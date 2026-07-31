@@ -1,17 +1,11 @@
 {
   "name": "@halqme/pi-kit-extensions",
   "private": true,
-  "workspaces": [
-    "agent-team",
-    "background-process",
-    "grill-plan",
-    "astrolabe"
-  ],
   "type": "module",
   "scripts": {
-    "check": "bun run --filter '*' check",
-    "typecheck": "bun run --filter '*' typecheck",
-    "test": "bun run --filter '*' test",
+    "check": "bun run --filter './*' check",
+    "typecheck": "bun run --filter './*' typecheck",
+    "test": "bun run --filter './*' test",
     "format": "bunx oxfmt .",
     "lint": "bunx oxlint ."
   },

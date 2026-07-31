@@ -5,7 +5,7 @@
     "pi-package"
   ],
   "workspaces": [
-    "extensions/"
+    "extensions/*"
   ],
   "peerDependencies": {
     "oxfmt": "latest",
