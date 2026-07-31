@@ -5,7 +5,7 @@ A collection of Pi extensions and reusable agent skills for planning, collaborat
 ## Installation
 
 ```sh
-pi install git:git@github.com:halqme/pi-kit
+pi install git:github.com/halqme/pi-kit
 ```
 
 ## What's included
