@@ -1,5 +1,5 @@
 ---
-name: remove-ai-slop
+name: deslop
 description: Detect and remove low-value or unnatural AI-generated code and prose from a change while preserving intended behavior. Use when the user asks to remove AI slop, clean up an AI-generated patch, make generated code idiomatic, reduce overengineering, or inspect a diff for unnecessary comments, defensive code, type escapes, abstractions, verbosity, or local style inconsistencies.
 ---
 

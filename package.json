@@ -5,8 +5,12 @@
     "pi-package"
   ],
   "workspaces": [
-    "extensions/*"
+    "extensions/*",
+    "packages/*"
   ],
+  "scripts": {
+    "hooks:install": "git config core.hooksPath .githooks"
+  },
   "peerDependencies": {
     "oxfmt": "latest",
     "oxlint": "latest"

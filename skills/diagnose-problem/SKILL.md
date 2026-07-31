@@ -5,14 +5,16 @@ description: Diagnose failures, regressions, anomalies, flaky behavior, performa
 
 # Diagnose a Problem
 
-1. Define observed behavior, expected behavior, impact, environment, and the earliest known failure. Separate reported facts from assumptions.
+1. Define the observed behavior, expected behavior, impact, environment, and earliest known failure. Record only confirmed observations, with provenance and timestamps when they matter, and keep observations separate from explanations.
 2. Inspect applicable instructions, current changes, relevant code and configuration, complete errors or logs, and recent history when available.
-3. Reproduce the problem with the smallest faithful command or artifact when safe and practical. Record what the reproduction proves.
-4. Form a short, ranked set of hypotheses. Run discriminating checks that can eliminate alternatives; do not make random edits or repeat unchanged commands.
-5. Trace the failure to the responsible boundary and explain the causal mechanism with concrete evidence. Distinguish root cause from trigger and symptom.
-6. Adversarially challenge the leading diagnosis: construct the strongest competing explanation, identify evidence that would distinguish it, and attempt that check. Confirm that the proposed cause predicts the observed behavior better than correlation alone.
-7. If the user requested diagnosis only, stop before editing and recommend the smallest viable fix plus a verification plan.
-8. If the user requested a fix, apply the `implement-change` workflow, add or run a regression check, and verify both the original failure and relevant neighboring behavior.
-9. Report confirmed findings, evidence, eliminated hypotheses, adversarial checks, unresolved uncertainty, and next steps.
+3. Reproduce the problem with the smallest faithful command or artifact when safe and practical. Record what the reproduction proves and what it does not prove.
+4. Orient the evidence into a short, ranked set of genuinely competing hypotheses. For each hypothesis, list supporting and contradicting evidence, assumptions, and the observation that would most distinguish it. Do not manufacture alternatives when the cause is already established.
+5. Decide on the smallest, safest, most reversible check that can distinguish the hypotheses or move the diagnosis forward. State the hypothesis being tested, procedure, expected outcomes, and stop condition; do not make a broad edit merely to test an explanation.
+6. Act only on the selected check, respecting `operate-safely` and any approval boundary. Record the actual result, including failures and unexpected output, then mark each hypothesis supported, weakened, rejected, or unresolved. If uncertainty remains, start the next observation from the new evidence rather than repeating an unchanged check.
+7. Trace the failure to the responsible boundary and explain the causal mechanism with concrete evidence. Distinguish root cause from trigger and symptom.
+8. Adversarially challenge the leading diagnosis with the strongest competing explanation and run the check that best distinguishes it. Confirm that the proposed cause predicts the observed behavior better than correlation alone.
+9. If the user requested diagnosis only, stop before editing and recommend the smallest viable fix plus a verification plan.
+10. If the user requested a fix, apply the `implement-change` workflow, add or run a regression check, and verify both the original failure and relevant neighboring behavior.
+11. Report confirmed findings, evidence, eliminated hypotheses, actual checks and results, unresolved uncertainty, and next steps. Stop when the cause is sufficiently supported, additional checks have little information value, required evidence is unavailable, or the next action needs approval.
 
 For intermittent issues, vary one factor at a time and preserve timestamps, seeds, versions, inputs, and environment details needed to reproduce the result.

@@ -1,40 +1,14 @@
 # Pi Extensions Workspace
 
-Global Pi extensions live in one Bun workspace. Pi auto-discovers each `<extension>/index.ts` directory. Every extension is an independent package with its own dependencies, scripts, tests, TypeScript configuration, and documentation.
-
-```text
-extensions/
-├── package.json
-├── bun.lock
-├── tsconfig.json
-├── agent-team/
-│   ├── package.json
-│   ├── index.ts
-│   ├── rpc-client.ts
-│   ├── team.ts
-│   ├── rpc-client.test.ts
-│   ├── team.test.ts
-│   └── README.md
-├── background-process/
-│   ├── package.json
-│   ├── index.ts
-│   └── README.md
-├── grill-plan/
-│   ├── package.json
-│   ├── index.ts
-│   ├── utils.ts
-│   ├── utils.test.ts
-│   └── README.md
-```
+Pi extensions live in one Bun workspace. Pi auto-discovers each `<extension>/index.ts` entry point. Every extension is an independent package with its own dependencies, checks, and documentation; see the extension's README for its behavior and constraints.
 
 Run from this directory:
 
 ```sh
 bun install
 bun run check
-bun run --filter @halqme/agent-team dev
-bun run --filter @halqme/background-process dev
-bun run --filter @halqme/grill-plan dev
+bun run --filter <package-name> dev
+bun run --filter <package-name> smoke
 ```
 
-`bun run check` recursively runs each package's strict TypeScript checks and Node test-runner tests. Pi loads this global directory automatically; use `/reload` after changes.
+`bun run check` runs each package's TypeScript checks and tests. The `dev` and `smoke` scripts run one selected extension through Pi. After changing an extension already loaded by Pi, use `/reload`.

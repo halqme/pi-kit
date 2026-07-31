@@ -82,6 +82,7 @@ test("plan-execute starts a turn, records completion, and rejects replay", async
     hasUI: false,
     ui: {
       theme: { fg: (_color: string, text: string) => text },
+      confirm: async () => true,
       setStatus() {},
       setWidget() {},
       notify(message: string, level: string) {
@@ -129,6 +130,18 @@ test("plan-execute starts a turn, records completion, and rejects replay", async
   await commands.get("plan")?.("execute", ctx);
   assert.equal(sentUserMessages.length, 1);
   assert.match(notifications.at(-1)?.message ?? "", /No executable plan/);
+
+  (ctx as unknown as { hasUI: boolean }).hasUI = true;
+  const startTool = tools.get("grill_plan_start");
+  assert.ok(startTool);
+  const startParams = {
+    completedSteps: [],
+    goal: "assistant-generated task text must not become user approval",
+  };
+  const startResult = await startTool.execute("call-2", startParams, undefined, undefined, ctx);
+  assert.equal(startResult.isError, undefined);
+  assert.equal(sentUserMessages.length, 1);
+  assert.equal((appendedStates.at(-1) as { phase?: string }).phase, "planning");
 
   await commands.get("plan")?.("hogehoge", ctx);
   assert.equal(sentUserMessages.length, 2);

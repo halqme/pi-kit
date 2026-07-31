@@ -1,70 +1,88 @@
 # Pi Kit
 
-A collection of Pi extensions and reusable agent skills for planning, collaboration, background work, and project-aware automation.
+A collection of extensions and reusable agent skills for [Pi](https://github.com/earendil-works/pi), focused on planning, collaboration, project-aware automation, and safe development workflows.
 
-## Installation
+## Install
 
 ```sh
+pi install npm:pi-subagents
 pi install git:github.com/halqme/pi-kit
+
 ```
 
-## What's included
+Requirements:
+
+- Node.js 24 or later
+- Bun 1.3.14 or later
+
+Dependencies:
+- npm:pi-subagents
+
+Recommendation:
+- npm:@ollama/pi-web-search
+
+Settings:
+```json
+{
+  "enabledModels": [
+    "openai-codex/gpt-5.6-luna:max",
+    "openai-codex/gpt-5.6-terra:max",
+    "openai-codex/gpt-5.6-sol:high"
+  ]
+}
+```
+
+## Included packages
 
 ### Extensions
 
-The `extensions/` directory is a bun workspace. Pi discovers each extension from its `index.ts` entry point.
+Pi discovers extensions from the `extensions/` directory. Each extension is an independent Bun workspace package with its own documentation and checks.
 
-| Extension | Purpose | Documentation |
-| --- | --- | --- |
-| [`agent-team`](extensions/agent-team/) | Run session-scoped teams of Pi agents for committee discussion or adversarial review. | [`README.md`](extensions/agent-team/README.md) |
-| [`background-process`](extensions/background-process/) | Start, inspect, and stop durable background shell commands. | [`README.md`](extensions/background-process/README.md) |
-| [`grill-plan`](extensions/grill-plan/) | Use an evidence-first, approval-gated planning workflow before implementation. | [`README.md`](extensions/grill-plan/README.md) |
-
-See the individual README files for commands, lifecycle details, and extension-specific constraints.
+See each extension's README for its tools, usage, and constraints. Workspace-level commands are covered in the [extension development guide](./extensions/README.md).
 
 ### Skills
 
-Reusable agent workflows live under `skills/`. They cover implementation, diagnosis, review, verification, research, performance work, safe operation, Git workflows, removing low-value generated output, maximum-effort quality work (`l99`), OODA-based uncertainty control (`ooda`), and repository-conforming scaffolding (`scaffold`). Standard subagent delegation is provided by the installed `pi-subagents` package; `agent-team` remains the higher-level committee/review layer.
+Reusable workflows live under `skills/`:
 
-## Requirements
-
-- Node.js `>=24.0.0`
-- bun `>=1.3.14`
+Each skill is defined by a `SKILL.md` file. Standard subagent delegation comes from the separately installed `pi-subagents` package; `agent-team` provides the higher-level committee and review workflow.
 
 ## Development
 
-Install dependencies and run the full workspace check from `extensions/`:
+Install dependencies from the repository root:
+
+```sh
+bun install
+```
+
+Run all extension checks from the extension workspace:
 
 ```sh
 cd extensions
-bun install
-bun check
+bun run check
 ```
 
-The check runs strict TypeScript checks and Node test-runner tests for each package that defines a `check` script. Other useful workspace commands are:
+The full check runs strict TypeScript checks and Node test-runner tests for every extension. You can also run one kind of check across the workspace:
 
 ```sh
-bun typecheck
-bun test
+bun run typecheck
+bun run test
 ```
 
-To work on one extension, run its development or smoke command from `extensions/`:
+To work on a single extension, use its package name:
 
 ```sh
 bun --filter @halqme/agent-team dev
 bun --filter @halqme/agent-team smoke
 ```
 
-Replace the package name to target another extension. After changing an extension loaded by Pi, run `/reload` in the Pi session.
+Replace `@halqme/agent-team` with the target package name. After changing an extension already loaded by Pi, run `/reload` in the Pi session.
 
 ## Repository layout
 
 ```text
 .
-├── extensions/   # Pi extensions and bun workspace configuration
+├── extensions/   # Pi extensions and Bun workspace configuration
 ├── skills/       # Reusable agent workflows
-├── settings.json # Agent settings
-└── AGENTS.md     # Workspace working principles
+├── package.json  # Pi package metadata
+└── bun.lock      # Locked dependencies
 ```
-
-This workspace is intended to be used by Pi; extension behavior and usage are documented in each extension's README.
