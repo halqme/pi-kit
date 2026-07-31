@@ -1,0 +1,30 @@
+{
+  "name": "@halqme/pi-kit",
+  "private": true,
+  "keywords": [
+    "pi-package"
+  ],
+  "workspaces": [
+    "extensions/"
+  ],
+  "peerDependencies": {
+    "oxfmt": "latest",
+    "oxlint": "latest"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions",
+      "npm:@ollama/pi-web-search@0.0.5",
+      "npm:pi-subagents"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ],
+    "themes": [
+      "./themes"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@halqme/grill-plan",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun run typecheck && bun test",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test",
+    "dev": "pi -e ./index.ts",
+    "smoke": "pi -e ./index.ts --list-models __extension_smoke__"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-agent-core": "0.81.1",
+    "@earendil-works/pi-ai": "0.81.1",
+    "@earendil-works/pi-coding-agent": "0.81.1",
+    "@earendil-works/pi-tui": "0.81.1",
+    "@types/node": "24.12.4",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

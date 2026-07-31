@@ -1,0 +1,27 @@
+{
+  "name": "@halqme/pi-kit-extensions",
+  "private": true,
+  "workspaces": [
+    "agent-team",
+    "background-process",
+    "grill-plan",
+    "astrolabe"
+  ],
+  "type": "module",
+  "scripts": {
+    "check": "bun run --filter '*' check",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
+    "format": "bunx oxfmt .",
+    "lint": "bunx oxlint ."
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
+    "vite-plus": "0.2.4"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "bun@1.3.14"
+}
