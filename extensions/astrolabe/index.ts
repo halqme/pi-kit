@@ -34,7 +34,7 @@ const REPLACE_GUIDANCE = [
 ];
 
 const ASTROLABE_HOOK_GUIDANCE =
-  "When working with an existing file supported by an Astrolabe language adapter, prefer syntax_inspect outline → structure → source before broad reads, and use syntax_replace only after source confirms the exact nodeId. Do not infer support from TypeScript or a file extension alone; use the adapter or an explicit language when needed. Use normal tools for unsupported, generated, configuration, or new files.";
+  "When working with an existing file supported by an Astrolabe language adapter, call syntax_inspect strictly serially: outline first, then structure for the returned nodeId, then source only after the successful structure result. Never request structure and source for the same node in parallel, and never request source before structure completes. Use syntax_replace only after source confirms the exact nodeId. Do not infer support from TypeScript or a file extension alone; use the adapter or an explicit language when needed. Use normal tools for unsupported, generated, configuration, or new files.";
 
 function normalizePath(path: string): string {
   return path.startsWith("@") ? path.slice(1) : path;
@@ -99,7 +99,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
     name: "syntax_inspect",
     label: "Syntax Inspect",
     description:
-      "Map a supported-language file by declarations, drill into selected syntax nodes, and return source only for a selected nodeId. Start with outline; use structure before source.",
+      "Map a supported-language file by declarations, drill into selected syntax nodes, and return source only for a selected nodeId. Calls must be serial: outline → successful structure for the returned nodeId → source. Never call structure and source in parallel or source before structure.",
     promptSnippet:
       "Read supported-language source structurally: outline declarations, drill into nodeIds, then fetch only the needed node source",
     promptGuidelines: INSPECT_GUIDANCE,
