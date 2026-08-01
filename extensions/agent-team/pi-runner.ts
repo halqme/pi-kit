@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import {
   acknowledgeProcess,
   inspectProcess,
@@ -28,6 +29,7 @@ export function createPiAgentFactory(options: PiRunnerOptions): AgentTeamAgentFa
       if (options.tools.length) args.push("--tools", options.tools.join(","));
       args.push("--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes");
       for (const skill of member.skills ?? []) args.push("--skill", skill);
+      await ensureAgentTeamTaskRoot(options.taskRoot);
       const task = await startBackgroundProcess({
         taskRoot: options.taskRoot,
         ownerSessionId: options.ownerSessionId,
@@ -68,6 +70,11 @@ export function createPiAgentFactory(options: PiRunnerOptions): AgentTeamAgentFa
       },
     };
   };
+}
+
+export async function ensureAgentTeamTaskRoot(taskRoot: string): Promise<void> {
+  await mkdir(taskRoot, { recursive: true });
+  await writeFile(join(dirname(taskRoot), ".gitignore"), "*");
 }
 
 export function agentTeamTaskRoot(cwd: string, sessionId: string): string {
