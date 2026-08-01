@@ -30,6 +30,8 @@ test("renders a deterministic human summary and formats token units", () => {
   assert.match(output, /\| Sessions \| Active days \|/);
   assert.match(output, /\| 1 \| 1 \| 1 \| 1 \| 0 \| 1 \| 0 \| 1\.2M \|/);
   assert.match(output, /Top model \/ effort/);
+  assert.match(output, /\$\/1M tokens/);
+  assert.match(output, /\$14\.8548/);
   assert.match(output, /\| Effort \|/);
   assert.match(output, /Top skills & tools/);
   assert.equal(formatTokens(820_000), "820K");

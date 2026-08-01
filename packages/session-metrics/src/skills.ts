@@ -12,7 +12,7 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function installedPackageSkillRoots(): Promise<string[]> {
+async function installedPackageRoots(): Promise<string[]> {
   const settingsPath = join(homedir(), ".pi", "agent", "settings.json");
   try {
     const settings = JSON.parse(await readFile(settingsPath, "utf8")) as { packages?: string[] };
@@ -22,11 +22,8 @@ async function installedPackageSkillRoots(): Promise<string[]> {
         ? join(homedir(), ".pi", "agent", "npm", "node_modules", source.slice(4))
         : resolve(dirname(settingsPath), source);
       try {
-        const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")) as {
-          pi?: { skills?: string[] };
-        };
-        for (const skillRoot of manifest.pi?.skills ?? [])
-          roots.push(resolve(packageRoot, skillRoot));
+        await readFile(join(packageRoot, "package.json"), "utf8");
+        roots.push(packageRoot);
       } catch {
         // A package can be unavailable while its source remains in settings.
       }
@@ -37,21 +34,33 @@ async function installedPackageSkillRoots(): Promise<string[]> {
   }
 }
 
-async function findSkillRoots(root: string, depth: number): Promise<string[]> {
-  if (depth < 0) return [];
+const builtInTools = new Set([
+  "bash", "edit", "find", "grep", "ls", "read", "write", "background_process",
+]);
+
+async function extensionTools(root: string): Promise<Set<string>> {
+  const tools = new Set<string>();
   try {
-    const entries = await readdir(root, { withFileTypes: true });
-    const roots: string[] = [];
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const path = join(root, entry.name);
-      if (entry.name === "skills") roots.push(path);
-      else roots.push(...(await findSkillRoots(path, depth - 1)));
+    const source = /\.(?:ts|js)$/.test(root) ? await readFile(root, "utf8") : undefined;
+    if (source !== undefined) {
+      for (const match of source.matchAll(/registerTool\(\s*\{\s*name:\s*["']([^"']+)["']/g))
+        tools.add(match[1]!);
+      return tools;
     }
-    return roots;
+    for (const entry of await readdir(root, { withFileTypes: true })) {
+      const path = join(root, entry.name);
+      if (entry.isDirectory()) {
+        for (const tool of await extensionTools(path)) tools.add(tool);
+      } else if (/\.(?:ts|js)$/.test(entry.name)) {
+        const source = await readFile(path, "utf8");
+        for (const match of source.matchAll(/registerTool\(\s*\{\s*name:\s*["']([^"']+)["']/g))
+          tools.add(match[1]!);
+      }
+    }
   } catch {
-    return [];
+    // An unavailable package is not an active tool source.
   }
+  return tools;
 }
 
 export async function addSkillAvailability(report: MetricsReport): Promise<MetricsReport> {
@@ -59,12 +68,35 @@ export async function addSkillAvailability(report: MetricsReport): Promise<Metri
     join(homedir(), ".pi", "agent", "skills"),
     join(homedir(), ".agents", "skills"),
   ];
-  globalRoots.push(...(await findSkillRoots(join(homedir(), ".pi", "agent", "git"), 4)));
-  globalRoots.push(...(await installedPackageSkillRoots()));
+  const packageRoots = await installedPackageRoots();
+  for (const packageRoot of packageRoots) {
+    try {
+      const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")) as {
+        pi?: { skills?: string[] };
+      };
+      globalRoots.push(...(manifest.pi?.skills ?? []).map((root) => resolve(packageRoot, root)));
+    } catch {
+      // An unavailable package has no active skills.
+    }
+  }
   const hasSkill = async (roots: string[], name: string): Promise<boolean> => {
     for (const root of roots) if (await exists(join(root, name, "SKILL.md"))) return true;
     return false;
   };
+  const activeTools = new Set(builtInTools);
+  for (const packageRoot of packageRoots) {
+    try {
+      const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")) as {
+        pi?: { extensions?: string[] };
+      };
+      for (const extensionRoot of manifest.pi?.extensions ?? [])
+        for (const tool of await extensionTools(resolve(packageRoot, extensionRoot))) activeTools.add(tool);
+    } catch {
+      // An unavailable package has no active tools.
+    }
+  }
+  for (const [name, usage] of Object.entries(report.toolUsage)) usage.available = activeTools.has(name);
+
   for (const name of Object.keys(report.skills)) {
     const skill = report.skills[name];
     if (skill) skill.existsGlobally = await hasSkill(globalRoots, name);

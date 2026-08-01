@@ -3,6 +3,7 @@ import {
   mergeMetrics,
   type MetricSummary,
   type MetricsReport,
+  type SkillMetrics,
   type ToolMetrics,
 } from "./analyze.ts";
 
@@ -42,8 +43,8 @@ function money(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-function costPerKTokens(cost: number, tokens: number): string {
-  return tokens > 0 ? `$${((cost / tokens) * 1_000).toFixed(4)}` : "—";
+function costPerMTokens(cost: number, tokens: number): string {
+  return tokens > 0 ? `$${((cost / tokens) * 1_000_000).toFixed(4)}` : "—";
 }
 
 const BRAILLE_LEVELS = ["⠀", "⠆", "⡇", "⡷", "⣿"];
@@ -86,6 +87,19 @@ function limitValue(limit?: number): number | undefined {
 
 function rows<T>(items: T[], limit?: number): T[] {
   return limit === undefined ? items : items.slice(0, limit);
+}
+
+function availableSkills(report: MetricsReport): Array<[string, SkillMetrics]> {
+  const projectNames = new Set(
+    Object.values(report.projects).flatMap((project) =>
+      Object.entries(project.skills)
+        .filter(([, skill]) => skill.existsInProject === true)
+        .map(([name]) => name),
+    ),
+  );
+  return Object.entries(report.skills).filter(
+    ([name, skill]) => skill.existsGlobally === true || projectNames.has(name),
+  );
 }
 
 function title(text: string): string {
@@ -175,7 +189,7 @@ function renderSummaryMarkdown(report: MetricsReport, options: ReportOptions = {
       ? daily.reduce((total, [, metrics]) => mergeMetrics(total, metrics), createMetrics())
       : report;
     const tools = rows(
-      Object.entries(summary.toolUsage).sort(
+      Object.entries(summary.toolUsage).filter(([, tool]) => tool.available === true).sort(
         ([a, av], [b, bv]) => bv.calls - av.calls || a.localeCompare(b),
       ),
       limit,
@@ -187,7 +201,7 @@ function renderSummaryMarkdown(report: MetricsReport, options: ReportOptions = {
       limit,
     );
     const skills = rows(
-      Object.entries(summary.skills).sort(
+      availableSkills(report).sort(
         ([a, av], [b, bv]) =>
           bv.reads + bv.explicit - (av.reads + av.explicit) || a.localeCompare(b),
       ),
@@ -281,13 +295,13 @@ function summarySections(report: MetricsReport, options: ReportOptions): ReportS
     limit,
   );
   const skills = rows(
-    Object.entries(summary.skills).sort(
+    availableSkills(report).sort(
       ([a, av], [b, bv]) => bv.reads + bv.explicit - (av.reads + av.explicit) || a.localeCompare(b),
     ),
     limit,
   );
   const tools = rows(
-    Object.entries(summary.toolUsage).sort(
+    Object.entries(summary.toolUsage).filter(([, tool]) => tool.available === true).sort(
       ([a, av], [b, bv]) => bv.calls - av.calls || a.localeCompare(b),
     ),
     limit,
@@ -304,7 +318,7 @@ function summarySections(report: MetricsReport, options: ReportOptions): ReportS
     {
       title: "Top model / effort",
       markdown: markdownTable(
-        ["Model", "Effort", "Activity", "Messages", "Tokens", "Cost", "$/1K tokens"],
+        ["Model", "Effort", "Activity", "Messages", "Tokens", "Cost", "$/1M tokens"],
         modelEfforts.map(([_, m]) => [
           m.model,
           m.effort,
@@ -312,7 +326,7 @@ function summarySections(report: MetricsReport, options: ReportOptions): ReportS
           number(m.messages),
           formatTokens(m.usage.total),
           money(m.usage.cost),
-          costPerKTokens(m.usage.cost, m.usage.total),
+          costPerMTokens(m.usage.cost, m.usage.total),
         ]),
       ).join("\n"),
     },
@@ -410,7 +424,7 @@ function renderProjectTable(report: MetricsReport, limit: number | undefined): s
 
 function renderSkillTable(report: MetricsReport, limit: number | undefined): string {
   const entries = rows(
-    Object.entries(report.skills).sort(
+    availableSkills(report).sort(
       ([a, av], [b, bv]) => bv.reads + bv.explicit - av.reads - av.explicit || a.localeCompare(b),
     ),
     limit,
@@ -441,14 +455,14 @@ function renderModelEffortTable(report: MetricsReport, limit: number | undefined
   return [
     title("Top models / effort"),
     ...markdownTable(
-      ["Model", "Effort", "Messages", "Tokens", "Cost", "$/1K tokens"],
+      ["Model", "Effort", "Messages", "Tokens", "Cost", "$/1M tokens"],
       entries.map(([_, value]) => [
         value.model,
         value.effort,
         number(value.messages),
         formatTokens(value.usage.total),
         money(value.usage.cost),
-        costPerKTokens(value.usage.cost, value.usage.total),
+        costPerMTokens(value.usage.cost, value.usage.total),
       ]),
     ),
   ].join("\n");
@@ -456,7 +470,7 @@ function renderModelEffortTable(report: MetricsReport, limit: number | undefined
 
 function renderToolTable(report: MetricsReport, limit: number | undefined): string {
   const entries = rows(
-    Object.entries(report.toolUsage).sort(
+    Object.entries(report.toolUsage).filter(([, tool]) => tool.available === true).sort(
       ([a, av], [b, bv]) => bv.calls - av.calls || a.localeCompare(b),
     ),
     limit,

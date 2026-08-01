@@ -21,6 +21,7 @@ export interface SkillMetrics {
 }
 
 export interface ToolMetrics {
+  available?: boolean;
   calls: number;
   estimatedResultTokens: number;
   reportedTokens: number;
