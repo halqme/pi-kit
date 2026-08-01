@@ -1,9 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathIsWithin, resolveExistingPath } from "./path.ts";
+import {
+  pathIsWithin,
+  resolveExistingPath,
+  resolveExistingScope,
+  sourceFilesInScope,
+} from "./path.ts";
 
 test("resolves existing files using real paths", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-path-"));
@@ -24,6 +29,26 @@ test("rejects a symlink that resolves outside the working directory", async () =
   await writeFile(outsideFile, "const secret = true;\n");
   await symlink(outsideFile, join(dir, "link.ts"));
   await assert.rejects(resolveExistingPath(dir, "link.ts"), /working directory/);
+});
+
+test("resolves file and directory scopes and walks only regular supported files", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-path-"));
+  const nested = join(dir, "nested");
+  const outside = await mkdtemp(join(tmpdir(), "astrolabe-outside-"));
+  await writeFile(join(dir, "top.ts"), "export const top = true;\n");
+  await writeFile(join(dir, "notes.md"), "ignored\n");
+  await writeFile(join(outside, "outside.ts"), "export const outside = true;\n");
+  await mkdir(nested);
+  await writeFile(join(nested, "inner.py"), "answer = 42\n");
+  await symlink(join(outside, "outside.ts"), join(nested, "outside.ts"));
+
+  assert.deepEqual(await resolveExistingScope(dir, "nested"), { path: nested, kind: "directory" });
+  assert.deepEqual(
+    (await sourceFilesInScope(dir, ".", (path) => /\.(?:ts|py)$/.test(path))).map((path) =>
+      path.slice(dir.length + 1),
+    ),
+    ["nested/inner.py", "top.ts"],
+  );
 });
 
 test("checks lexical containment without treating a similarly named directory as a child", () => {

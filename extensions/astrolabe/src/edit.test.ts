@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearFileCache, parseFile } from "./parser.ts";
 import { HandleStore } from "./node-handles.ts";
-import { edit } from "./edit.ts";
+import { edit, editContinuationDetailed } from "./edit.ts";
 
 test("replaces an inspected node and rejects stale content", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tree-edit-"));
@@ -24,11 +24,6 @@ test("replaces an inspected node and rejects stale content", async () => {
   const handle = handles.issue(file, returned);
   assert.match(
     await edit({ path, nodeId: handle.id, replacement: "return 2;" }, dir, handles),
-    /^replace_requires_source:/,
-  );
-  handles.markSourceInspected(handle.id);
-  assert.match(
-    await edit({ path, nodeId: handle.id, replacement: "return 2;" }, dir, handles),
     /edited .*return_statement with typescript; re-inspect before further edits/,
   );
   assert.match(await readFile(path, "utf8"), /return 2/);
@@ -37,6 +32,30 @@ test("replaces an inspected node and rejects stale content", async () => {
   assert.match(
     await edit({ path, nodeId: handle.id, replacement: "return 4;" }, dir, handles),
     /stale_node/,
+  );
+  clearFileCache(path);
+});
+
+test("revalidates a continuation before writing without requiring source retrieval", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tree-edit-"));
+  const path = join(dir, "sample.ts");
+  await writeFile(path, "function answer() { return 1; }\n");
+  const file = await parseFile(path);
+  const node = file.tree.rootNode.namedChildren[0];
+  assert.ok(node);
+  const handles = new HandleStore();
+  const handle = handles.issue(file, node, "outline");
+  const token = handles.issueContinuation(handle.id);
+  assert.ok(token);
+  assert.match(
+    (
+      await editContinuationDetailed(
+        { continuation: { token }, replacement: "function answer() { return 2; }" },
+        dir,
+        handles,
+      )
+    ).message,
+    /edited/,
   );
   clearFileCache(path);
 });

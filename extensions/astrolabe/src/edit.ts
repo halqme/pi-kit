@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { chmod, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { HandleStore, resolveHandleResult } from "./node-handles.ts";
+import type { Continuation } from "./protocol.ts";
 import {
   cacheFile,
   createTreeEdit,
@@ -20,6 +21,11 @@ import {
 export interface EditParams {
   path: string;
   nodeId: string;
+  replacement: string;
+}
+
+export interface ContinuationEditParams {
+  continuation: Continuation;
   replacement: string;
 }
 
@@ -50,11 +56,6 @@ async function editImpl(
   const old = handles.get(params.nodeId);
   if (!old) throw new Error(`Unknown nodeId: ${params.nodeId}`);
   if (old.path !== path) throw new Error("nodeId belongs to a different path");
-  if (old.inspectionStage !== "source") {
-    return failed(
-      "replace_requires_source: Inspect this nodeId with view=source before editing it.",
-    );
-  }
   const adapter = adapterForIdentity(old.languageId, old.grammarId);
   if (!adapter) {
     return failed(
@@ -141,6 +142,21 @@ export function editDetailed(
   handles: HandleStore,
 ): Promise<EditResult> {
   return withParserActivity(() => editImpl(params, cwd, handles));
+}
+
+export function editContinuationDetailed(
+  params: ContinuationEditParams,
+  cwd: string,
+  handles: HandleStore,
+): Promise<EditResult> {
+  const handle = handles.resolveContinuation(params.continuation.token);
+  if (!handle)
+    return Promise.resolve(failed("invalid_continuation: The continuation has expired."));
+  return editDetailed(
+    { path: handle.path, nodeId: handle.id, replacement: params.replacement },
+    cwd,
+    handles,
+  );
 }
 
 export async function edit(params: EditParams, cwd: string, handles: HandleStore): Promise<string> {

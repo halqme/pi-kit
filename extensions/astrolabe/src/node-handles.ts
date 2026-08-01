@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Node } from "web-tree-sitter";
 import { hash, sourceOf, stringIndexToByteIndex, type ParsedFile } from "./parser.ts";
 import { adapterForIdentity } from "./language-profile.ts";
@@ -92,6 +93,8 @@ export class HandleStore {
   private next = 1;
   private readonly handles = new Map<string, NodeHandle>();
   private readonly handlesByPath = new Map<string, Set<string>>();
+  private readonly continuations = new Map<string, string>();
+  private readonly continuationByHandle = new Map<string, Set<string>>();
   private readonly maxHandlesPerFile: number;
 
   constructor(maxHandlesPerFile = 256) {
@@ -168,6 +171,26 @@ export class HandleStore {
     return handle;
   }
 
+  issueContinuation(id: string): string | undefined {
+    if (!this.get(id)) return undefined;
+    const token = randomUUID();
+    this.continuations.set(token, id);
+    const tokens = this.continuationByHandle.get(id) ?? new Set<string>();
+    tokens.add(token);
+    this.continuationByHandle.set(id, tokens);
+    return token;
+  }
+
+  resolveContinuation(token: string): NodeHandle | undefined {
+    const id = this.continuations.get(token);
+    return id ? this.get(id) : undefined;
+  }
+
+  private deleteContinuations(id: string): void {
+    for (const token of this.continuationByHandle.get(id) ?? []) this.continuations.delete(token);
+    this.continuationByHandle.delete(id);
+  }
+
   size(path?: string): number {
     if (path) return this.handlesByPath.get(path)?.size ?? 0;
     return this.handles.size;
@@ -183,6 +206,7 @@ export class HandleStore {
     const handle = this.handles.get(id);
     if (!handle) return false;
     this.handles.delete(id);
+    this.deleteContinuations(id);
     const fileHandles = this.handlesByPath.get(handle.path);
     fileHandles?.delete(id);
     if (fileHandles?.size === 0) this.handlesByPath.delete(handle.path);
@@ -191,12 +215,17 @@ export class HandleStore {
 
   clear(path?: string): void {
     if (path) {
-      for (const id of this.handlesByPath.get(path) ?? []) this.handles.delete(id);
+      for (const id of this.handlesByPath.get(path) ?? []) {
+        this.handles.delete(id);
+        this.deleteContinuations(id);
+      }
       this.handlesByPath.delete(path);
       return;
     }
     this.handles.clear();
     this.handlesByPath.clear();
+    this.continuations.clear();
+    this.continuationByHandle.clear();
   }
 
   findReplacement(file: ParsedFile, old: NodeHandle): Node | undefined {
@@ -225,6 +254,7 @@ export class HandleStore {
       if (!oldest) break;
       fileHandles.delete(oldest);
       this.handles.delete(oldest);
+      this.deleteContinuations(oldest);
     }
     if (fileHandles.size === 0) this.handlesByPath.delete(path);
   }

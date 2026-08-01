@@ -1,13 +1,20 @@
 import { Query, type Node } from "web-tree-sitter";
-import { adapterForLanguage, requireAdapterForPath, type LanguageId } from "./language-profile.ts";
+import {
+  adapterForLanguage,
+  adapterForPath,
+  requireAdapterForPath,
+  type LanguageId,
+} from "./language-profile.ts";
+import { HandleStore, type NodeHandle } from "./node-handles.ts";
 import { parseFile, sourceOf, type ParsedFile } from "./parser.ts";
-import { HandleStore } from "./node-handles.ts";
-import { resolveExistingPath } from "./path.ts";
+import { sourceFilesInScope } from "./path.ts";
 
 export type SyntaxSearchKind = "function" | "call" | "import";
 
 export interface SyntaxSearchParams {
-  path: string;
+  /** @deprecated Use scope. Kept temporarily for internal callers during the API migration. */
+  path?: string;
+  scope?: string;
   kind: SyntaxSearchKind;
   name?: string;
   source?: string;
@@ -18,6 +25,14 @@ interface SearchMatch {
   node: Node;
   name: string;
   source?: string;
+}
+
+export interface SyntaxSearchMatch {
+  handle: NodeHandle;
+  path: string;
+  name: string;
+  source?: string;
+  description: string;
 }
 
 function nodeText(file: ParsedFile, node: Node | null): string {
@@ -83,22 +98,46 @@ function describeMatch(file: ParsedFile, match: SearchMatch): string {
   return `${label} (${match.node.type}, ${start.row + 1}:${start.column + 1}-${end.row + 1}:${end.column + 1}) ${nodeText(file, match.node)}`;
 }
 
+function requestedScope(params: SyntaxSearchParams): string {
+  const scope = params.scope ?? params.path;
+  if (!scope) throw new Error("search requires a file or directory scope");
+  return scope;
+}
+
+export async function syntaxSearchDetailed(
+  params: SyntaxSearchParams,
+  cwd: string,
+  handles: HandleStore,
+): Promise<SyntaxSearchMatch[]> {
+  const paths = await sourceFilesInScope(cwd, requestedScope(params), (path) =>
+    Boolean(adapterForPath(path)),
+  );
+  const matches: SyntaxSearchMatch[] = [];
+  for (const path of paths) {
+    const adapter = params.language
+      ? adapterForLanguage(params.language)
+      : requireAdapterForPath(path);
+    const file = await parseFile(path, adapter);
+    for (const match of collectMatches(file, params, adapter)) {
+      const handle = handles.issue(file, match.node, "outline");
+      matches.push({
+        handle,
+        path,
+        name: match.name,
+        ...(match.source ? { source: match.source } : {}),
+        description: describeMatch(file, match),
+      });
+    }
+  }
+  return matches;
+}
+
 export async function syntaxSearch(
   params: SyntaxSearchParams,
   cwd: string,
   handles: HandleStore,
 ): Promise<string> {
-  const path = await resolveExistingPath(cwd, params.path);
-  const adapter = params.language
-    ? adapterForLanguage(params.language)
-    : requireAdapterForPath(path);
-  const file = await parseFile(path, adapter);
-  const matches = collectMatches(file, params, adapter);
+  const matches = await syntaxSearchDetailed(params, cwd, handles);
   if (matches.length === 0) return "(no syntax matches)";
-  return matches
-    .map((match) => {
-      const handle = handles.issue(file, match.node, "structure");
-      return `nodeId=${handle.id} ${describeMatch(file, match)}`;
-    })
-    .join("\n");
+  return matches.map((match) => `nodeId=${match.handle.id} ${match.description}`).join("\n");
 }

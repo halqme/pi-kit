@@ -26,6 +26,20 @@ test("bounds handles per file and retains recently used handles", async () => {
   assert.equal(handles.get(h3.id)?.id, h3.id);
 });
 
+test("continuations are opaque, resolve only live handles, and expire with them", async () => {
+  const file = await parseSource("/tmp/continuation.ts", "function answer() {}\n");
+  const node = file.tree.rootNode.namedChildren[0];
+  assert.ok(node);
+  const handles = new HandleStore();
+  const handle = handles.issue(file, node);
+  const token = handles.issueContinuation(handle.id);
+  assert.ok(token);
+  assert.equal(handles.resolveContinuation(token)?.id, handle.id);
+  handles.delete(handle.id);
+  assert.equal(handles.resolveContinuation(token), undefined);
+  file.tree.delete();
+});
+
 test("LRU eviction follows access order rather than issue order", async () => {
   const file = await parseSource(
     "/tmp/handles-lru.ts",

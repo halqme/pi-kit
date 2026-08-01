@@ -132,7 +132,7 @@ test("syntax_inspect rejects unsupported files and whole-file source reads", asy
   );
 });
 
-test("syntax_inspect enforces outline, structure, then selected source", async () => {
+test("syntax_inspect lets an outlined node advance directly to source", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-inspect-"));
   const path = join(dir, "sample.ts");
   await writeFile(path, "class Service { answer() { return 42; } }\n");
@@ -144,22 +144,11 @@ test("syntax_inspect enforces outline, structure, then selected source", async (
     inspect({ path, view: "structure" }, dir, handles),
     /structure_requires_node/,
   );
-  await assert.rejects(
-    inspect({ path, nodeId: outlineId, view: "source" }, dir, handles),
-    /source_requires_structure/,
-  );
-  const structure = await inspect(
-    { path, nodeId: outlineId, view: "structure", depth: 3 },
-    dir,
-    handles,
-  );
-  const methodId = /nodeId=(n\d+) declaration\.method answer/.exec(structure)?.[1];
-  assert.ok(methodId);
   assert.equal(
-    await inspect({ path, nodeId: methodId, view: "source" }, dir, handles),
-    "answer() { return 42; }",
+    await inspect({ path, nodeId: outlineId, view: "source" }, dir, handles),
+    "class Service { answer() { return 42; } }",
   );
-  assert.equal(handles.get(methodId)?.inspectionStage, "source");
+  assert.equal(handles.get(outlineId)?.inspectionStage, "source");
   clearFileCache(path);
 });
 

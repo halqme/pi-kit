@@ -2,281 +2,304 @@ import { resolve } from "node:path";
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { type ExtensionAPI, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { editDetailed } from "./src/edit.ts";
+import { editContinuationDetailed } from "./src/edit.ts";
 import { inspect } from "./src/inspect.ts";
-import { syntaxSearch } from "./src/syntax-search.ts";
-import { HandleStore } from "./src/node-handles.ts";
-import { shutdownParserCaches, startParserCaches } from "./src/parser.ts";
+import { supportedLanguageIds, type LanguageId } from "./src/language-profile.ts";
 import { createMetrics, record } from "./src/metrics.ts";
-import { supportedLanguageIds } from "./src/language-profile.ts";
+import { HandleStore, type NodeHandle } from "./src/node-handles.ts";
+import { shutdownParserCaches, startParserCaches } from "./src/parser.ts";
+import {
+  continuation,
+  failure,
+  isContinuation,
+  responseText,
+  type SyntaxHandle,
+  type SyntaxRequest,
+  type SyntaxResponse,
+} from "./src/protocol.ts";
+import { syntaxSearchDetailed } from "./src/syntax-search.ts";
 
-const INSPECT_GUIDANCE = [
-  "When an existing file is in a supported language and its code structure can answer the question, let syntax_inspect be the map before using read as the microscope.",
-  "For an unfamiliar supported source file, call syntax_inspect with view=outline and no nodeId first; do not begin by consuming the whole file when a declaration map will do.",
-  "Treat outline as the index, structure as the cross-section, and source as the smallest necessary specimen: drill into returned nodeIds and fetch source only for the declarations whose bodies matter.",
-  "For a large change, do not route around syntax_inspect merely because the final diff is large. Map the related declarations, then decompose the work into a sequence of local syntax edits and inspect the intermediate state when it reduces uncertainty.",
-  "Avoid redundant inspections: reuse still-valid handles, request enough outline context to cover related nodes, and use edit results or updated handles when available. Re-inspect after edits when handles or surrounding structure may have changed.",
-  "Use read for unsupported languages, generated text, configuration, or files where syntax structure provides no useful leverage; syntax_inspect is a guide to the code, not a ritual that replaces judgment.",
+const GUIDANCE = [
+  "Use astrolabe for supported existing source: search accepts a file or directory scope; inspect returns the selected source without manual outline/structure transitions.",
+  "Pass the continuation object returned in a result unchanged to inspect or replace. Replace revalidates the target source, node type, range, and context before writing.",
+  "Use read or normal edits only for unsupported, generated, configuration, or new files—not after a syntax error. Use the returned next action to recover.",
 ];
 
-const SEARCH_GUIDANCE = [
-  "Use syntax_search for exact declarations, calls, or imports in a supported language after broad text search has identified a likely area.",
-  "Use kind=function, call, or import; add name or source filters when possible.",
-  "Search results return nodeIds that can be expanded with syntax_inspect structure or source.",
-  "syntax_search is not a replacement for text search, type checking, or tests.",
-];
-
-const REPLACE_GUIDANCE = [
-  "Use syntax_replace after syntax_inspect source has confirmed the exact nodeId when one or a few local syntax nodes in a supported language need editing.",
-  "Use normal diff/patch editing for new files, unsupported or non-structural files, and changes whose structure provides no useful leverage. For broad or cross-cutting changes in supported source, prefer a sequence of local syntax_replace operations when that makes intermediate validation useful.",
-  "After syntax_replace succeeds, run syntax_inspect again before another structural edit because prior nodeIds may be stale.",
-  "syntax_replace validates syntax, not types; run the project type checker and tests separately after the edit batch.",
-];
-
-const ASTROLABE_HOOK_GUIDANCE =
-  "When working with an existing file supported by an Astrolabe language adapter, call syntax_inspect strictly serially: outline first, then structure for the returned nodeId, then source only after the successful structure result. Never request structure and source for the same node in parallel, and never request source before structure completes. Use syntax_replace only after source confirms the exact nodeId. Do not infer support from TypeScript or a file extension alone; use the adapter or an explicit language when needed. Use normal tools for unsupported, generated, configuration, or new files.";
+const actionSchema = Type.Union([
+  Type.Object({
+    action: Type.Literal("inspect"),
+    continuation: Type.Optional(Type.Object({ token: Type.String() })),
+    path: Type.Optional(Type.String()),
+    language: Type.Optional(StringEnum(supportedLanguageIds)),
+    detail: Type.Optional(StringEnum(["outline", "source"] as const)),
+    depth: Type.Optional(Type.Integer({ minimum: 0, maximum: 12 })),
+  }),
+  Type.Object({
+    action: Type.Literal("search"),
+    scope: Type.String({ description: "Existing supported source file or directory scope" }),
+    language: Type.Optional(StringEnum(supportedLanguageIds)),
+    kind: StringEnum(["function", "call", "import"] as const),
+    name: Type.Optional(Type.String()),
+    source: Type.Optional(Type.String()),
+  }),
+  Type.Object({
+    action: Type.Literal("replace"),
+    continuation: Type.Object({
+      token: Type.String({ description: "Continuation returned by inspect with source detail" }),
+    }),
+    replacement: Type.String(),
+  }),
+]);
 
 function normalizePath(path: string): string {
   return path.startsWith("@") ? path.slice(1) : path;
 }
 
 function resultText(result: { content: readonly unknown[] }): string {
-  const first = result.content[0] as { type?: string; text?: string } | undefined;
-  return first?.type === "text" && typeof first.text === "string" ? first.text : "";
+  const first = result.content[0] as { text?: string } | undefined;
+  return typeof first?.text === "string" ? first.text : "";
 }
 
-function failureHint(tool: string, text: string): string {
-  const hint = text.includes("Unknown nodeId")
-    ? "run syntax_inspect with view=outline and use the exact nodeId=n3 from its output"
-    : text.includes("structure_requires_node")
-      ? "start with view=outline, then pass a returned nodeId=n3 with view=structure"
-      : text.includes("source_requires_structure")
-        ? "inspect the selected node with view=structure before requesting view=source"
-        : text.includes("source_requires_node")
-          ? "start with view=outline and select a returned nodeId=n3"
-          : text.includes("replace_requires_source")
-            ? "inspect the selected node with view=source before retrying syntax_replace"
-            : text.includes("stale_node")
-              ? "run syntax_inspect again; nodeIds can become stale after edits"
-              : text.includes("unsupported_language")
-                ? "use a supported file or provide a supported language"
-                : text.includes("syntax_error")
-                  ? "check the replacement syntax and retry"
-                  : tool === "syntax_search"
-                    ? "check the path and search parameters, then retry"
-                    : "check the error and retry with the documented parameters";
-  return `${text}\nHint: ${hint}.`;
+function handleResponse(handles: HandleStore, handle: NodeHandle): SyntaxHandle | undefined {
+  const token = handles.issueContinuation(handle.id);
+  if (!token) return undefined;
+  return {
+    continuation: continuation(token),
+    path: handle.path,
+    type: handle.type,
+    range: { start: handle.startPosition, end: handle.endPosition },
+    capabilities: ["inspect", "source", "replace"],
+  };
 }
 
-function isFailure(tool: string, text: string): boolean {
-  return tool === "syntax_inspect"
-    ? /^(?:Error:|stale_node:)/.test(text)
-    : tool === "syntax_replace"
-      ? !text.startsWith("edited ")
-      : text.startsWith("Error:");
+function outlineRequest(path: string, language: LanguageId | undefined): SyntaxRequest {
+  return { action: "inspect", path, ...(language ? { language } : {}), detail: "outline" };
+}
+
+function handlesFromOutput(handles: HandleStore, output: string): SyntaxHandle[] {
+  return [...new Set([...output.matchAll(/nodeId=(n\d+)/g)].map((match) => match[1]))].flatMap(
+    (id) => {
+      const handle = id ? handles.get(id) : undefined;
+      const result = handle ? handleResponse(handles, handle) : undefined;
+      return result ? [result] : [];
+    },
+  );
+}
+
+async function dispatch(
+  request: SyntaxRequest,
+  cwd: string,
+  handles: HandleStore,
+): Promise<SyntaxResponse> {
+  if (request.action === "search") {
+    const scope = normalizePath(request.scope);
+    const matches = await syntaxSearchDetailed({ ...request, scope }, cwd, handles);
+    const resultHandles = matches.flatMap((match) => {
+      const result = handleResponse(handles, match.handle);
+      return result ? [result] : [];
+    });
+    return {
+      ok: true,
+      action: "search",
+      data: { matchCount: matches.length, matches: matches.map((match) => match.description) },
+      ...(resultHandles.length > 0 ? { handles: resultHandles } : {}),
+      ...(resultHandles.length > 0
+        ? {
+            next: resultHandles.map((handle) => ({
+              action: "inspect" as const,
+              continuation: handle.continuation,
+              detail: "source" as const,
+            })),
+          }
+        : {}),
+    };
+  }
+
+  if (request.action === "inspect") {
+    const detail = request.detail ?? "outline";
+    if (request.continuation && !isContinuation(request.continuation)) {
+      return failure(
+        "inspect",
+        "invalid_continuation",
+        "The continuation must be passed unchanged.",
+      );
+    }
+    const handle = request.continuation
+      ? handles.resolveContinuation(request.continuation.token)
+      : undefined;
+    if (request.continuation && !handle) {
+      return failure(
+        "inspect",
+        "invalid_continuation",
+        "The continuation has expired; search or outline again.",
+      );
+    }
+    if (!handle && !request.path) {
+      return failure(
+        "inspect",
+        "inspect_requires_target",
+        "Provide a source path or a continuation.",
+      );
+    }
+    if (!handle && detail === "source") {
+      return failure(
+        "inspect",
+        "source_requires_target",
+        "Request outline first or pass a search continuation.",
+        [outlineRequest(request.path as string, request.language)],
+      );
+    }
+    const path = handle?.path ?? normalizePath(request.path as string);
+    const inspectParams = {
+      path,
+      ...(handle ? { nodeId: handle.id } : {}),
+      ...(request.language ? { language: request.language } : {}),
+      ...(request.depth !== undefined ? { depth: request.depth } : {}),
+    };
+    const structure =
+      detail === "source" && handle
+        ? await inspect({ ...inspectParams, view: "structure" }, cwd, handles)
+        : undefined;
+    const output = await inspect({ ...inspectParams, view: detail }, cwd, handles);
+    if (output.startsWith("stale_node:")) {
+      return failure(
+        "inspect",
+        "stale_node",
+        output,
+        request.path ? [outlineRequest(request.path, request.language)] : [],
+      );
+    }
+    const responseHandles =
+      detail === "source" && handle
+        ? [handleResponse(handles, handle)].filter((item): item is SyntaxHandle => Boolean(item))
+        : handlesFromOutput(handles, output);
+    return {
+      ok: true,
+      action: "inspect",
+      data:
+        detail === "source"
+          ? { source: output, ...(structure ? { structure } : {}) }
+          : { outline: output },
+      ...(responseHandles.length > 0 ? { handles: responseHandles } : {}),
+      ...(detail === "outline" && responseHandles.length > 0
+        ? {
+            next: responseHandles.map((item) => ({
+              action: "inspect" as const,
+              continuation: item.continuation,
+              detail: "source" as const,
+            })),
+          }
+        : detail === "source" && responseHandles[0]
+          ? {
+              next: [
+                {
+                  action: "replace" as const,
+                  continuation: responseHandles[0].continuation,
+                  replacement: "",
+                },
+              ],
+            }
+          : {}),
+    };
+  }
+
+  if (!isContinuation(request.continuation)) {
+    return failure("replace", "invalid_continuation", "Pass the source continuation unchanged.");
+  }
+  const target = handles.resolveContinuation(request.continuation.token);
+  if (!target)
+    return failure(
+      "replace",
+      "invalid_continuation",
+      "The continuation has expired; inspect source again.",
+    );
+  return withFileMutationQueue(resolve(cwd, target.path), async () => {
+    const result = await editContinuationDetailed(request, cwd, handles);
+    if (!result.message.startsWith("edited ")) {
+      return failure("replace", result.message.split(":")[0] ?? "replace_failed", result.message, [
+        { action: "inspect", continuation: request.continuation, detail: "source" },
+      ]);
+    }
+    const updated = result.details?.recommendedNextInspectionTarget
+      ? handles.get(result.details.recommendedNextInspectionTarget)
+      : undefined;
+    const nextHandle = updated ? handleResponse(handles, updated) : undefined;
+    return {
+      ok: true,
+      action: "replace",
+      data: { message: result.message, ...(result.details ? { edit: result.details } : {}) },
+      ...(nextHandle
+        ? {
+            handles: [nextHandle],
+            next: [{ action: "inspect", continuation: nextHandle.continuation, detail: "source" }],
+          }
+        : {}),
+    };
+  });
 }
 
 export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
   startParserCaches();
   const handles = new HandleStore();
   const metrics = createMetrics();
-
   pi.on("session_shutdown", async () => {
     handles.clear();
     await shutdownParserCaches();
   });
-
   pi.on("before_agent_start", async (event) => {
-    const selectedTools = event.systemPromptOptions.selectedTools ?? [];
-    const astrolabeSelected = ["syntax_inspect", "syntax_search", "syntax_replace"].some((name) =>
-      selectedTools.includes(name),
-    );
-    if (!astrolabeSelected) return;
-    return { systemPrompt: `${event.systemPrompt}\n\n${ASTROLABE_HOOK_GUIDANCE}` };
+    if (!(event.systemPromptOptions.selectedTools ?? []).includes("astrolabe")) return;
+    return { systemPrompt: `${event.systemPrompt}\n\n${GUIDANCE.join(" ")}` };
   });
-
   pi.registerTool({
-    name: "syntax_inspect",
-    label: "Syntax Inspect",
+    name: "astrolabe",
+    label: "Astrolabe",
     description:
-      "Map a supported-language file by declarations, drill into selected syntax nodes, and return source only for a selected nodeId. Calls must be serial: outline → successful structure for the returned nodeId → source. Never call structure and source in parallel or source before structure.",
-    promptSnippet:
-      "Read supported-language source structurally: outline declarations, drill into nodeIds, then fetch only the needed node source",
-    promptGuidelines: INSPECT_GUIDANCE,
-    parameters: Type.Object({
-      path: Type.String({ description: "Existing file path relative to the working directory" }),
-      language: Type.Optional(
-        StringEnum(supportedLanguageIds, {
-          description: "Explicit language override; otherwise inferred from the extension",
-        }),
-      ),
-      nodeId: Type.Optional(Type.String({ description: "Node handle returned by syntax_inspect" })),
-      view: Type.Optional(
-        StringEnum(["outline", "structure", "source"] as const, {
-          description:
-            "outline maps declarations, structure drills into a node, source returns one selected node body",
-        }),
-      ),
-      depth: Type.Optional(Type.Integer({ minimum: 0, maximum: 12 })),
-    }),
+      "Search supported source files or directory scopes, inspect selected syntax, and safely replace validated nodes. Reuse returned continuations and next actions unchanged.",
+    promptSnippet: "Search, inspect, and safely edit supported source with reusable continuations",
+    promptGuidelines: GUIDANCE,
+    parameters: actionSchema,
     renderCall(args, theme) {
-      const view = args.view ?? "outline";
-      const target = args.nodeId ? ` nodeId=${args.nodeId}` : "";
+      const request = args as SyntaxRequest;
+      const target =
+        request.action === "search"
+          ? request.scope
+          : request.action === "inspect"
+            ? (request.path ?? "continuation")
+            : "continuation";
       return new Text(
-        `${theme.fg("toolTitle", theme.bold("inspect "))}${theme.fg("accent", args.path)}${theme.fg("dim", ` ${view}${target}`)}`,
+        `${theme.fg("toolTitle", theme.bold("astrolabe "))}${theme.fg("accent", target)}${theme.fg("dim", ` ${request.action}`)}`,
         0,
         0,
       );
     },
     renderResult(result, { isPartial }, theme, context) {
-      if (isPartial) return new Text(theme.fg("warning", "Inspecting..."), 0, 0);
+      if (isPartial) return new Text(theme.fg("warning", "Processing Astrolabe..."), 0, 0);
       const output = resultText(result);
-      const failed = context.isError || /^(?:Error:|stale_node:)/.test(output);
-      if (failed) return new Text(theme.fg("error", output || "Inspect failed"), 0, 0);
-      const lines = output === "" ? 0 : output.split("\n").length;
       return new Text(
-        theme.fg("success", `${context.args.view ?? "outline"}: ${lines} line(s)`),
+        theme.fg(
+          context.isError ? "error" : "success",
+          context.isError ? output : "Astrolabe complete",
+        ),
         0,
         0,
       );
     },
     async execute(_id, params, _signal, _update, ctx) {
       const start = Date.now();
+      let response: SyntaxResponse;
       try {
-        const output = await inspect(
-          { ...params, path: normalizePath(params.path) },
-          ctx.cwd,
-          handles,
-        );
-        const text = isFailure("syntax_inspect", output)
-          ? failureHint("syntax_inspect", output)
-          : output;
-        record(metrics, JSON.stringify(params).length, text, start);
-        return { content: [{ type: "text", text }], details: { metrics } };
+        response = await dispatch(params as SyntaxRequest, ctx.cwd, handles);
       } catch (error) {
-        const text = failureHint("syntax_inspect", String(error));
-        record(metrics, JSON.stringify(params).length, text, start);
-        return { content: [{ type: "text", text }], details: { metrics }, isError: true };
+        const request = params as SyntaxRequest;
+        response = failure(request.action, "syntax_error", String(error));
       }
-    },
-  });
-
-  pi.registerTool({
-    name: "syntax_search",
-    label: "Syntax Search",
-    description:
-      "Search a supported-language file with Tree-sitter Query for function declarations, calls, or imports and return position-aware node handles.",
-    promptSnippet:
-      "Find exact declarations, calls, or imports with Tree-sitter Query in a supported language",
-    promptGuidelines: SEARCH_GUIDANCE,
-    parameters: Type.Object({
-      path: Type.String({ description: "Existing file path relative to the working directory" }),
-      language: Type.Optional(
-        StringEnum(supportedLanguageIds, {
-          description: "Explicit language override; otherwise inferred from the extension",
-        }),
-      ),
-      kind: StringEnum(["function", "call", "import"] as const, {
-        description: "Syntax construct to find",
-      }),
-      name: Type.Optional(Type.String({ description: "Exact declaration or call name" })),
-      source: Type.Optional(
-        Type.String({ description: "Exact import module source, without surrounding quotes" }),
-      ),
-    }),
-    renderCall(args, theme) {
-      const filters = [args.name && `name=${args.name}`, args.source && `source=${args.source}`]
-        .filter(Boolean)
-        .join(" ");
-      return new Text(
-        `${theme.fg("toolTitle", theme.bold("search "))}${theme.fg("accent", args.path)}${theme.fg("dim", ` ${args.kind}${filters ? ` ${filters}` : ""}`)}`,
-        0,
-        0,
-      );
-    },
-    renderResult(result, { isPartial }, theme, context) {
-      if (isPartial) return new Text(theme.fg("warning", "Searching..."), 0, 0);
-      const output = resultText(result);
-      const failed = context.isError || output.startsWith("Error:");
-      const count = output === "(no syntax matches)" ? 0 : output ? output.split("\n").length : 0;
-      return new Text(
-        theme.fg(failed ? "error" : "success", failed ? output : `search: ${count} match(es)`),
-        0,
-        0,
-      );
-    },
-    async execute(_id, params, _signal, _update, ctx) {
-      const start = Date.now();
-      try {
-        const output = await syntaxSearch(
-          { ...params, path: normalizePath(params.path) },
-          ctx.cwd,
-          handles,
-        );
-        record(metrics, JSON.stringify(params).length, output, start);
-        return { content: [{ type: "text", text: output }], details: { metrics } };
-      } catch (error) {
-        const text = failureHint("syntax_search", String(error));
-        record(metrics, JSON.stringify(params).length, text, start);
-        return { content: [{ type: "text", text }], details: { metrics }, isError: true };
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "syntax_replace",
-    label: "Syntax Edit",
-    description:
-      "Replace one previously inspected syntax node, reject stale or cross-grammar handles, reparse incrementally, and save atomically. For broad changes in supported source, decompose the work into local syntax edits; use normal diff editing for new or non-structural files.",
-    promptSnippet:
-      "Edit one confirmed syntax node safely; use normal diff for broad or multi-location changes",
-    promptGuidelines: REPLACE_GUIDANCE,
-    parameters: Type.Object({
-      path: Type.String({ description: "Existing file path relative to the working directory" }),
-      nodeId: Type.String({
-        description: "Exact node handle confirmed with syntax_inspect source",
-      }),
-      replacement: Type.String({
-        description: "Complete replacement source for the selected node",
-      }),
-    }),
-    renderCall(args, theme) {
-      return new Text(
-        `${theme.fg("toolTitle", theme.bold("edit "))}${theme.fg("accent", args.path)}${theme.fg("dim", ` nodeId=${args.nodeId}`)}`,
-        0,
-        0,
-      );
-    },
-    renderResult(result, { isPartial }, theme, context) {
-      if (isPartial) return new Text(theme.fg("warning", "Editing..."), 0, 0);
-      const output = resultText(result);
-      const failed = context.isError || !output.startsWith("edited ");
-      return new Text(theme.fg(failed ? "error" : "success", output || "Edit failed"), 0, 0);
-    },
-    async execute(_id, params, _signal, _update, ctx) {
-      const start = Date.now();
-      const targetPath = resolve(ctx.cwd, normalizePath(params.path));
-      return withFileMutationQueue(targetPath, async () => {
-        try {
-          const result = await editDetailed(
-            { ...params, path: normalizePath(params.path) },
-            ctx.cwd,
-            handles,
-          );
-          const text = isFailure("syntax_replace", result.message)
-            ? failureHint("syntax_replace", result.message)
-            : result.message;
-          record(metrics, JSON.stringify(params).length, text, start);
-          return {
-            content: [{ type: "text", text }],
-            details: { metrics, ...(result.details ? { edit: result.details } : {}) },
-          };
-        } catch (error) {
-          const text = failureHint("syntax_replace", String(error));
-          record(metrics, JSON.stringify(params).length, text, start);
-          return { content: [{ type: "text", text }], details: { metrics }, isError: true };
-        }
-      });
+      const text = responseText(response);
+      record(metrics, JSON.stringify(params).length, text, start);
+      return {
+        content: [{ type: "text", text }],
+        details: { response, metrics },
+        ...(response.ok ? {} : { isError: true }),
+      };
     },
   });
 }
