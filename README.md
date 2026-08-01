@@ -1,6 +1,6 @@
 # Pi Kit
 
-A collection of extensions and reusable agent skills for [Pi](https://github.com/earendil-works/pi), focused on planning, collaboration, project-aware automation, and safe development workflows.
+A collection of extensions, reusable agent skills, prompts, themes, and session analysis tools for [Pi](https://github.com/earendil-works/pi), focused on planning, collaboration, project-aware automation, and safe development workflows.
 
 ## Install
 
@@ -38,13 +38,19 @@ Settings:
 
 Pi discovers extensions from the `extensions/` directory. Each extension is an independent Bun workspace package with its own documentation and checks.
 
-See each extension's README for its tools, usage, and constraints. Workspace-level commands are covered in the [extension development guide](./extensions/README.md).
+See each extension's README for its behavior, tools, hooks, and constraints. Workspace-level commands are covered in the [extension development guide](./extensions/README.md).
 
-### Skills
+### Packages
 
-Reusable workflows live under `skills/`:
+Additional standalone packages live under `packages/`. See each package's documentation for usage and constraints.
 
-Each skill is defined by a `SKILL.md` file. Standard subagent delegation comes from the separately installed `pi-subagents` package; `agent-team` provides the higher-level committee and review workflow.
+### Skills, prompts, and themes
+
+- Reusable workflows live under `skills/`; each skill is defined by a `SKILL.md` file.
+- Prompt templates live under `prompts/`.
+- Themes live under `themes/`.
+
+Standard subagent delegation comes from the separately installed `pi-subagents` package; `agent-team` provides the higher-level committee and review workflow.
 
 ## Development
 
@@ -82,7 +88,10 @@ Replace `@halqme/agent-team` with the target package name. After changing an ext
 ```text
 .
 ├── extensions/   # Pi extensions and Bun workspace configuration
+├── packages/     # Standalone packages such as session-metrics
 ├── skills/       # Reusable agent workflows
+├── prompts/      # Prompt templates
+├── themes/       # Pi themes
 ├── package.json  # Pi package metadata
 └── bun.lock      # Locked dependencies
 ```

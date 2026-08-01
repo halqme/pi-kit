@@ -10,7 +10,7 @@
     "lint": "oxlint ."
   },
   "devDependencies": {
-    "@types/node": "24.12.4"
+    "@types/node": "catalog:"
   },
   "engines": {
     "node": ">=24.0.0"
