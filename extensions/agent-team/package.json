@@ -12,7 +12,8 @@
   "dependencies": {
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
-    "@earendil-works/pi-tui": "catalog:"
+    "@earendil-works/pi-tui": "catalog:",
+    "@halqme/background-process": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

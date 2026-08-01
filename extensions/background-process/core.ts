@@ -9,8 +9,8 @@ export type ProcessPhase = "pending" | "running" | "unchecked" | "completed";
 export type ProcessOutcome = "success" | "failed" | "stopped" | "lost";
 
 export type ProcessSpec =
-  | { type: "shell"; command: string }
-  | { type: "argv"; executable: string; args: string[] };
+  | { type: "shell"; command: string; stdin?: string }
+  | { type: "argv"; executable: string; args: string[]; stdin?: string };
 
 export interface ProcessRequest {
   version: 1;
@@ -54,6 +54,7 @@ export interface StartProcessOptions {
   label?: string;
   kind?: string;
   id?: string;
+  stdin?: string;
 }
 
 const REQUEST_FILE = "request.json";
@@ -212,7 +213,7 @@ export async function startBackgroundProcess(
     ownerSessionId: options.ownerSessionId,
     cwd: options.cwd,
     createdAt: new Date().toISOString(),
-    spec: options.spec,
+    spec: options.stdin === undefined ? options.spec : { ...options.spec, stdin: options.stdin },
   };
   await writeJsonExclusive(join(taskDir, REQUEST_FILE), request);
 

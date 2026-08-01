@@ -4,13 +4,13 @@ Runs multiple session-scoped subagent runs as a lightweight discussion team. The
 
 The `agent_team` tool supports `start`, `list`, `check`, `answer`, and `stop`. `start` waits for autonomous teams to finish and returns the final report; consultative teams return after the opening statements and can be resumed with `answer`. Use `check` for an already-running or waiting team.
 
-Each opening, discussion, and final-recording response is a separate `pi-subagents` async run. Use pi-subagents' standard FleetView (`/subagents-fleet` or `Ctrl+Alt+F`) to inspect each member's live transcript. `check`, `start`, and `answer` also return the accumulated agent-team transcript.
+Each opening, discussion, and final-recording response is a separate Pi subprocess started through `@halqme/background-process`. Prompts are sent over stdin and members are started with argv, not shell commands. `check`, `start`, and `answer` return the accumulated agent-team transcript.
 
 - `mode: "committee"` asks specialists to develop a shared recommendation while preserving material dissent.
 - `mode: "adversarial"` asks members to cross-examine claims, evidence, assumptions, and failure modes. Adversarial behavior is directed at arguments, not people.
 - `interaction: "consultative"` remains available for callers that explicitly want a pause after independent opening statements; the normal default is autonomous.
 - `model` sets the default provider/model for the whole team. A member-level `model` overrides it; otherwise the parent Pi model is inherited.
-- Members run through the built-in read-only `oracle` subagent profile. The `tools` option is validated and included as a capability hint in the task prompt; the effective child tool set follows the installed subagent profile.
+- Members run with Pi's read-only tools by default (`read`, `grep`, `find`, and `ls`), with extensions, discovered skills, prompt templates, and themes disabled. Skills can be explicitly supplied when needed.
 - Each member can set `instructionPolicy` to `user-obedient` (follow user priorities faithfully) or `goal-driven` (challenge local instructions when needed to achieve the team's objective). It defaults to `goal-driven`.
 
 The first member acts as the final recorder after the configured discussion rounds. Teams are in-memory only and do not survive `/reload` or parent session shutdown.

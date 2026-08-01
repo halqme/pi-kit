@@ -67,8 +67,13 @@ try {
     cwd: request.cwd,
     detached: true,
     env: process.env,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
   });
+  if (request.spec.stdin !== undefined) {
+    child.stdin.end(request.spec.stdin);
+  } else {
+    child.stdin.end();
+  }
   child.stdout.on("data", (chunk) => stdout.write(chunk));
   child.stderr.on("data", (chunk) => stderr.write(chunk));
 

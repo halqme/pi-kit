@@ -5,7 +5,7 @@ import { isAbsolute, join, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { SubagentRpcClient } from "./subagent-rpc.ts";
+import { agentTeamTaskRoot, createPiAgentFactory } from "./pi-runner.ts";
 import {
   AgentTeam,
   type AgentTeamConfig,
@@ -116,7 +116,6 @@ function createLiveReporter(ctx: ExtensionContext, topic: string): AgentTeamUpda
 
 export default function agentTeamExtension(pi: ExtensionAPI): void {
   const teams = new Map<string, AgentTeam>();
-  const subagentClient = new SubagentRpcClient(pi.events);
 
   pi.registerTool({
     name: TOOL_NAME,
@@ -256,7 +255,6 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
           const tools = selectTools(params.tools, availableTools);
           const parentModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
           const defaultModel = params.model?.trim() || parentModel;
-          const thinking = params.thinking ?? pi.getThinkingLevel();
           const timeoutMs = params.turnTimeoutMs ?? 300_000;
           const teamSkills = await resolveSkills(params.skills, ctx.cwd);
           const members: AgentTeamMemberConfig[] = await Promise.all(
@@ -282,19 +280,17 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
             maxRounds: params.maxRounds ?? 1,
           };
 
-          const team = new AgentTeam(config, (member, systemPrompt) => {
-            const model = member.model ?? defaultModel;
-            return subagentClient.startMember({
-              member,
-              systemPrompt,
+          const team = new AgentTeam(
+            config,
+            createPiAgentFactory({
               cwd: ctx.cwd,
-              ...(model !== undefined ? { model } : {}),
-              ...(thinking ? { thinking } : {}),
+              taskRoot: agentTeamTaskRoot(ctx.cwd, ctx.sessionManager.getSessionId()),
+              ownerSessionId: ctx.sessionManager.getSessionId(),
+              ...(defaultModel !== undefined ? { model: defaultModel } : {}),
+              tools,
               timeoutMs,
-              ...(member.skills?.length ? { skills: member.skills } : {}),
-              ...(tools.length ? { tools } : {}),
-            });
-          });
+            }),
+          );
           teams.set(id, team);
           updateStatus(ctx, teams);
 
@@ -358,7 +354,6 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
   pi.on("session_shutdown", async (_event: unknown, ctx: ExtensionContext) => {
     await Promise.allSettled([...teams.values()].map((team) => team.stop()));
     teams.clear();
-    subagentClient.dispose();
     ctx.ui.setStatus(STATUS_KEY, undefined);
   });
 }

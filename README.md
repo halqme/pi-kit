@@ -5,7 +5,6 @@ A collection of extensions, reusable agent skills, prompts, themes, and session 
 ## Install
 
 ```sh
-pi install npm:pi-subagents
 pi install git:github.com/halqme/pi-kit
 
 ```
@@ -14,9 +13,6 @@ Requirements:
 
 - Node.js 24 or later
 - Bun 1.3.14 or later
-
-Dependencies:
-- npm:pi-subagents
 
 Recommendation:
 - npm:@ollama/pi-web-search
@@ -50,7 +46,7 @@ Additional standalone packages live under `packages/`. See each package's docume
 - Prompt templates live under `prompts/`.
 - Themes live under `themes/`.
 
-Standard subagent delegation comes from the separately installed `pi-subagents` package; `agent-team` provides the higher-level committee and review workflow.
+`agent-team` runs its discussion members as isolated Pi subprocesses through the bundled `background-process` extension.
 
 ## Development
 
