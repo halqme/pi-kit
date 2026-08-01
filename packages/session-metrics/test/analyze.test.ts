@@ -24,12 +24,30 @@ test("aggregates tokens, turns, tools, and errors from session JSONL", () => {
     output: 4,
     cacheRead: 2,
     cacheWrite: 1,
+    reasoning: 0,
     total: 17,
     cost: 0,
+    cacheCost: 0,
   });
   assert.equal(result.models.unknown?.messages, 1);
   assert.equal(result.toolUsage.read?.calls, 1);
   assert.equal(result.errors, 1);
+});
+
+test("tracks thinking levels as effort", () => {
+  const result = analyzeLines([
+    JSON.stringify({ type: "thinking_level_change", thinkingLevel: "high" }),
+    JSON.stringify({
+      type: "message",
+      message: {
+        role: "assistant",
+        usage: { totalTokens: 42 },
+      },
+    }),
+  ]);
+  assert.equal(result.thinkingLevels.high?.messages, 1);
+  assert.equal(result.thinkingLevels.high?.usage.total, 42);
+  assert.equal(Object.values(result.modelEfforts)[0]?.messages, 1);
 });
 
 test("collects metrics by UTC day, ISO week, month, and project", () => {
