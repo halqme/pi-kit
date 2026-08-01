@@ -1,11 +1,11 @@
 # Astrolabe
 
-Astrolabeは、既存ファイルを構文単位で読み、局所的に編集するためのTree-sitter拡張です。TypeScriptファイルは`outline → structure → source → syntax_replace`の順に扱い、必要な関数やメソッドだけをモデルへ渡します。
+Astrolabeは、対応言語の既存ファイルを構文単位で読み、局所的に編集するためのTree-sitter拡張です。対応言語のファイルは`outline → structure → source → syntax_replace`の順に扱い、必要な関数やメソッドだけをモデルへ渡します。
 
 ## Tools
 
-- `syntax_inspect`: nodeIdなしの`outline`でファイル内の関数、クラス、メソッド、型、import、exportを宣言要約として一覧にします。関数のシグネチャ、クラス／インターフェースの継承と主要メンバー、importの対象とモジュール名を表示します。出力の`nodeId=n3`のような値を`structure`で掘り下げ、そこで得たnodeIdだけを`source`で取得できます。ファイル全体の`structure`や`source`は拒否します。拡張子で判定できない場合は`language: "typescript"`を明示できます。
-- `syntax_search`: Tree-sitter Queryで関数宣言、呼出し、importを検索します。`kind`に`function`、`call`、`import`を指定し、`name`または`source`（モジュール名、引用符なし）で絞り込めます。結果には`nodeId=n3`形式の、`structure`／`source`へ渡せるnodeIdが含まれます。
+- `syntax_inspect`: nodeIdなしの`outline`で、対応言語のファイル内にある関数、クラス、メソッド、型、import、exportを宣言要約として一覧にします。関数のシグネチャ、クラス／インターフェースの継承と主要メンバー、importの対象とモジュール名を表示します。出力の`nodeId=n3`のような値を`structure`で掘り下げ、そこで得たnodeIdだけを`source`で取得できます。ファイル全体の`structure`や`source`は拒否します。拡張子で判定できない場合は、対応する`language`（例: `"typescript"`）を明示できます。
+- `syntax_search`: 対応言語のTree-sitter Queryで関数宣言、呼出し、importを検索します。`kind`に`function`、`call`、`import`を指定し、`name`または`source`（モジュール名、引用符なし）で絞り込めます。結果には`nodeId=n3`形式の、`structure`／`source`へ渡せるnodeIdが含まれます。
 - `syntax_replace`: `source`で本文を確認済みのnodeIdだけを置換します。Tree-sitterの`Edit`を作成し、増分再解析、`ERROR`とmissing nodeの位置、新しい構文エラー、置換後のノード型と親文脈を検証してから保存します。結果はTUIへ簡潔に表示されます。
 
 Tree-sitterはWASMで動くため、ネイティブアドオンのビルドは不要です。対象はrealpath解決後も作業ディレクトリ内にある既存ファイルだけです。新規ファイルと、作業ディレクトリ外を指すsymlinkは拒否します。
@@ -22,12 +22,12 @@ Astrolabeはgrammarを再実装しません。言語アダプターが言語ID�
 
 ```text
 languages/
-└── typescript/
+└── [language]/
     ├── config.ts
     └── queries.ts
 ```
 
-outlineは`declaration.function`、`declaration.method`、`declaration.type`、`declaration.import`、`declaration.export`に絞り、制御文や式を一覧へ混ぜません。現在サポートする拡張子は`.ts`、`.mts`、`.cts`です。TSXとその他の言語は`unsupported_language`で拒否します。TSXは`language`を明示しても受け付けません。拡張子のないTypeScriptファイルなどは、`syntax_inspect`の`language`で明示できます。
+outlineは言語アダプターが定義する宣言・重要ノードに絞り、制御文や式を一覧へ混ぜません。現在の対応言語と拡張子は、TypeScript（`.ts`、`.mts`、`.cts`）、JavaScript（`.js`、`.mjs`、`.cjs`）、Python（`.py`、`.pyw`）、Go（`.go`）です。TSXとその他の言語は`unsupported_language`で拒否します。拡張子で判定できないファイルは、`syntax_inspect`または`syntax_search`の`language`で明示できます。
 
 Queryは`queries.ts`の`String.raw`文字列として管理します。Astrolabe実行時に同じ文字列をTree-sitter Queryとしてコンパイルするため、外部エディタのQuery言語サーバーによる言語判別やparser設定には依存しません。
 
@@ -41,7 +41,7 @@ Queryは`queries.ts`の`String.raw`文字列として管理します。Astrolabe
 
 新規ファイル、生成コード、設定ファイル、非対応言語、または構文木操作の効果が薄い変更では通常のDiff・patch型編集を使います。対応言語の既存ソースに対する複数ファイルの変更や大規模な変更も、関連する局所編集へ分解できる限りAstrolabeの対象外にはしません。Astrolabeは既存ファイルだけを対象にし、存在しないファイルの新規作成は行いません。
 
-Astrolabeの構文検査は型検査ではありません。Tree-sitterのノードIDは編集後に陳腐化する可能性があるため、各編集後に再度outlineまたはstructureを取得してください。複数編集を終えた時点で、TypeScript Language Service、`tsc --noEmit`、プロジェクトのテストを別途実行してください。
+Astrolabeの構文検査は型検査ではありません。Tree-sitterのノードIDは編集後に陳腐化する可能性があるため、各編集後に再度outlineまたはstructureを取得してください。複数編集を終えた時点で、各言語の型検査・Lint・プロジェクトのテストを別途実行してください。
 
 ## 状態コード
 
