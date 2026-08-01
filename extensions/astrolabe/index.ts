@@ -20,18 +20,21 @@ const INSPECT_GUIDANCE = [
 ];
 
 const SEARCH_GUIDANCE = [
-  "Use syntax_search for exact TypeScript declarations, calls, or imports after broad text search has identified a likely area.",
+  "Use syntax_search for exact declarations, calls, or imports in a supported language after broad text search has identified a likely area.",
   "Use kind=function, call, or import; add name or source filters when possible.",
   "Search results return nodeIds that can be expanded with syntax_inspect structure or source.",
   "syntax_search is not a replacement for text search, type checking, or tests.",
 ];
 
 const REPLACE_GUIDANCE = [
-  "Use syntax_replace after syntax_inspect source has confirmed the exact nodeId when one or a few local syntax nodes need editing.",
+  "Use syntax_replace after syntax_inspect source has confirmed the exact nodeId when one or a few local syntax nodes in a supported language need editing.",
   "Use normal diff/patch editing for new files, unsupported or non-structural files, and changes whose structure provides no useful leverage. For broad or cross-cutting changes in supported source, prefer a sequence of local syntax_replace operations when that makes intermediate validation useful.",
   "After syntax_replace succeeds, run syntax_inspect again before another structural edit because prior nodeIds may be stale.",
   "syntax_replace validates syntax, not types; run the project type checker and tests separately after the edit batch.",
 ];
+
+const ASTROLABE_HOOK_GUIDANCE =
+  "When working with an existing file supported by an Astrolabe language adapter, prefer syntax_inspect outline → structure → source before broad reads, and use syntax_replace only after source confirms the exact nodeId. Do not infer support from TypeScript or a file extension alone; use the adapter or an explicit language when needed. Use normal tools for unsupported, generated, configuration, or new files.";
 
 function normalizePath(path: string): string {
   return path.startsWith("@") ? path.slice(1) : path;
@@ -40,6 +43,37 @@ function normalizePath(path: string): string {
 function resultText(result: { content: readonly unknown[] }): string {
   const first = result.content[0] as { type?: string; text?: string } | undefined;
   return first?.type === "text" && typeof first.text === "string" ? first.text : "";
+}
+
+function failureHint(tool: string, text: string): string {
+  const hint = text.includes("Unknown nodeId")
+    ? "run syntax_inspect with view=outline and use the exact nodeId=n3 from its output"
+    : text.includes("structure_requires_node")
+      ? "start with view=outline, then pass a returned nodeId=n3 with view=structure"
+      : text.includes("source_requires_structure")
+        ? "inspect the selected node with view=structure before requesting view=source"
+        : text.includes("source_requires_node")
+          ? "start with view=outline and select a returned nodeId=n3"
+          : text.includes("replace_requires_source")
+            ? "inspect the selected node with view=source before retrying syntax_replace"
+            : text.includes("stale_node")
+              ? "run syntax_inspect again; nodeIds can become stale after edits"
+              : text.includes("unsupported_language")
+                ? "use a supported file or provide a supported language"
+                : text.includes("syntax_error")
+                  ? "check the replacement syntax and retry"
+                  : tool === "syntax_search"
+                    ? "check the path and search parameters, then retry"
+                    : "check the error and retry with the documented parameters";
+  return `${text}\nHint: ${hint}.`;
+}
+
+function isFailure(tool: string, text: string): boolean {
+  return tool === "syntax_inspect"
+    ? /^(?:Error:|stale_node:)/.test(text)
+    : tool === "syntax_replace"
+      ? !text.startsWith("edited ")
+      : text.startsWith("Error:");
 }
 
 export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
@@ -52,13 +86,22 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
     await shutdownParserCaches();
   });
 
+  pi.on("before_agent_start", async (event) => {
+    const selectedTools = event.systemPromptOptions.selectedTools ?? [];
+    const astrolabeSelected = ["syntax_inspect", "syntax_search", "syntax_replace"].some((name) =>
+      selectedTools.includes(name),
+    );
+    if (!astrolabeSelected) return;
+    return { systemPrompt: `${event.systemPrompt}\n\n${ASTROLABE_HOOK_GUIDANCE}` };
+  });
+
   pi.registerTool({
     name: "syntax_inspect",
     label: "Syntax Inspect",
     description:
-      "Map a TypeScript file by declarations, drill into selected syntax nodes, and return source only for a selected nodeId. Start with outline; use structure before source.",
+      "Map a supported-language file by declarations, drill into selected syntax nodes, and return source only for a selected nodeId. Start with outline; use structure before source.",
     promptSnippet:
-      "Read TypeScript structurally: outline declarations, drill into nodeIds, then fetch only the needed node source",
+      "Read supported-language source structurally: outline declarations, drill into nodeIds, then fetch only the needed node source",
     promptGuidelines: INSPECT_GUIDANCE,
     parameters: Type.Object({
       path: Type.String({ description: "Existing file path relative to the working directory" }),
@@ -105,10 +148,13 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
           ctx.cwd,
           handles,
         );
-        record(metrics, JSON.stringify(params).length, output, start);
-        return { content: [{ type: "text", text: output }], details: { metrics } };
+        const text = isFailure("syntax_inspect", output)
+          ? failureHint("syntax_inspect", output)
+          : output;
+        record(metrics, JSON.stringify(params).length, text, start);
+        return { content: [{ type: "text", text }], details: { metrics } };
       } catch (error) {
-        const text = String(error);
+        const text = failureHint("syntax_inspect", String(error));
         record(metrics, JSON.stringify(params).length, text, start);
         return { content: [{ type: "text", text }], details: { metrics }, isError: true };
       }
@@ -119,8 +165,9 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
     name: "syntax_search",
     label: "Syntax Search",
     description:
-      "Search a TypeScript file with Tree-sitter Query for function declarations, calls, or imports and return position-aware node handles.",
-    promptSnippet: "Find exact TypeScript declarations, calls, or imports with Tree-sitter Query",
+      "Search a supported-language file with Tree-sitter Query for function declarations, calls, or imports and return position-aware node handles.",
+    promptSnippet:
+      "Find exact declarations, calls, or imports with Tree-sitter Query in a supported language",
     promptGuidelines: SEARCH_GUIDANCE,
     parameters: Type.Object({
       path: Type.String({ description: "Existing file path relative to the working directory" }),
@@ -169,7 +216,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
         record(metrics, JSON.stringify(params).length, output, start);
         return { content: [{ type: "text", text: output }], details: { metrics } };
       } catch (error) {
-        const text = String(error);
+        const text = failureHint("syntax_search", String(error));
         record(metrics, JSON.stringify(params).length, text, start);
         return { content: [{ type: "text", text }], details: { metrics }, isError: true };
       }
@@ -182,7 +229,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
     description:
       "Replace one previously inspected syntax node, reject stale or cross-grammar handles, reparse incrementally, and save atomically. For broad changes in supported source, decompose the work into local syntax edits; use normal diff editing for new or non-structural files.",
     promptSnippet:
-      "Edit one confirmed TypeScript node safely; use normal diff for broad or multi-location changes",
+      "Edit one confirmed syntax node safely; use normal diff for broad or multi-location changes",
     promptGuidelines: REPLACE_GUIDANCE,
     parameters: Type.Object({
       path: Type.String({ description: "Existing file path relative to the working directory" }),
@@ -216,13 +263,16 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
             ctx.cwd,
             handles,
           );
-          record(metrics, JSON.stringify(params).length, result.message, start);
+          const text = isFailure("syntax_replace", result.message)
+            ? failureHint("syntax_replace", result.message)
+            : result.message;
+          record(metrics, JSON.stringify(params).length, text, start);
           return {
-            content: [{ type: "text", text: result.message }],
+            content: [{ type: "text", text }],
             details: { metrics, ...(result.details ? { edit: result.details } : {}) },
           };
         } catch (error) {
-          const text = String(error);
+          const text = failureHint("syntax_replace", String(error));
           record(metrics, JSON.stringify(params).length, text, start);
           return { content: [{ type: "text", text }], details: { metrics }, isError: true };
         }

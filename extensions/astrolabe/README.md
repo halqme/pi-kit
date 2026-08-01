@@ -8,6 +8,12 @@ Astrolabeは、対応言語の既存ファイルを構文単位で読み、局�
 - `syntax_search`: 対応言語のTree-sitter Queryで関数宣言、呼出し、importを検索します。`kind`に`function`、`call`、`import`を指定し、`name`または`source`（モジュール名、引用符なし）で絞り込めます。結果には`nodeId=n3`形式の、`structure`／`source`へ渡せるnodeIdが含まれます。
 - `syntax_replace`: `source`で本文を確認済みのnodeIdだけを置換します。Tree-sitterの`Edit`を作成し、増分再解析、`ERROR`とmissing nodeの位置、新しい構文エラー、置換後のノード型と親文脈を検証してから保存します。結果はTUIへ簡潔に表示されます。
 
+### フック
+
+- `before_agent_start`: `syntax_inspect`、`syntax_search`、`syntax_replace`のいずれかがそのターンで有効な場合に、Astrolabeの使い方をシステムプロンプトへ追加します。対応する言語アダプターの既存ファイルでは、`outline → structure → source`の順で調べ、`source`確認後に`syntax_replace`を使うよう案内します。TypeScriptや拡張子だけで対応可否を判断せず、アダプターまたは明示した`language`を使います。未対応・生成物・設定・新規ファイルは通常のツールを使います。
+
+ツールが失敗した場合は、`Unknown nodeId`、古いハンドル、検査順序違反、構文エラーなどに応じて、次に試す操作を短い`Hint`として結果へ付けます。
+
 Tree-sitterはWASMで動くため、ネイティブアドオンのビルドは不要です。対象はrealpath解決後も作業ディレクトリ内にある既存ファイルだけです。新規ファイルと、作業ディレクトリ外を指すsymlinkは拒否します。
 
 ## ハンドルと位置
