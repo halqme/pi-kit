@@ -10,7 +10,7 @@ interface CapturedTool {
   name: string;
   execute: (
     toolCallId: string,
-    params: { completedSteps: number[] },
+    params: Record<string, unknown>,
     signal: AbortSignal | undefined,
     onUpdate: undefined,
     ctx: ExtensionContext,
@@ -111,19 +111,19 @@ test("plan-execute starts a turn, records completion, and rejects replay", async
 
   assert.equal(sentUserMessages.length, 1);
   assert.match(sentUserMessages[0]!, /Execute the approved plan/);
-  assert.ok(activeTools.includes("grill_plan_progress"));
+  assert.ok(activeTools.includes("grill_plan"));
 
-  const progressTool = tools.get("grill_plan_progress");
+  const progressTool = tools.get("grill_plan");
   assert.ok(progressTool);
   const result = await progressTool.execute(
     "call-1",
-    { completedSteps: [1, 2] },
+    { action: "progress", completedSteps: [1, 2] },
     undefined,
     undefined,
     ctx,
   );
   assert.equal(result.isError, undefined);
-  assert.ok(!activeTools.includes("grill_plan_progress"));
+  assert.ok(!activeTools.includes("grill_plan"));
   assert.match(notifications.at(-1)?.message ?? "", /completed/);
   assert.equal((appendedStates.at(-1) as { phase?: string }).phase, "idle");
 
@@ -132,10 +132,10 @@ test("plan-execute starts a turn, records completion, and rejects replay", async
   assert.match(notifications.at(-1)?.message ?? "", /No executable plan/);
 
   (ctx as unknown as { hasUI: boolean }).hasUI = true;
-  const startTool = tools.get("grill_plan_start");
+  const startTool = tools.get("grill_plan");
   assert.ok(startTool);
   const startParams = {
-    completedSteps: [],
+    action: "start",
     goal: "assistant-generated task text must not become user approval",
   };
   const startResult = await startTool.execute("call-2", startParams, undefined, undefined, ctx);
@@ -147,4 +147,23 @@ test("plan-execute starts a turn, records completion, and rejects replay", async
   assert.equal(sentUserMessages.length, 2);
   assert.equal(sentUserMessages.at(-1), "hogehoge");
   assert.equal((appendedStates.at(-1) as { goal?: string }).goal, "hogehoge");
+
+  (ctx as unknown as { hasUI: boolean }).hasUI = false;
+  await events.get("agent_end")?.(
+    {
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: `課題:\nNeed a plan\n\n原因:\nUnknown\n\n修正するべき点:\nDefine the change\n\n対処法:\nInspect and implement\n\n実際に編集するファイル:\n- src/example.ts\n\nPlan:\n1. Inspect the implementation\n2. Run the tests`,
+            },
+          ],
+        },
+      ],
+    },
+    ctx,
+  );
+  assert.equal((appendedStates.at(-1) as { phase?: string }).phase, "ready");
 });

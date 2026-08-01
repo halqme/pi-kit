@@ -29,7 +29,7 @@ interface PersistedState {
 }
 
 const STATE_ENTRY = "grill-plan-state";
-const PROGRESS_TOOL = "grill_plan_progress";
+const PROGRESS_TOOL = "grill_plan";
 const PLAN_TOOLS = new Set([
   "read",
   "bash",
@@ -39,7 +39,9 @@ const PLAN_TOOLS = new Set([
   "questionnaire",
   "web_search",
   "web_fetch",
-  "grill_plan_write",
+  "syntax_search",
+  "syntax_inspect",
+  "grill_plan",
 ]);
 
 function unique<T>(values: T[]): T[] {
@@ -92,6 +94,8 @@ export default function grillPlanExtension(pi: ExtensionAPI): void {
     });
     await rename(temporaryPath, path);
 
+    parsePlanSidecar(JSON.parse(await readFile(path, "utf8")) as unknown);
+
     const markdownPath = join(ctx.sessionManager.getSessionDir(), planMarkdownFilename(sessionId));
     const markdownTemporaryPath = `${markdownPath}.${randomUUID()}.tmp`;
     try {
@@ -107,9 +111,9 @@ export default function grillPlanExtension(pi: ExtensionAPI): void {
   }
 
   async function persist(ctx: ExtensionContext): Promise<string | undefined> {
-    pi.appendEntry(STATE_ENTRY, { phase, goal, planText, steps, toolsBeforePlanning });
     try {
       sidecarPath = await writeSidecar(ctx);
+      pi.appendEntry(STATE_ENTRY, { phase, goal, planText, steps, toolsBeforePlanning });
       updateUi(ctx);
       return sidecarPath;
     } catch (error) {
@@ -176,186 +180,216 @@ export default function grillPlanExtension(pi: ExtensionAPI): void {
     return true;
   }
 
-  pi.registerTool({
-    name: "grill_plan_start",
-    label: "Start Grill Plan",
-    description:
-      "Propose a read-only, approval-gated Grill Plan workflow for a complex or high-risk task. Use when the user asks for a plan first, requests approval before implementation, or the task has meaningful uncertainty and dependencies. This tool always asks the user for confirmation before changing mode.",
-    promptSnippet: "Propose an approval-gated plan-first workflow for a complex task",
-    promptGuidelines: [
-      "Use grill_plan_start when a complex or high-risk task should be investigated and planned before implementation; it asks for explicit user confirmation and never bypasses approval.",
-    ],
-    parameters: Type.Object({
-      goal: Type.Optional(
-        Type.String({ description: "The task to investigate and plan, if already stated" }),
-      ),
-    }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      if (phase !== "idle") {
-        return {
-          content: [{ type: "text" as const, text: `Grill Plan is already ${phase}.` }],
-          details: { phase },
-          isError: true,
-        };
-      }
-      if (!ctx.hasUI) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "Grill Plan requires interactive user confirmation; use /plan in an interactive session.",
-            },
-          ],
-          details: { phase },
-          isError: true,
-        };
-      }
-      const goalText = params.goal?.trim() || "the current task";
-      const approved = await ctx.ui.confirm(
-        "Start Grill Plan?",
-        `Switch to read-only planning for ${goalText}. Implementation will require explicit approval.`,
-      );
-      if (!approved) {
-        return {
-          content: [{ type: "text" as const, text: "User declined to start Grill Plan." }],
-          details: { phase: "idle", approved: false },
-        };
-      }
-      await beginPlanning(ctx, params.goal);
-      // The tool arguments are assistant-generated; never re-submit them as user approval.
-      return {
-        content: [{ type: "text" as const, text: "Grill Plan started in read-only mode." }],
-        details: { phase: "planning", approved: true },
-      };
-    },
-  });
-
-  pi.registerTool({
-    name: "grill_plan_write",
-    label: "Write Grill Plan",
-    description: "Persist the completed structured Grill Plan for this session.",
-    promptSnippet: "Persist a completed structured Grill Plan",
-    promptGuidelines: [
-      "When planning is complete, call grill_plan_write. Its structured data is the source of truth.",
-      "Do not claim the plan is executable until grill_plan_write succeeds.",
-    ],
-    parameters: Type.Object({
-      issue: Type.String({ minLength: 1 }),
-      cause: Type.String({ minLength: 1 }),
-      changes: Type.String({ minLength: 1 }),
-      approach: Type.String({ minLength: 1 }),
-      files: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-      steps: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-    }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      if (phase !== "planning") {
-        return {
-          content: [
-            { type: "text" as const, text: `Cannot write a plan while Grill Plan is ${phase}.` },
-          ],
-          details: { phase },
-          isError: true,
-        };
-      }
-      const cleanSteps = params.steps.map((step) => step.replace(/\s+/g, " ").trim());
-      if (cleanSteps.some((step) => step.length < 4)) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "Every plan step must contain at least four characters.",
-            },
-          ],
-          details: { phase },
-          isError: true,
-        };
-      }
-      planText = [
-        `課題:\n${params.issue.trim()}`,
-        `原因:\n${params.cause.trim()}`,
-        `修正するべき点:\n${params.changes.trim()}`,
-        `対処法:\n${params.approach.trim()}`,
-        `実際に編集するファイル:\n${params.files.map((file) => `- ${file.trim()}`).join("\n")}`,
-        `Plan:\n${cleanSteps.map((step, index) => `${index + 1}. ${step}`).join("\n")}`,
-      ].join("\n\n");
-      steps = cleanSteps.map((text, index) => ({ step: index + 1, text, completed: false }));
-      phase = "ready";
+  async function commitPlan(
+    nextPlanText: string,
+    nextSteps: PlanStep[],
+    ctx: ExtensionContext,
+  ): Promise<boolean> {
+    planText = nextPlanText;
+    steps = nextSteps;
+    phase = "ready";
+    enableReadOnlyTools();
+    updateUi(ctx);
+    const savedPath = await persist(ctx);
+    if (ctx.sessionManager.getSessionFile() && !savedPath) {
+      phase = "planning";
+      planText = undefined;
+      steps = [];
       updateUi(ctx);
-      const savedPath = await persist(ctx);
+      await persist(ctx);
       ctx.ui.notify(
-        `Executable Grill Plan saved.\n${savedPath ?? "Session sidecar is unavailable."}\nApprove it with /plan-execute.`,
-        "info",
+        "Could not verify the Grill Plan sidecar; the plan remains in planning mode.",
+        "error",
       );
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: savedPath
-              ? `Executable Grill Plan saved to the session sidecar:\n${savedPath}`
-              : "Executable Grill Plan saved, but the session sidecar path is unavailable.",
-          },
-        ],
-        details: { phase, steps: steps.length },
-      };
-    },
-  });
+      return false;
+    }
+    return true;
+  }
 
   pi.registerTool({
-    name: PROGRESS_TOOL,
-    label: "Grill Plan Progress",
+    name: "grill_plan",
+    label: "Grill Plan",
     description:
-      "Mark one or more approved Grill Plan steps complete immediately after finishing them",
-    promptSnippet: "Record completed Grill Plan step numbers",
+      "Manage the approval-gated Grill Plan lifecycle. Use start for read-only planning, write for a completed structured plan, progress after verified execution steps, and status or cancel as needed.",
+    promptSnippet: "Manage a read-only plan, persist it, or record approved-plan progress",
     promptGuidelines: [
-      "Call grill_plan_progress immediately after completing and verifying each approved Grill Plan step; include every newly completed step number.",
+      "Use action=start before investigating a complex or high-risk task.",
+      "Use action=write when the final structured plan is complete. The extension also saves a valid plan automatically at agent end.",
+      "Use action=progress immediately after completing and verifying an approved step.",
+      "Do not claim a plan is executable until action=write succeeds or the extension reports that it was saved.",
     ],
-    parameters: Type.Object({
-      completedSteps: Type.Array(Type.Integer({ minimum: 1 }), {
-        minItems: 1,
-        description: "One-based step numbers that have actually been completed and verified",
+    parameters: Type.Union([
+      Type.Object({
+        action: Type.Literal("start"),
+        goal: Type.Optional(Type.String({ description: "The task to plan, if already stated" })),
       }),
-    }),
+      Type.Object({
+        action: Type.Literal("write"),
+        issue: Type.String({ minLength: 1 }),
+        cause: Type.String({ minLength: 1 }),
+        changes: Type.String({ minLength: 1 }),
+        approach: Type.String({ minLength: 1 }),
+        files: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
+        steps: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
+      }),
+      Type.Object({
+        action: Type.Literal("progress"),
+        completedSteps: Type.Array(Type.Integer({ minimum: 1 }), { minItems: 1 }),
+      }),
+      Type.Object({ action: Type.Literal("status") }),
+      Type.Object({ action: Type.Literal("cancel") }),
+    ]),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      if (phase !== "executing") {
+      if (params.action === "start") {
+        if (phase !== "idle")
+          return {
+            content: [{ type: "text" as const, text: `Grill Plan is already ${phase}.` }],
+            details: { phase },
+            isError: true,
+          };
+        if (!ctx.hasUI)
+          return {
+            content: [
+              { type: "text" as const, text: "Grill Plan requires interactive user confirmation." },
+            ],
+            details: { phase },
+            isError: true,
+          };
+        const goalText = params.goal?.trim() || "the current task";
+        const approved = await ctx.ui.confirm(
+          "Start Grill Plan?",
+          `Switch to read-only planning for ${goalText}. Implementation will require explicit approval.`,
+        );
+        if (!approved)
+          return {
+            content: [{ type: "text" as const, text: "User declined to start Grill Plan." }],
+            details: { phase: "idle", approved: false },
+          };
+        await beginPlanning(ctx, params.goal);
         return {
-          content: [{ type: "text" as const, text: "No approved Grill Plan is executing." }],
-          details: { completedSteps: [], changed: 0, complete: 0, total: steps.length },
-          isError: true,
-        };
-      }
-      const requested = unique(params.completedSteps);
-      const unknown = requested.filter((number) => !steps.some((step) => step.step === number));
-      if (unknown.length > 0) {
-        return {
-          content: [
-            { type: "text" as const, text: `Unknown Grill Plan steps: ${unknown.join(", ")}` },
-          ],
-          details: {
-            completedSteps: requested,
-            changed: 0,
-            complete: steps.filter((step) => step.completed).length,
-            total: steps.length,
-          },
-          isError: true,
+          content: [{ type: "text" as const, text: "Grill Plan started in read-only mode." }],
+          details: { phase: "planning", approved: true },
         };
       }
 
-      const changed = markCompletedStepNumbers(requested, steps);
-      updateUi(ctx);
-      const completed = await finishExecutionIfComplete(ctx);
-      if (!completed) await persist(ctx);
-      const complete = steps.filter((step) => step.completed).length;
+      if (params.action === "write") {
+        if (phase !== "planning")
+          return {
+            content: [
+              { type: "text" as const, text: `Cannot write a plan while Grill Plan is ${phase}.` },
+            ],
+            details: { phase },
+            isError: true,
+          };
+        const cleanSteps = params.steps.map((step) => step.replace(/\s+/g, " ").trim());
+        if (cleanSteps.some((step) => step.length < 4))
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "Every plan step must contain at least four characters.",
+              },
+            ],
+            details: { phase },
+            isError: true,
+          };
+        const structuredPlan = [
+          `課題:\n${params.issue.trim()}`,
+          `原因:\n${params.cause.trim()}`,
+          `修正するべき点:\n${params.changes.trim()}`,
+          `対処法:\n${params.approach.trim()}`,
+          `実際に編集するファイル:\n${params.files.map((file) => `- ${file.trim()}`).join("\n")}`,
+          `Plan:\n${cleanSteps.map((step, index) => `${index + 1}. ${step}`).join("\n")}`,
+        ].join("\n\n");
+        const saved = await commitPlan(
+          structuredPlan,
+          cleanSteps.map((text, index) => ({ step: index + 1, text, completed: false })),
+          ctx,
+        );
+        if (!saved)
+          return {
+            content: [
+              { type: "text" as const, text: "Plan was not saved and remains in planning mode." },
+            ],
+            details: { phase },
+            isError: true,
+          };
+        ctx.ui.notify(
+          "Executable Grill Plan saved and verified. Approve it with /plan execute.",
+          "info",
+        );
+        return {
+          content: [{ type: "text" as const, text: "Executable Grill Plan saved and verified." }],
+          details: { phase, steps: steps.length },
+        };
+      }
+
+      if (params.action === "progress") {
+        if (phase !== "executing")
+          return {
+            content: [{ type: "text" as const, text: "No approved Grill Plan is executing." }],
+            details: { completedSteps: [], changed: 0, complete: 0, total: steps.length },
+            isError: true,
+          };
+        const requested = unique(params.completedSteps);
+        const unknown = requested.filter((number) => !steps.some((step) => step.step === number));
+        if (unknown.length > 0)
+          return {
+            content: [
+              { type: "text" as const, text: `Unknown Grill Plan steps: ${unknown.join(", ")}` },
+            ],
+            details: {
+              completedSteps: requested,
+              changed: 0,
+              complete: steps.filter((step) => step.completed).length,
+              total: steps.length,
+            },
+            isError: true,
+          };
+        const changed = markCompletedStepNumbers(requested, steps);
+        updateUi(ctx);
+        const completed = await finishExecutionIfComplete(ctx);
+        if (!completed) await persist(ctx);
+        const complete = steps.filter((step) => step.completed).length;
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                changed > 0
+                  ? `Recorded progress: ${complete}/${steps.length}`
+                  : "Progress was already recorded.",
+            },
+          ],
+          details: { completedSteps: requested, changed, complete, total: steps.length },
+        };
+      }
+
+      if (params.action === "cancel") {
+        await cancel(ctx);
+        return {
+          content: [{ type: "text" as const, text: "Grill Plan cancelled." }],
+          details: { phase },
+        };
+      }
+
+      if (params.action === "status") {
+        const complete = steps.filter((step) => step.completed).length;
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Phase: ${phase}\nProgress: ${complete}/${steps.length}\nPlan file: ${sidecarPath ?? "(not saved)"}`,
+            },
+          ],
+          details: { phase, complete, total: steps.length, sidecarPath },
+        };
+      }
+
       return {
-        content: [
-          {
-            type: "text" as const,
-            text:
-              changed > 0
-                ? `Recorded progress: ${complete}/${steps.length}`
-                : "Progress was already recorded.",
-          },
-        ],
-        details: { completedSteps: requested, changed, complete, total: steps.length },
+        content: [{ type: "text" as const, text: "Unknown Grill Plan action." }],
+        details: { phase },
+        isError: true,
       };
     },
   });
@@ -601,7 +635,7 @@ export default function grillPlanExtension(pi: ExtensionAPI): void {
         .map((step) => `${step.step}. ${step.text}`)
         .join("\n");
       return {
-        systemPrompt: `${event.systemPrompt}\n\n[EXECUTING APPROVED PLAN]\n\n${planText ?? ""}\n\nRemaining steps:\n${remaining}\n\nFollow the approved plan. Immediately after completing and verifying a step, call ${PROGRESS_TOOL} with its step number before continuing. The legacy [DONE:n] marker is only a fallback. Do not claim completion while any step remains unrecorded. If evidence invalidates the plan or new authority is needed, stop and explain rather than silently changing scope.`,
+        systemPrompt: `${event.systemPrompt}\n\n[EXECUTING APPROVED PLAN]\n\n${planText ?? ""}\n\nRemaining steps:\n${remaining}\n\nFollow the approved plan. Immediately after completing and verifying a step, call ${PROGRESS_TOOL} with action \`progress\` and its step number before continuing. The legacy [DONE:n] marker is only a fallback. Do not claim completion while any step remains unrecorded. If evidence invalidates the plan or new authority is needed, stop and explain rather than silently changing scope.`,
       };
     }
   });
@@ -629,14 +663,8 @@ export default function grillPlanExtension(pi: ExtensionAPI): void {
     const extractedPlan = extractPlanText(response);
     if (!extractedPlan || extractedSteps.length === 0) return;
 
-    planText = extractedPlan;
-    steps = extractedSteps;
-    phase = "ready";
-    enableReadOnlyTools();
-    updateUi(ctx);
-    await persist(ctx);
-
-    if (!ctx.hasUI) return;
+    const saved = await commitPlan(extractedPlan, extractedSteps, ctx);
+    if (!saved || !ctx.hasUI) return;
     const choice = await ctx.ui.select("Plan ready", [
       "Approve and execute",
       "Refine the plan",
