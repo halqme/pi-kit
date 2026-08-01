@@ -78,7 +78,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
     }),
     renderCall(args, theme) {
       const view = args.view ?? "outline";
-      const target = args.nodeId ? ` #${args.nodeId}` : "";
+      const target = args.nodeId ? ` nodeId=${args.nodeId}` : "";
       return new Text(
         `${theme.fg("toolTitle", theme.bold("inspect "))}${theme.fg("accent", args.path)}${theme.fg("dim", ` ${view}${target}`)}`,
         0,
@@ -151,7 +151,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
       if (isPartial) return new Text(theme.fg("warning", "Searching..."), 0, 0);
       const output = resultText(result);
       const failed = context.isError || output.startsWith("Error:");
-      const count = output === "(no syntax matches)" ? 0 : output ? output.split("\\n").length : 0;
+      const count = output === "(no syntax matches)" ? 0 : output ? output.split("\n").length : 0;
       return new Text(
         theme.fg(failed ? "error" : "success", failed ? output : `search: ${count} match(es)`),
         0,
@@ -195,7 +195,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
     }),
     renderCall(args, theme) {
       return new Text(
-        `${theme.fg("toolTitle", theme.bold("edit "))}${theme.fg("accent", args.path)}${theme.fg("dim", ` #${args.nodeId}`)}`,
+        `${theme.fg("toolTitle", theme.bold("edit "))}${theme.fg("accent", args.path)}${theme.fg("dim", ` nodeId=${args.nodeId}`)}`,
         0,
         0,
       );

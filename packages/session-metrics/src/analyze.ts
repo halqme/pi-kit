@@ -8,10 +8,9 @@ export interface UsageTotals {
   total: number;
   cost: number;
 }
-export interface SessionMetrics {
+
+export interface MetricSummary {
   sessions: number;
-  sessionId?: string;
-  cwd?: string;
   messages: number;
   assistantMessages: number;
   turns: number;
@@ -25,6 +24,19 @@ export interface SessionMetrics {
   models: Record<string, { messages: number; usage: UsageTotals }>;
   errors: number;
   tokens: UsageTotals;
+}
+
+export interface SessionMetrics extends MetricSummary {
+  sessionId?: string;
+  cwd?: string;
+  timestamp?: string;
+}
+
+export interface MetricsReport extends MetricSummary {
+  daily: Record<string, MetricSummary>;
+  weekly: Record<string, MetricSummary>;
+  monthly: Record<string, MetricSummary>;
+  projects: Record<string, MetricSummary>;
 }
 
 export function createMetrics(): SessionMetrics {
@@ -43,6 +55,16 @@ export function createMetrics(): SessionMetrics {
   };
 }
 
+export function createReport(): MetricsReport {
+  return {
+    ...createMetrics(),
+    daily: {},
+    weekly: {},
+    monthly: {},
+    projects: {},
+  };
+}
+
 export function analyzeLines(lines: Iterable<string>): SessionMetrics {
   const result = createMetrics();
   for (const line of lines) {
@@ -52,6 +74,7 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
       result.sessions++;
       result.sessionId = entry.id;
       result.cwd = entry.cwd;
+      result.timestamp = entry.timestamp;
       continue;
     }
     if (entry.type === "turn_end") {
@@ -132,7 +155,40 @@ export async function analyzeFile(path: string): Promise<SessionMetrics> {
   return analyzeLines((await readFile(path, "utf8")).split("\n"));
 }
 
-export function mergeMetrics(target: SessionMetrics, source: SessionMetrics): SessionMetrics {
+function isoWeekKey(timestamp: string): string {
+  const date = new Date(timestamp);
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const week = Math.ceil(((date.getTime() - yearStart) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+function periodKeys(
+  timestamp: string,
+): { daily: string; weekly: string; monthly: string } | undefined {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return {
+    daily: date.toISOString().slice(0, 10),
+    weekly: isoWeekKey(timestamp),
+    monthly: date.toISOString().slice(0, 7),
+  };
+}
+
+export function addToReport(report: MetricsReport, session: SessionMetrics): MetricsReport {
+  mergeMetrics(report, session);
+  const periods = session.timestamp && periodKeys(session.timestamp);
+  if (periods) {
+    mergeMetrics((report.daily[periods.daily] ??= createMetrics()), session);
+    mergeMetrics((report.weekly[periods.weekly] ??= createMetrics()), session);
+    mergeMetrics((report.monthly[periods.monthly] ??= createMetrics()), session);
+  }
+  mergeMetrics((report.projects[session.cwd ?? "(unknown)"] ??= createMetrics()), session);
+  return report;
+}
+
+export function mergeMetrics(target: MetricSummary, source: MetricSummary): MetricSummary {
   target.sessions += source.sessions;
   target.messages += source.messages;
   target.assistantMessages += source.assistantMessages;

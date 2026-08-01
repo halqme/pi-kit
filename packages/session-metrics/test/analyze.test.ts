@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { analyzeLines } from "../src/analyze.ts";
+import { addToReport, analyzeLines, createReport } from "../src/analyze.ts";
 
 test("aggregates tokens, turns, tools, and errors from session JSONL", () => {
   const result = analyzeLines([
@@ -30,6 +30,40 @@ test("aggregates tokens, turns, tools, and errors from session JSONL", () => {
   assert.equal(result.models.unknown?.messages, 1);
   assert.equal(result.toolUsage.read?.calls, 1);
   assert.equal(result.errors, 1);
+});
+
+test("collects metrics by UTC day, ISO week, month, and project", () => {
+  const report = createReport();
+  addToReport(
+    report,
+    analyzeLines([
+      JSON.stringify({
+        type: "session",
+        id: "s1",
+        timestamp: "2026-01-01T12:00:00.000Z",
+        cwd: "/repo/one",
+      }),
+      JSON.stringify({ type: "turn_end" }),
+    ]),
+  );
+  addToReport(
+    report,
+    analyzeLines([
+      JSON.stringify({
+        type: "session",
+        id: "s2",
+        timestamp: "2026-01-04T12:00:00.000Z",
+        cwd: "/repo/two",
+      }),
+      JSON.stringify({ type: "turn_end" }),
+    ]),
+  );
+
+  assert.equal(report.daily["2026-01-01"]!.turns, 1);
+  assert.equal(report.weekly["2026-W01"]!.sessions, 2);
+  assert.equal(report.monthly["2026-01"]!.sessions, 2);
+  assert.equal(report.projects["/repo/one"]!.sessions, 1);
+  assert.equal(report.projects["/repo/two"]!.turns, 1);
 });
 
 test("separates skill reads from explicit skill commands", () => {

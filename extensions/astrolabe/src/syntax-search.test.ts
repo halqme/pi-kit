@@ -19,15 +19,15 @@ test("syntax_search finds functions, calls, and imports by syntax", async () => 
     dir,
     handles,
   );
-  assert.match(functionResult, /#n\d+ parseSource \(function_declaration, 2:1-/);
+  assert.match(functionResult, /nodeId=n\d+ parseSource \(function_declaration, 2:1-/);
   const callResult = await syntaxSearch({ path, kind: "call", name: "parseSource" }, dir, handles);
-  assert.match(callResult, /#n\d+ parseSource \(call_expression, 3:1-/);
+  assert.match(callResult, /nodeId=n\d+ parseSource \(call_expression, 3:1-/);
   const importResult = await syntaxSearch(
     { path, kind: "import", source: "web-tree-sitter" },
     dir,
     handles,
   );
-  assert.match(importResult, /#n\d+ web-tree-sitter \(import_statement, 1:1-/);
+  assert.match(importResult, /nodeId=n\d+ web-tree-sitter \(import_statement, 1:1-/);
 });
 
 test("syntax_search returns no matches and applies exact filters", async () => {

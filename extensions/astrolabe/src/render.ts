@@ -130,7 +130,7 @@ export function outline(file: ParsedFile, node: Node, handles: HandleStore, dept
       return;
     }
     const handle = handles.issue(file, current, "outline");
-    lines.push(`${"  ".repeat(level)}#${handle.id} ${label(current, file, context)}`);
+    lines.push(`${"  ".repeat(level)}nodeId=${handle.id} ${label(current, file, context)}`);
     for (const child of current.namedChildren) if (child) visit(child, level + 1);
   };
   for (const child of node.namedChildren) if (child) visit(child, 0);
@@ -148,7 +148,7 @@ export function structure(
   const visit = (current: Node, level: number): void => {
     if (level > depth) return;
     const handle = handles.issue(file, current, "structure");
-    lines.push(`${"  ".repeat(level)}#${handle.id} ${label(current, file, context)}`);
+    lines.push(`${"  ".repeat(level)}nodeId=${handle.id} ${label(current, file, context)}`);
     for (const child of current.namedChildren) if (child) visit(child, level + 1);
   };
   visit(node, 0);

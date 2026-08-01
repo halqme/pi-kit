@@ -278,13 +278,13 @@ async function runDiffCase(
 
 function handleIdsFromOutput(output: string, label: string): string[] {
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return [...output.matchAll(new RegExp(`^[ \\t]*#(n\\d+) ${escapedLabel}(?:\\s|$)`, "gm"))]
+  return [...output.matchAll(new RegExp(`^[ \\t]*nodeId=(n\\d+) ${escapedLabel}(?:\\s|$)`, "gm"))]
     .map((match) => match[1])
     .filter((nodeId): nodeId is string => nodeId !== undefined);
 }
 
 function firstHandleId(output: string): string | undefined {
-  return /^[ \t]*#(n\d+) /m.exec(output)?.[1];
+  return /^[ \t]*nodeId=(n\d+) /m.exec(output)?.[1];
 }
 
 function requireSingleHandle(output: string, label: string): string {

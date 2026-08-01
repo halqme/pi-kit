@@ -98,7 +98,7 @@ export async function syntaxSearch(
   return matches
     .map((match) => {
       const handle = handles.issue(file, match.node, "structure");
-      return `#${handle.id} ${describeMatch(file, match)}`;
+      return `nodeId=${handle.id} ${describeMatch(file, match)}`;
     })
     .join("\n");
 }

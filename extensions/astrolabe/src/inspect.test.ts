@@ -138,7 +138,7 @@ test("syntax_inspect enforces outline, structure, then selected source", async (
   await writeFile(path, "class Service { answer() { return 42; } }\n");
   const handles = new HandleStore();
   const outline = await inspect({ path, view: "outline" }, dir, handles);
-  const outlineId = /#(n\d+) declaration\.type Service/.exec(outline)?.[1];
+  const outlineId = /nodeId=(n\d+) declaration\.type Service/.exec(outline)?.[1];
   assert.ok(outlineId);
   await assert.rejects(
     inspect({ path, view: "structure" }, dir, handles),
@@ -153,7 +153,7 @@ test("syntax_inspect enforces outline, structure, then selected source", async (
     dir,
     handles,
   );
-  const methodId = /#(n\d+) declaration\.method answer/.exec(structure)?.[1];
+  const methodId = /nodeId=(n\d+) declaration\.method answer/.exec(structure)?.[1];
   assert.ok(methodId);
   assert.equal(
     await inspect({ path, nodeId: methodId, view: "source" }, dir, handles),

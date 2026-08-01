@@ -4,8 +4,8 @@ Astrolabeは、既存ファイルを構文単位で読み、局所的に編集�
 
 ## Tools
 
-- `syntax_inspect`: nodeIdなしの`outline`でファイル内の関数、クラス、メソッド、型、import、exportを宣言要約として一覧にします。関数のシグネチャ、クラス／インターフェースの継承と主要メンバー、importの対象とモジュール名を表示します。得られたnodeIdを`structure`で掘り下げ、そこで得たnodeIdだけを`source`で取得できます。ファイル全体の`structure`や`source`は拒否します。拡張子で判定できない場合は`language: "typescript"`を明示できます。
-- `syntax_search`: Tree-sitter Queryで関数宣言、呼出し、importを検索します。`kind`に`function`、`call`、`import`を指定し、`name`または`source`（モジュール名、引用符なし）で絞り込めます。結果には位置と、`structure`／`source`へ渡せるnodeIdが含まれます。
+- `syntax_inspect`: nodeIdなしの`outline`でファイル内の関数、クラス、メソッド、型、import、exportを宣言要約として一覧にします。関数のシグネチャ、クラス／インターフェースの継承と主要メンバー、importの対象とモジュール名を表示します。出力の`nodeId=n3`のような値を`structure`で掘り下げ、そこで得たnodeIdだけを`source`で取得できます。ファイル全体の`structure`や`source`は拒否します。拡張子で判定できない場合は`language: "typescript"`を明示できます。
+- `syntax_search`: Tree-sitter Queryで関数宣言、呼出し、importを検索します。`kind`に`function`、`call`、`import`を指定し、`name`または`source`（モジュール名、引用符なし）で絞り込めます。結果には`nodeId=n3`形式の、`structure`／`source`へ渡せるnodeIdが含まれます。
 - `syntax_replace`: `source`で本文を確認済みのnodeIdだけを置換します。Tree-sitterの`Edit`を作成し、増分再解析、`ERROR`とmissing nodeの位置、新しい構文エラー、置換後のノード型と親文脈を検証してから保存します。結果はTUIへ簡潔に表示されます。
 
 Tree-sitterはWASMで動くため、ネイティブアドオンのビルドは不要です。対象はrealpath解決後も作業ディレクトリ内にある既存ファイルだけです。新規ファイルと、作業ディレクトリ外を指すsymlinkは拒否します。
