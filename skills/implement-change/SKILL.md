@@ -1,6 +1,6 @@
 ---
 name: implement-change
-description: Implement, modify, refactor, or remove code, configuration, tests, or documentation. Use when the user asks Pi to build something, change behavior, fix an identified issue, clean up code, or otherwise edit project artifacts.
+description: Implement, modify, refactor, or remove code, configuration, tests, or documentation. Use when the user asks Pi to build something, change behavior, fix an identified issue, clean up code, or otherwise edit project artifacts. Do not use for review- or diagnosis-only requests.
 ---
 
 # Implement a Change
@@ -19,3 +19,7 @@ description: Implement, modify, refactor, or remove code, configuration, tests, 
 10. Report the outcome, files or behavior changed, verification results, adversarial checks, skipped checks, unresolved hypotheses, and remaining risk.
 
 Stop and ask before a choice that materially changes product behavior, public interfaces, data, dependencies, or external state and cannot be resolved from project evidence.
+
+## Trigger and contract
+
+Use when the user requests an implementation, modification, refactor, removal, or documentation/configuration change. Do not edit for diagnosis or review-only requests. Input is the request plus repository evidence; output is the smallest coherent change with updated checks. Stop before editing when scope, approval, compatibility, or a competing hypothesis remains materially unresolved.

@@ -1,6 +1,6 @@
 ---
 name: deslop
-description: Detect and remove low-value or unnatural AI-generated code and prose from a change while preserving intended behavior. Use when the user asks to remove AI slop, clean up an AI-generated patch, make generated code idiomatic, reduce overengineering, or inspect a diff for unnecessary comments, defensive code, type escapes, abstractions, verbosity, or local style inconsistencies.
+description: Detect and remove low-value or unnatural AI-generated code and prose from a change while preserving intended behavior. Use when the user asks to remove AI slop, clean up an AI-generated patch, make generated code idiomatic, reduce overengineering, or inspect a diff for unnecessary comments, defensive code, type escapes, abstractions, verbosity, or local style inconsistencies. Do not use for behavior redesign or generic style cleanup.
 ---
 
 # Remove AI Slop
@@ -14,3 +14,7 @@ description: Detect and remove low-value or unnatural AI-generated code and pros
 7. Adversarially verify that each removal is behavior-preserving and does not discard intentional safety, compatibility, observability, or domain knowledge. Run focused checks, then inspect the final diff for remaining slop and accidental scope expansion.
 
 When the task is solely AI-slop cleanup, finish with only a one-to-three-sentence summary of what changed and any material verification limitation. Do not provide a long file-by-file narration.
+
+## Trigger and contract
+
+Use for an identified change, patch, or artifact whose behavior should be preserved while removing unnecessary generated-looking material. Do not use to redesign behavior, apply generic style preferences, or clean pre-existing code without naming that scope. Input is the complete relevant artifact and its checks; output is a focused diff or review result. Stop when each proposed removal has a behavior-preserving reason and a focused check, or when intent cannot be established.

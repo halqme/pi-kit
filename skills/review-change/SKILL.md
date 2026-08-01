@@ -1,6 +1,6 @@
 ---
 name: review-change
-description: Review code, diffs, pull requests, patches, tests, configuration, or technical documents for correctness and maintainability. Use when the user asks for review, critique, risk assessment, regression analysis, or actionable findings without requesting implementation.
+description: Review code, diffs, pull requests, patches, tests, configuration, or technical documents for correctness and maintainability. Use when the user asks for review, critique, risk assessment, regression analysis, or actionable findings without requesting implementation. Do not use for implementation unless a fix is separately requested.
 ---
 
 # Review a Change
@@ -14,3 +14,7 @@ description: Review code, diffs, pull requests, patches, tests, configuration, o
 7. Keep summaries brief. If no actionable findings remain, say so and state what was inspected, how the change was challenged, and what could not be verified.
 
 Do not edit artifacts unless the user also asks for fixes. Avoid duplicating one root cause across multiple findings.
+
+## Trigger and contract
+
+Use for review of a diff, patch, pull request, test, configuration, or technical document when the requested result is critique rather than implementation. Do not edit unless a fix is separately requested. Input is the complete artifact and its intended behavior; output is actionable findings ordered by impact, or a concise no-findings report with verification limits. Stop when the artifact or required context is incomplete instead of reviewing a partial contract as definitive.

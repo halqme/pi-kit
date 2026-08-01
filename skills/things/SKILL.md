@@ -1,6 +1,6 @@
 ---
 name: things
-description: Things 3 のタスクを自然言語で作成・検索・完了・移動する。Things 操作を明示的に依頼されたときだけ使用する。
+description: Things 3 のタスクを自然言語で作成・検索・完了・移動する。Things 操作を明示的に依頼されたときだけ使用し、説明・相談・Skill確認には使わない。
 disable-model-invocation: true
 ---
 
@@ -88,3 +88,7 @@ osascript "$(dirname "$SKILL_PATH")/scripts/move.applescript" \
 
 - `Not authorized` などが出た場合は、macOS の「システム設定 → プライバシーとセキュリティ → オートメーション」で pi が Things を操作できるようにする。
 - Things の AppleScript API で対応できない操作は、URL Scheme や Shortcuts に切り替えず、まず制約として説明する。
+
+## 入出力と停止条件
+
+入力は明示された操作、対象、作成内容、移動先である。出力は検索・要約結果、または確認後に実行した変更と事後確認結果とする。対象が一意でない、変更内容が確定していない、確認を拒否された、AppleScriptが非ゼロ終了した場合は停止し、推測で再実行しない。読み取り操作と変更操作を報告上も分離する。

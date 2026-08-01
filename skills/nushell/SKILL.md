@@ -1,6 +1,6 @@
 ---
 name: nushell
-description: Write, review, debug, and explain Nushell (nu) commands and .nu scripts. Use for structured pipelines, types, closures, paths and globs, quoting, external commands, configuration, and Bash/Zsh-to-Nushell translation. Trigger especially when shell-looking syntax may invite incorrect POSIX-shell assumptions.
+description: Write, review, debug, and explain Nushell (nu) commands and .nu scripts. Use for structured pipelines, types, closures, paths and globs, quoting, external commands, configuration, and Bash/Zsh-to-Nushell translation, especially when shell-looking syntax may invite incorrect POSIX-shell assumptions. Do not treat ordinary POSIX shell code as Nushell without confirming the execution boundary.
 compatibility: Works with Pi and other Agent Skills-compatible harnesses. Runtime verification requires a local Nushell executable.
 ---
 
@@ -250,3 +250,7 @@ For Nushell answers:
 - Never invent a command, flag, type conversion, or quoting rule.
 - Prefer current official documentation and installed `help` output over memory.
 - Keep code formatted according to Nushell conventions: readable multiline pipelines, space around `|`, snake_case variables, kebab-case command names, and no unnecessary commas in lists.
+
+## Trigger and contract
+
+Use when writing, reviewing, debugging, explaining, or translating Nushell code. Do not treat shell-like syntax as Nushell merely because the request mentions a terminal. Input is the execution boundary, Nushell version when available, and the code or intent; output is one idiomatic solution with its type and error behavior explained. Stop and label the result untested when `nu` or authoritative local help is unavailable; never present an unexecuted guess as verified.

@@ -14,3 +14,7 @@ description: Perform explicit Git repository operations involving commits, branc
 7. Report the resulting refs or commits, commands and checks that materially establish success, anything intentionally left uncommitted or unpublished, and recovery guidance when relevant.
 
 Read-only Git commands are evidence-gathering tools and may be used without this workflow. Git hosting actions remain externally visible even when the underlying Git command is reversible.
+
+## Trigger and contract
+
+Use only when the user explicitly requests a Git operation that changes history, refs, remotes, or a pull request. Do not use for read-only status, diff, log, blame, or show inspection. Input is the exact requested ref operation and its scope; output is the verified resulting refs and working-tree state. Stop before mutation when the target, approval boundary, or included paths are ambiguous.

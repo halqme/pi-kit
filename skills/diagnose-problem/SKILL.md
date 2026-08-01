@@ -1,6 +1,6 @@
 ---
 name: diagnose-problem
-description: Diagnose failures, regressions, anomalies, flaky behavior, performance problems, or unexpected results. Use when the user asks why something is broken, requests root-cause analysis, provides an error or failing check, or asks Pi to debug an issue.
+description: Diagnose failures, regressions, anomalies, flaky behavior, performance problems, or unexpected results. Use when the user asks why something is broken, requests root-cause analysis, provides an error or failing check, or asks Pi to debug an issue. Do not use for speculative redesign without an observed problem.
 ---
 
 # Diagnose a Problem
@@ -18,3 +18,7 @@ description: Diagnose failures, regressions, anomalies, flaky behavior, performa
 11. Report confirmed findings, evidence, eliminated hypotheses, actual checks and results, unresolved uncertainty, and next steps. Stop when the cause is sufficiently supported, additional checks have little information value, required evidence is unavailable, or the next action needs approval.
 
 For intermittent issues, vary one factor at a time and preserve timestamps, seeds, versions, inputs, and environment details needed to reproduce the result.
+
+## Trigger and contract
+
+Use when an observed failure, regression, anomaly, or unexpected result needs a causal explanation. Do not use for speculative redesign or a fix without an observed problem. Input is the reported behavior and available evidence; output is a ranked, evidence-backed diagnosis or, when requested, a verified fix. Stop when the responsible boundary is sufficiently supported, evidence is unavailable, or the next action requires approval.

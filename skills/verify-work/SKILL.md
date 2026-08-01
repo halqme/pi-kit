@@ -1,6 +1,6 @@
 ---
 name: verify-work
-description: Verify evidence, outputs, changes, conclusions, and completion claims for any task. Must be used before completing every user task, including implementation, diagnosis, review, research, Git operations, and short factual answers, with verification effort scaled to risk.
+description: Verify evidence, outputs, changes, conclusions, and completion claims for any task. Use before completing every user task, including implementation, diagnosis, review, research, Git operations, and short factual answers. Do not use as a substitute for implementing, diagnosing, or reviewing the work.
 ---
 
 # Verify Work
@@ -16,3 +16,7 @@ description: Verify evidence, outputs, changes, conclusions, and completion clai
 9. Report what each check establishes, checks skipped and why, remaining uncertainty or risk, and any claim that could not be verified. Never claim correctness beyond the evidence.
 
 For a trivial or read-only task, the pass may be brief, but it must still challenge the most consequential assumption. If a meaningful challenge is impractical, state that limitation.
+
+## Trigger and contract
+
+Use before completing every task or making a completion claim, including read-only answers, reviews, diagnoses, research, and Git operations. Input is the acceptance condition and the evidence-producing work; output maps each material claim to actual checks, failures, skipped checks, and remaining risk. Stop short of claiming correctness when evidence is missing, a check fails, or the strongest plausible counterexample remains unresolved.

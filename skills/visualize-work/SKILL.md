@@ -1,6 +1,6 @@
 ---
 name: visualize-work
-description: Visualize a non-trivial plan, workflow, or system model as a temporary D2 diagram for human review.
+description: Visualize a non-trivial plan, workflow, or system model as a temporary D2 diagram for human review. Use when the model has meaningful dependencies, branches, feedback loops, parallel work, or approval points. Do not use for a simple linear explanation unless a diagram is explicitly requested.
 ---
 
 # Visualize Work
@@ -44,3 +44,7 @@ Use this skill when the current plan, workflow, or system model has meaningful d
 - Keep labels concise and use edges for execution order, dependency, feedback, and branch conditions.
 - Preserve ambiguity in the model rather than inventing detail to make the diagram look complete.
 - If D2 is unavailable or validation/rendering fails, report the error and continue with the textual model when safe; never silently present an unverified diagram.
+
+## Trigger and contract
+
+Use for a non-trivial plan, workflow, or system model with dependencies, branches, feedback loops, parallel work, or approval points. Do not use for a simple linear explanation unless a diagram is explicitly requested. Input is the already-established textual model; output is a temporary, validated D2/SVG projection plus its limitations. Stop before rendering when the model is incomplete, and never treat the diagram as executable instructions or a second source of truth.
