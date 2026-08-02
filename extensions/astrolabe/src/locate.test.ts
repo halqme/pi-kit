@@ -51,6 +51,22 @@ test("locate matches terms case-insensitively and orders equal scores by path an
   clearFileCache(second);
 });
 
+test("locate flow omits outer calls whose callees contain another call", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-locate-"));
+  const path = join(dir, "sample.ts");
+  await writeFile(
+    path,
+    'function example() { return sourceOf(file, node.childForFieldName("name")).split(/\\s/, 1); }\n',
+  );
+  const matches = await locateDetailed(
+    { scope: path, symbols: ["example"] },
+    dir,
+    new HandleStore(),
+  );
+  assert.deepEqual(matches[0]?.flow.calls, ["sourceOf", "node.childForFieldName"]);
+  clearFileCache(path);
+});
+
 test("locate returns no candidates when its hints do not match a declaration", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-locate-"));
   const path = join(dir, "sample.ts");

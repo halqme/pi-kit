@@ -75,6 +75,15 @@ function parentName(
   return undefined;
 }
 
+function containsCall(node: Node): boolean {
+  for (const child of node.namedChildren) {
+    if (!child) continue;
+    if (child.type === "call_expression" || child.type === "call" || containsCall(child))
+      return true;
+  }
+  return false;
+}
+
 function flow(file: Awaited<ReturnType<typeof parseFile>>, node: Node): LocateFlow {
   const calls = new Set<string>();
   let awaits = 0;
@@ -84,7 +93,9 @@ function flow(file: Awaited<ReturnType<typeof parseFile>>, node: Node): LocateFl
   const visit = (current: Node): void => {
     if (current.type === "call_expression" || current.type === "call") {
       const callee = current.childForFieldName("function") ?? current.childForFieldName("callee");
-      if (callee && calls.size < 8) calls.add(sourceOf(file, callee).replace(/\s+/g, " "));
+      if (callee && !containsCall(callee) && calls.size < 8) {
+        calls.add(sourceOf(file, callee).replace(/\s+/g, " "));
+      }
     }
     if (["if_statement", "switch_statement", "conditional_expression"].includes(current.type))
       branches++;
