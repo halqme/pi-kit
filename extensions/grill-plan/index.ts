@@ -653,7 +653,16 @@ export default function grillPlanExtension(pi: ExtensionAPI): void {
 
   pi.on("agent_end", async (event, ctx) => {
     if (phase === "executing") {
-      await finishExecutionIfComplete(ctx);
+      if (await finishExecutionIfComplete(ctx)) return;
+
+      const remaining = steps
+        .filter((step) => !step.completed)
+        .map((step) => `${step.step}. ${step.text}`)
+        .join("\n");
+      pi.sendUserMessage(
+        `Continue the approved plan from the first remaining step.\n\nRemaining steps:\n${remaining}\n\nDo not stop between steps: complete and verify each step, record it with ${PROGRESS_TOOL}, then continue. Stop only if the plan is invalidated or explicit user authority is required.`,
+        { deliverAs: "followUp" },
+      );
       return;
     }
     if (phase !== "planning" && phase !== "ready") return;

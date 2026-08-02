@@ -113,6 +113,14 @@ test("plan-execute starts a turn, records completion, and rejects replay", async
   assert.match(sentUserMessages[0]!, /Execute the approved plan/);
   assert.ok(activeTools.includes("grill_plan"));
 
+  await events.get("agent_end")?.(
+    { messages: [{ role: "assistant", content: [{ type: "text", text: "Completed step 1." }] }] },
+    ctx,
+  );
+  assert.equal(sentUserMessages.length, 2);
+  assert.match(sentUserMessages[1]!, /first remaining step/);
+  assert.match(sentUserMessages[1]!, /2\. Run tests/);
+
   const progressTool = tools.get("grill_plan");
   assert.ok(progressTool);
   const result = await progressTool.execute(
@@ -128,7 +136,7 @@ test("plan-execute starts a turn, records completion, and rejects replay", async
   assert.equal((appendedStates.at(-1) as { phase?: string }).phase, "idle");
 
   await commands.get("plan")?.("execute", ctx);
-  assert.equal(sentUserMessages.length, 1);
+  assert.equal(sentUserMessages.length, 2);
   assert.match(notifications.at(-1)?.message ?? "", /No executable plan/);
 
   (ctx as unknown as { hasUI: boolean }).hasUI = true;
@@ -140,11 +148,11 @@ test("plan-execute starts a turn, records completion, and rejects replay", async
   };
   const startResult = await startTool.execute("call-2", startParams, undefined, undefined, ctx);
   assert.equal(startResult.isError, undefined);
-  assert.equal(sentUserMessages.length, 1);
+  assert.equal(sentUserMessages.length, 2);
   assert.equal((appendedStates.at(-1) as { phase?: string }).phase, "planning");
 
   await commands.get("plan")?.("hogehoge", ctx);
-  assert.equal(sentUserMessages.length, 2);
+  assert.equal(sentUserMessages.length, 3);
   assert.equal(sentUserMessages.at(-1), "hogehoge");
   assert.equal((appendedStates.at(-1) as { goal?: string }).goal, "hogehoge");
 
