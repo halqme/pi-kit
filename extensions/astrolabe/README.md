@@ -64,34 +64,10 @@ Astrolabeの構文検査は型検査やLintの代替ではありません。編�
 - `syntax_error`: 新しい構文エラー、missing node、または置換後の構文型・親文脈の不一致を検出しました。
 - `unsupported_language`: 対象ファイルに言語アダプターがありません。
 
-## ベンチマーク
-
-編集時は`Tree.copy() → oldTree.edit(edit) → parser.parse(nextSource, oldTree)`で増分再解析します。小さなファイルで増分解析が常に高速とは限らないため、ベンチマークは同じ置換について全体解析と増分解析の平均時間を併記します。
-
-```sh
-bun run benchmark
-bun run benchmark -- --json
-```
-
-ベンチマークは決定的な小さなfixtureで、次の方式を比較します。
-
-- A: ファイル読込後の通常の文字列置換・書込み
-- B: 実際の`astrolabe` responseからcontinuationを選び、`replace`する方式
-- C: タスク種別に応じてA/Bを選ぶ方式
-
-対象はimportの追加・削除、条件式、関数本体、引数、式、関数全体、新規ファイル、複数ファイルです。JSONには入出力文字数・推定token数・ツール呼出し数・時間・編集成功・期待結果との差分行数・構文検査・型検査・テスト・再試行・全体/増分解析時間を出力します。
-
-Bで新規ファイル作成は`not_applicable`になります。失敗ではなく、Astrolabeの対象外であることを表します。テストは既定では`skipped`です。`runBenchmark`の`testCommand`オプションを与えると、各成功fixtureの作業ディレクトリで指定コマンドを実行し、pass/failを記録できます。
-
-このベンチマークは編集方式の境界と処理量を比較するためのfixture harnessであり、特定のLLMの品質や実プロジェクトのテスト成功率を直接測るものではありません。
-
-専用編集action（`add_import`など）は、汎用`astrolabe`の`replace`を維持した上での拡張点です。利用ログがまだないため、現時点では追加していません。
-
 ## Development
 
 ```sh
 bun run check
-bun run benchmark
 ```
 
 ツールのschema、説明、promptGuidelines、TUI表示を変更した場合は、Piで`/reload`を実行すると現在のセッションへ反映されます。
