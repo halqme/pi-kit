@@ -1,8 +1,8 @@
 # Astrolabe session benchmark
 
-各言語のfixtureを一時ディレクトリへ展開し、同じ編集タスクをfreshなPiプロセスで実行します。Astrolabeを明示的に読み込む場合と、通常の`read`/`edit`だけを使う場合を比較します。
+実際のリポジトリ内TypeScriptファイルを一時ディレクトリへコピーし、同じ編集タスクをfreshなPiプロセスで実行します。Astrolabeを明示的に読み込む場合と、通常の`read`/`edit`だけを使う場合を比較します。Astrolabe自身のソースは比較対象から除外し、`extensions/grill-plan/index.ts`、`extensions/agent-team/index.ts`、`extensions/agent-team/team.ts`、`packages/session-metrics/src/report.ts`を使います。
 
-対応言語のディレクトリは`extensions/astrolabe/languages/*`から検出されます。言語を追加したときは、このベンチマークにも同じ言語のfixtureを追加してください。fixtureがない言語があると実行を中止します。
+fixtureは実ファイルの内容とサイズをそのまま使い、対象文字列が一意に存在することを実行前に検証します。これにより、虚構のファイル構造ではなく、実際のTypeScriptコード上でファイルサイズ・対象位置・探索コストを比較します。
 
 ## 実行
 
@@ -30,5 +30,6 @@ JSONを標準出力へ出力します。各結果には次を含みます。
 - tool引数・結果の文字数と4文字あたり1tokenの概算
 - 実編集結果がfixtureの期待値と一致したか
 - 実行時間
+- fixtureの文字数・行数
 
 これはモデルを含む統合ベンチマークです。モデルのランダム性、プロバイダーの遅延、既存のPi設定の影響を受けるため、単一実行の時間だけで判断せず、同じ条件の反復結果と編集成功率を比較してください。

@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
-import { readdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -10,15 +10,21 @@ const extension = resolve(root, "extensions/astrolabe/index.ts");
 const pi = process.env.PI_BIN ?? "pi";
 
 type Mode = "without-astrolabe" | "with-astrolabe";
-type Language = "typescript" | "javascript" | "python" | "go";
+type Language = "typescript";
 
-interface Task {
+interface TaskDefinition {
   id: string;
+  sourcePath: string;
+  oldText: string;
+  newText: string;
+  prompt: string;
+}
+
+interface Task extends TaskDefinition {
   language: Language;
   file: string;
   source: string;
   expected: string;
-  prompt: string;
 }
 
 interface ToolEvent {
@@ -32,6 +38,8 @@ interface ToolEvent {
 interface RunResult {
   task: string;
   language: Language;
+  sourceChars: number;
+  sourceLines: number;
   mode: Mode;
   success: boolean;
   exitCode: number;
@@ -48,82 +56,55 @@ interface RunResult {
   stderr: string;
 }
 
-const tasks: readonly Task[] = [
+const taskDefinitions: readonly TaskDefinition[] = [
   {
-    id: "typescript-single-edit",
-    language: "typescript",
-    file: "sample.ts",
-    source: "export function answer(): number { return 1; }\n",
-    expected: "export function answer(): number { return 2; }\n",
-    prompt:
-      "In sample.ts, change answer() so it returns 2 instead of 1. Do not change anything else.",
+    id: "grill-plan-large-file",
+    sourcePath: "extensions/grill-plan/index.ts",
+    oldText: 'description: "Start in Grill Plan mode",',
+    newText: 'description: "Start the Grill Plan mode",',
+    prompt: "In the TypeScript source file, change the description to say ‘Start the Grill Plan mode’. Do not change anything else.",
   },
   {
-    id: "typescript-multiple-edit",
-    language: "typescript",
-    file: "sample.ts",
-    source:
-      "export function first(): number { return 1; }\nexport function second(): number { return 3; }\n",
-    expected:
-      "export function first(): number { return 2; }\nexport function second(): number { return 4; }\n",
-    prompt:
-      "In sample.ts, change first() to return 2 and second() to return 4. Do not change anything else.",
+    id: "agent-team-index",
+    sourcePath: "extensions/agent-team/index.ts",
+    oldText: 'promptSnippet: "Choose constructive committee or adversarial review for a difficult question",',
+    newText: 'promptSnippet: "Choose committee or adversarial review for a difficult question",',
+    prompt: "In the TypeScript source file, shorten the agent-team promptSnippet by removing ‘constructive ’. Do not change anything else.",
   },
   {
-    id: "javascript-single-edit",
-    language: "javascript",
-    file: "sample.js",
-    source: "export function answer() { return 1; }\n",
-    expected: "export function answer() { return 2; }\n",
-    prompt:
-      "In sample.js, change answer() so it returns 2 instead of 1. Do not change anything else.",
+    id: "agent-team-coordination",
+    sourcePath: "extensions/agent-team/team.ts",
+    oldText: "// 500ms stagger avoids concurrent API requests from multiple child Pi",
+    newText: "// A 500ms stagger avoids concurrent API requests from multiple child Pi",
+    prompt: "In the TypeScript source file, improve the first coordination comment by adding ‘A ’ at its start. Do not change anything else.",
   },
   {
-    id: "javascript-multiple-edit",
-    language: "javascript",
-    file: "sample.js",
-    source: "export function first() { return 1; }\nexport function second() { return 3; }\n",
-    expected: "export function first() { return 2; }\nexport function second() { return 4; }\n",
-    prompt:
-      "In sample.js, change first() to return 2 and second() to return 4. Do not change anything else.",
-  },
-  {
-    id: "python-single-edit",
-    language: "python",
-    file: "sample.py",
-    source: "def answer():\n    return 1\n",
-    expected: "def answer():\n    return 2\n",
-    prompt:
-      "In sample.py, change answer() so it returns 2 instead of 1. Do not change anything else.",
-  },
-  {
-    id: "python-multiple-edit",
-    language: "python",
-    file: "sample.py",
-    source: "def first():\n    return 1\n\ndef second():\n    return 3\n",
-    expected: "def first():\n    return 2\n\ndef second():\n    return 4\n",
-    prompt:
-      "In sample.py, change first() to return 2 and second() to return 4. Do not change anything else.",
-  },
-  {
-    id: "go-single-edit",
-    language: "go",
-    file: "sample.go",
-    source: "package sample\n\nfunc Answer() int { return 1 }\n",
-    expected: "package sample\n\nfunc Answer() int { return 2 }\n",
-    prompt:
-      "In sample.go, change Answer() so it returns 2 instead of 1. Do not change anything else.",
-  },
-  {
-    id: "go-multiple-edit",
-    language: "go",
-    file: "sample.go",
-    source: "package sample\n\nfunc First() int { return 1 }\nfunc Second() int { return 3 }\n",
-    expected: "package sample\n\nfunc First() int { return 2 }\nfunc Second() int { return 4 }\n",
-    prompt:
-      "In sample.go, change First() to return 2 and Second() to return 4. Do not change anything else.",
+    id: "session-metrics-report",
+    sourcePath: "packages/session-metrics/src/report.ts",
+    oldText: '      title("Session Metrics"),',
+    newText: '      title("Session Metrics Report"),',
+    prompt: "In the TypeScript source file, change the report title from ‘Session Metrics’ to ‘Session Metrics Report’. Do not change anything else.",
   },
 ];
+
+async function loadTasks(): Promise<readonly Task[]> {
+  return Promise.all(
+    taskDefinitions.map(async (definition) => {
+      const source = await readFile(join(root, definition.sourcePath), "utf8");
+      const occurrences = source.split(definition.oldText).length - 1;
+      if (occurrences !== 1) {
+        throw new Error(`${definition.sourcePath}: expected one task target, found ${occurrences}`);
+      }
+      return {
+        ...definition,
+        language: "typescript" as const,
+        file: basename(definition.sourcePath),
+        source,
+        expected: source.replace(definition.oldText, definition.newText),
+      };
+    }),
+  );
+}
 
 function parseOptions(argv: readonly string[]) {
   let model: string | undefined;
@@ -172,13 +153,6 @@ function parseEvents(stdout: string): ToolEvent[] {
   return events;
 }
 
-async function discoverLanguages(): Promise<Set<string>> {
-  const entries = await readdir(join(root, "extensions/astrolabe/languages"), {
-    withFileTypes: true,
-  });
-  return new Set(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name));
-}
-
 async function runTask(task: Task, mode: Mode, model: string | undefined): Promise<RunResult> {
   const directory = await mkdtemp(join("/tmp", "astrolabe-session-benchmark-"));
   const path = join(directory, task.file);
@@ -225,6 +199,8 @@ async function runTask(task: Task, mode: Mode, model: string | undefined): Promi
   return {
     task: task.id,
     language: task.language,
+    sourceChars: task.source.length,
+    sourceLines: task.source.split("\n").length - 1,
     mode,
     success: exitCode === 0 && actual === task.expected,
     exitCode,
@@ -244,11 +220,7 @@ async function runTask(task: Task, mode: Mode, model: string | undefined): Promi
 
 async function main() {
   const options = parseOptions(process.argv.slice(2));
-  const languages = await discoverLanguages();
-  const taskLanguages = new Set(tasks.map((task) => task.language));
-  const missing = [...languages].filter((language) => !taskLanguages.has(language as Language));
-  if (missing.length > 0)
-    throw new Error(`Missing benchmark tasks for languages: ${missing.join(", ")}`);
+  const tasks = await loadTasks();
   const selected = selectedTask ? tasks.filter((task) => task.id === selectedTask) : tasks;
   if (selected.length === 0) throw new Error(`Unknown task: ${selectedTask}`);
 
