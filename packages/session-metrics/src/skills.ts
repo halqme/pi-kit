@@ -35,7 +35,14 @@ async function installedPackageRoots(): Promise<string[]> {
 }
 
 const builtInTools = new Set([
-  "bash", "edit", "find", "grep", "ls", "read", "write", "background_process",
+  "bash",
+  "edit",
+  "find",
+  "grep",
+  "ls",
+  "read",
+  "write",
+  "background_process",
 ]);
 
 async function extensionTools(root: string): Promise<Set<string>> {
@@ -90,12 +97,14 @@ export async function addSkillAvailability(report: MetricsReport): Promise<Metri
         pi?: { extensions?: string[] };
       };
       for (const extensionRoot of manifest.pi?.extensions ?? [])
-        for (const tool of await extensionTools(resolve(packageRoot, extensionRoot))) activeTools.add(tool);
+        for (const tool of await extensionTools(resolve(packageRoot, extensionRoot)))
+          activeTools.add(tool);
     } catch {
       // An unavailable package has no active tools.
     }
   }
-  for (const [name, usage] of Object.entries(report.toolUsage)) usage.available = activeTools.has(name);
+  for (const [name, usage] of Object.entries(report.toolUsage))
+    usage.available = activeTools.has(name);
 
   for (const name of Object.keys(report.skills)) {
     const skill = report.skills[name];

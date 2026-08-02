@@ -11,5 +11,8 @@ test("builds bounded tool error queries", () => {
 
 test("builds token and latency outlier queries", () => {
   assert.match(insightQuery("tool-token-outliers"), /ORDER BY r\.estimated_tokens DESC/);
-  assert.match(insightQuery("tool-latency-outliers", { since: "2026-01-01" }), /created_at.*2026-01-01/s);
+  assert.match(
+    insightQuery("tool-latency-outliers", { since: "2026-01-01" }),
+    /created_at.*2026-01-01/s,
+  );
 });

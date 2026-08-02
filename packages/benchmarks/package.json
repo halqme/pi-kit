@@ -1,0 +1,11 @@
+{
+  "name": "@halqme/benchmarks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "benchmark:astrolabe": "bun ./astrolabe/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:"
+  }
+}

@@ -189,9 +189,9 @@ function renderSummaryMarkdown(report: MetricsReport, options: ReportOptions = {
       ? daily.reduce((total, [, metrics]) => mergeMetrics(total, metrics), createMetrics())
       : report;
     const tools = rows(
-      Object.entries(summary.toolUsage).filter(([, tool]) => tool.available === true).sort(
-        ([a, av], [b, bv]) => bv.calls - av.calls || a.localeCompare(b),
-      ),
+      Object.entries(summary.toolUsage)
+        .filter(([, tool]) => tool.available === true)
+        .sort(([a, av], [b, bv]) => bv.calls - av.calls || a.localeCompare(b)),
       limit,
     );
     const modelEfforts = rows(
@@ -301,9 +301,9 @@ function summarySections(report: MetricsReport, options: ReportOptions): ReportS
     limit,
   );
   const tools = rows(
-    Object.entries(summary.toolUsage).filter(([, tool]) => tool.available === true).sort(
-      ([a, av], [b, bv]) => bv.calls - av.calls || a.localeCompare(b),
-    ),
+    Object.entries(summary.toolUsage)
+      .filter(([, tool]) => tool.available === true)
+      .sort(([a, av], [b, bv]) => bv.calls - av.calls || a.localeCompare(b)),
     limit,
   );
   const maxEffortTokens = Math.max(...modelEfforts.map(([, value]) => value.usage.total), 0);
@@ -470,9 +470,9 @@ function renderModelEffortTable(report: MetricsReport, limit: number | undefined
 
 function renderToolTable(report: MetricsReport, limit: number | undefined): string {
   const entries = rows(
-    Object.entries(report.toolUsage).filter(([, tool]) => tool.available === true).sort(
-      ([a, av], [b, bv]) => bv.calls - av.calls || a.localeCompare(b),
-    ),
+    Object.entries(report.toolUsage)
+      .filter(([, tool]) => tool.available === true)
+      .sort(([a, av], [b, bv]) => bv.calls - av.calls || a.localeCompare(b)),
     limit,
   );
   return [
