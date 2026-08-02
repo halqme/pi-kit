@@ -55,7 +55,14 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
     const previous = announced.get(snapshot.request.id);
     if (!force && previous === snapshot.phase) return;
     announced.set(snapshot.request.id, snapshot.phase);
-    const text = `[background-process] ${describe(snapshot)}`;
+    const text = [
+      `[background-process] ${describe(snapshot)}`,
+      snapshot.phase === "unchecked"
+        ? "Completion received. Continue the pending task; do not rerun check unless output is needed."
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
     pi.sendMessage(
       {
         customType: "background-process-status",
@@ -64,23 +71,36 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
         details: snapshot,
       },
       snapshot.phase === "unchecked"
-        ? { triggerTurn: ctx.isIdle(), deliverAs: ctx.isIdle() ? "nextTurn" : "followUp" }
+        ? { triggerTurn: true, deliverAs: ctx.isIdle() ? "nextTurn" : "followUp" }
         : { triggerTurn: false, deliverAs: "nextTurn" },
     );
     if (snapshot.phase === "unchecked") await acknowledgeProcess(snapshot.taskDir);
   }
 
-  async function poll(ctx: ExtensionContext, force = false): Promise<void> {
+  async function poll(
+    ctx: ExtensionContext,
+    options: { force?: boolean; completedOnly?: boolean } = {},
+  ): Promise<void> {
     const snapshots = await listProcesses(rootFor(ctx));
     updateStatus(ctx, snapshots);
-    for (const snapshot of snapshots) await announce(ctx, snapshot, force);
+    for (const snapshot of snapshots) {
+      if (options.completedOnly && snapshot.phase !== "unchecked") continue;
+      await announce(ctx, snapshot, options.force ?? false);
+    }
   }
 
   pi.registerTool({
     name: TOOL_NAME,
     label: "Background Process",
     description:
-      "Start one or more durable background shell commands, list, check, or stop them. Use for dev servers, watchers, builds, tests, and other commands that should outlive the current turn. Completed processes are hidden unless explicitly requested.",
+      "Start one or more durable background shell commands, list, check, or stop them. Use for dev servers, watchers, builds, tests, and other commands that should outlive the current turn. After starting a long-running command, do not wait with sleep, polling, ps, or repeated check calls: report that it started and end the turn. Completion is delivered automatically, or on session resume if the session was interrupted. Completed processes are hidden unless explicitly requested.",
+    promptGuidelines: [
+      "Use start or start_many for commands that may take longer than the current turn.",
+      "After starting a background process, do not use sleep, polling, ps, or check to wait for completion.",
+      "Report that the process started and end the turn; background-process will notify you when it completes.",
+      "Use check only when the user explicitly asks for current progress or output.",
+      "When a background-process completion message arrives, inspect its result and continue the pending task.",
+    ],
     parameters: Type.Object({
       action: Type.Union([
         Type.Literal("start"),
@@ -129,7 +149,12 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
           announced.set(snapshot.request.id, snapshot.phase);
           await poll(ctx);
           return {
-            content: [{ type: "text" as const, text: `Started ${describe(snapshot)}` }],
+            content: [
+              {
+                type: "text" as const,
+                text: `Started ${describe(snapshot)}\nDo not wait or poll for completion; end this turn and let background-process notify you.`,
+              },
+            ],
             details: snapshot,
           };
         }
@@ -165,6 +190,9 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
             failed.length
               ? `Failed ${failed.length} process(es):\n${failed.map((item) => `${item.index}: ${item.error}`).join("\n")}`
               : "",
+            started.length
+              ? "Do not wait or poll for completion; end this turn and let background-process notify you."
+              : "",
           ]
             .filter(Boolean)
             .join("\n\n");
@@ -194,7 +222,6 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
         }
         const snapshot = await inspectProcess(dir);
         const output = await readProcessOutput(dir);
-        if (snapshot.phase === "unchecked") await acknowledgeProcess(dir);
         return {
           content: [
             {
@@ -218,13 +245,13 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
     activeContext = ctx;
     announced.clear();
     if (timer) clearInterval(timer);
-    await poll(ctx, true);
+    await poll(ctx, { force: true, completedOnly: true });
     timer = setInterval(() => {
       if (activeContext) void poll(activeContext).catch(() => undefined);
     }, POLL_MS);
     timer.unref();
   });
-  pi.on("session_compact", async (_event, ctx) => poll(ctx, true));
+  pi.on("session_compact", async (_event, ctx) => poll(ctx, { force: true, completedOnly: true }));
   pi.on("session_shutdown", (_event, ctx) => {
     if (timer) clearInterval(timer);
     timer = undefined;

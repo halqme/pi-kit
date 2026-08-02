@@ -7,10 +7,12 @@ The `background_process` tool supports:
 - `start`: start a shell command with an optional label and cwd.
 - `start_many`: start multiple shell commands concurrently. Each item accepts `command`, plus optional `label` and `cwd`.
 - `list`: show pending, running, and unchecked jobs. Set `includeCompleted` for history.
-- `check`: show status plus bounded stdout/stderr tails and acknowledge the result.
+- `check`: show status plus bounded stdout/stderr tails without acknowledging the result. Use it for explicit progress or output requests, not to wait for completion.
 - `stop`: request TERM followed by KILL after a grace period.
 
 `start_many` reports successfully started processes and per-item launch failures separately. Each process remains independently inspectable and stoppable by its returned ID.
+
+After starting a long-running process, end the turn instead of using `sleep`, polling, `ps`, or repeated `check` calls. Completion is automatically delivered as a follow-up turn; if the session was interrupted, an unchecked completion is delivered when the session resumes. Completion notifications are acknowledged automatically after delivery.
 
 Phases are `pending`, `running`, `unchecked`, and `completed`. Exit disposition is stored separately as `success`, `failed`, `stopped`, or `lost`.
 
