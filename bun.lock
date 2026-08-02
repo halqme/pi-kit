@@ -72,6 +72,17 @@
         "typescript": "catalog:",
       },
     },
+    "extensions/threads": {
+      "name": "@halqme/threads",
+      "dependencies": {
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/session-metrics": {
       "name": "@halqme/pi-session-metrics",
       "bin": {
@@ -181,6 +192,8 @@
     "@halqme/pi-session-metrics": ["@halqme/pi-session-metrics@workspace:packages/session-metrics"],
 
     "@halqme/pi-session-metrics-extension": ["@halqme/pi-session-metrics-extension@workspace:extensions/session-metrics"],
+
+    "@halqme/threads": ["@halqme/threads@workspace:extensions/threads"],
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
