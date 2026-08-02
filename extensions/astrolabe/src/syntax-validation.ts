@@ -1,12 +1,13 @@
 import type { Node, Tree } from "web-tree-sitter";
 import { syntaxIssues, type ParsedFile, type SyntaxIssue, type TreeEdit } from "./parser.ts";
 
-function mapIndex(index: number, edit: TreeEdit): number | undefined {
-  if (index <= edit.startIndex) return index;
-  if (index >= edit.oldEndIndex) {
-    return edit.newEndIndex + index - edit.oldEndIndex;
-  }
-  return undefined;
+function mapIndexThroughEdits(index: number, edits: readonly TreeEdit[]): number {
+  return (
+    index +
+    edits
+      .filter((edit) => edit.oldEndIndex <= index)
+      .reduce((delta, edit) => delta + edit.newEndIndex - edit.oldEndIndex, 0)
+  );
 }
 
 function sameIssue(left: SyntaxIssue, right: SyntaxIssue): boolean {
@@ -24,16 +25,27 @@ export function findNewSyntaxIssues(
   after: ParsedFile,
   edit: TreeEdit,
 ): SyntaxIssue[] {
+  return findNewSyntaxIssuesForEdits(before, after, [edit]);
+}
+
+export function findNewSyntaxIssuesForEdits(
+  before: ParsedFile,
+  after: ParsedFile,
+  edits: readonly TreeEdit[],
+): SyntaxIssue[] {
+  const orderedEdits = [...edits].sort((left, right) => left.startIndex - right.startIndex);
   const expected: SyntaxIssue[] = [];
   for (const issue of before.syntaxIssues) {
-    const overlapsEditedSource =
-      issue.startIndex < edit.oldEndIndex && issue.endIndex > edit.startIndex;
+    const overlapsEditedSource = orderedEdits.some(
+      (edit) => issue.startIndex < edit.oldEndIndex && issue.endIndex > edit.startIndex,
+    );
     if (overlapsEditedSource) continue;
-    const start = mapIndex(issue.startIndex, edit);
-    const end = mapIndex(issue.endIndex, edit);
-    if (start !== undefined && end !== undefined) {
-      expected.push({ ...issue, startIndex: start, endIndex: end });
-    }
+
+    expected.push({
+      ...issue,
+      startIndex: mapIndexThroughEdits(issue.startIndex, orderedEdits),
+      endIndex: mapIndexThroughEdits(issue.endIndex, orderedEdits),
+    });
   }
 
   const unmatched = [...after.syntaxIssues];

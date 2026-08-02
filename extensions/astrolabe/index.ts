@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { type ExtensionAPI, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { editContinuationDetailed } from "./src/edit.ts";
+import { editContinuationDetailed, editManyContinuationDetailed } from "./src/edit.ts";
 import { inspect } from "./src/inspect.ts";
 import { supportedLanguageIds, type LanguageId } from "./src/language-profile.ts";
 import { createMetrics, record } from "./src/metrics.ts";
@@ -19,10 +19,13 @@ import {
 } from "./src/protocol.ts";
 import { syntaxSearchDetailed } from "./src/syntax-search.ts";
 
+const TOOL_SELECTION_GUIDANCE =
+  "When modifying existing TypeScript, JavaScript, Python, or Go source, prefer the astrolabe tool over read/edit; use read/edit for new, generated, configuration, or unsupported files.";
+
 const GUIDANCE = [
-  "Use astrolabe for supported existing source: search accepts a file or directory scope; inspect returns the selected source without manual outline/structure transitions.",
-  "Pass the continuation object returned in a result unchanged to inspect or replace. Replace revalidates the target source, node type, range, and context before writing.",
-  "Use read or normal edits only for unsupported, generated, configuration, or new files—not after a syntax error. Use the returned next action to recover.",
+  "For existing TypeScript, JavaScript, Python, or Go source, use astrolabe before read or edit. Do not use read/edit for a supported existing source file unless astrolabe reports unsupported, generated, or configuration content.",
+  "Use search for a symbol or call, or inspect a file path for its outline. Follow the returned continuation or next action unchanged; source inspection and replace are safe, validated operations.",
+  "Use read or normal edits for unsupported languages, generated/configuration files, new files, or when astrolabe explicitly reports that the target is not applicable.",
 ];
 
 const actionSchema = Type.Union([
@@ -48,6 +51,16 @@ const actionSchema = Type.Union([
       token: Type.String({ description: "Continuation returned by inspect with source detail" }),
     }),
     replacement: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("replace_many"),
+    targets: Type.Array(
+      Type.Object({
+        continuation: Type.Object({ token: Type.String() }),
+        replacement: Type.String(),
+      }),
+      { minItems: 1 },
+    ),
   }),
 ]);
 
@@ -102,7 +115,6 @@ async function dispatch(
       ok: true,
       action: "search",
       data: { matchCount: matches.length, matches: matches.map((match) => match.description) },
-      ...(resultHandles.length > 0 ? { handles: resultHandles } : {}),
       ...(resultHandles.length > 0
         ? {
             next: resultHandles.map((handle) => ({
@@ -156,10 +168,6 @@ async function dispatch(
       ...(request.language ? { language: request.language } : {}),
       ...(request.depth !== undefined ? { depth: request.depth } : {}),
     };
-    const structure =
-      detail === "source" && handle
-        ? await inspect({ ...inspectParams, view: "structure" }, cwd, handles)
-        : undefined;
     const output = await inspect({ ...inspectParams, view: detail }, cwd, handles);
     if (output.startsWith("stale_node:")) {
       return failure(
@@ -176,11 +184,7 @@ async function dispatch(
     return {
       ok: true,
       action: "inspect",
-      data:
-        detail === "source"
-          ? { source: output, ...(structure ? { structure } : {}) }
-          : { outline: output },
-      ...(responseHandles.length > 0 ? { handles: responseHandles } : {}),
+      data: detail === "source" ? { source: output } : { outline: output },
       ...(detail === "outline" && responseHandles.length > 0
         ? {
             next: responseHandles.map((item) => ({
@@ -201,6 +205,56 @@ async function dispatch(
             }
           : {}),
     };
+  }
+
+  if (request.action === "replace_many") {
+    const firstTarget = request.targets[0];
+    if (!firstTarget || !isContinuation(firstTarget.continuation)) {
+      return failure(
+        "replace_many",
+        "invalid_continuation",
+        "Pass every target continuation unchanged.",
+      );
+    }
+    const target = handles.resolveContinuation(firstTarget.continuation.token);
+    if (!target) {
+      return failure(
+        "replace_many",
+        "invalid_continuation",
+        "The continuation has expired; inspect source again.",
+      );
+    }
+    return withFileMutationQueue(resolve(cwd, target.path), async () => {
+      const result = await editManyContinuationDetailed(request, cwd, handles);
+      if (!result.message.startsWith("edited ")) {
+        return failure(
+          "replace_many",
+          result.message.split(":")[0] ?? "replace_failed",
+          result.message,
+          [{ action: "inspect", continuation: firstTarget.continuation, detail: "source" }],
+        );
+      }
+      const updated = result.details?.recommendedNextInspectionTarget
+        ? handles.get(result.details.recommendedNextInspectionTarget)
+        : undefined;
+      const nextHandle = updated ? handleResponse(handles, updated) : undefined;
+      return {
+        ok: true,
+        action: "replace_many" as const,
+        data: { message: result.message, ...(result.details ? { edit: result.details } : {}) },
+        ...(nextHandle
+          ? {
+              next: [
+                {
+                  action: "inspect" as const,
+                  continuation: nextHandle.continuation,
+                  detail: "source",
+                },
+              ],
+            }
+          : {}),
+      };
+    });
   }
 
   if (!isContinuation(request.continuation)) {
@@ -230,7 +284,6 @@ async function dispatch(
       data: { message: result.message, ...(result.details ? { edit: result.details } : {}) },
       ...(nextHandle
         ? {
-            handles: [nextHandle],
             next: [{ action: "inspect", continuation: nextHandle.continuation, detail: "source" }],
           }
         : {}),
@@ -247,15 +300,19 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
     await shutdownParserCaches();
   });
   pi.on("before_agent_start", async (event) => {
-    if (!(event.systemPromptOptions.selectedTools ?? []).includes("astrolabe")) return;
-    return { systemPrompt: `${event.systemPrompt}\n\n${GUIDANCE.join(" ")}` };
+    const selectedTools = event.systemPromptOptions.selectedTools ?? [];
+    const guidance = selectedTools.includes("astrolabe")
+      ? `${TOOL_SELECTION_GUIDANCE} ${GUIDANCE.join(" ")}`
+      : TOOL_SELECTION_GUIDANCE;
+    return { systemPrompt: `${event.systemPrompt}\n\n${guidance}` };
   });
   pi.registerTool({
     name: "astrolabe",
     label: "Astrolabe",
     description:
-      "Search supported source files or directory scopes, inspect selected syntax, and safely replace validated nodes. Reuse returned continuations and next actions unchanged.",
-    promptSnippet: "Search, inspect, and safely edit supported source with reusable continuations",
+      "Use first for existing TypeScript, JavaScript, Python, or Go source instead of read/edit: search symbols, inspect syntax, and safely replace validated nodes. Avoid for new, generated, configuration, or unsupported files.",
+    promptSnippet:
+      "Prefer for existing supported source; search, inspect, and safely replace validated syntax",
     promptGuidelines: GUIDANCE,
     parameters: actionSchema,
     renderCall(args, theme) {
@@ -297,7 +354,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
       record(metrics, JSON.stringify(params).length, text, start);
       return {
         content: [{ type: "text", text }],
-        details: { response, metrics },
+        details: { metrics },
         ...(response.ok ? {} : { isError: true }),
       };
     },

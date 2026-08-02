@@ -316,17 +316,17 @@ async function runAstrolabeEdit(
   if (!containerId) {
     throw new Error(`No expandable declaration in syntax_inspect outline for ${fixture.path}`);
   }
-  const structureOutput = await inspect(
-    { path, nodeId: containerId, view: "structure", depth: 12 },
-    directory,
-    handles,
-  );
-  metrics.calls++;
-  addInput(metrics, structureOutput);
-  const nodeId = requireSingleHandle(
-    structureOutput,
-    outlineTargetIds.length === 1 ? targetLabel : fixture.nodeType,
-  );
+  let nodeId = containerId;
+  if (outlineTargetIds.length !== 1) {
+    const structureOutput = await inspect(
+      { path, nodeId: containerId, view: "structure", depth: 12 },
+      directory,
+      handles,
+    );
+    metrics.calls++;
+    addInput(metrics, structureOutput);
+    nodeId = requireSingleHandle(structureOutput, fixture.nodeType);
+  }
   const sourceOutput = await inspect({ path, nodeId, view: "source" }, directory, handles);
   metrics.calls++;
   addInput(metrics, sourceOutput);

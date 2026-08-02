@@ -1,7 +1,7 @@
 import type { LanguageId } from "./language-profile.ts";
 import type { SyntaxSearchKind } from "./syntax-search.ts";
 
-export type SyntaxAction = "inspect" | "search" | "replace";
+export type SyntaxAction = "inspect" | "search" | "replace" | "replace_many";
 export type InspectDetail = "outline" | "source";
 export type ContinuationCapability = "inspect" | "source" | "replace";
 
@@ -34,7 +34,15 @@ export interface ReplaceRequest {
   replacement: string;
 }
 
-export type SyntaxRequest = InspectRequest | SearchRequest | ReplaceRequest;
+export interface ReplaceManyRequest {
+  action: "replace_many";
+  targets: Array<{
+    continuation: Continuation;
+    replacement: string;
+  }>;
+}
+
+export type SyntaxRequest = InspectRequest | SearchRequest | ReplaceRequest | ReplaceManyRequest;
 
 export interface SyntaxHandle {
   continuation: Continuation;
@@ -72,7 +80,7 @@ export function isContinuation(value: unknown): value is Continuation {
 }
 
 export function responseText(response: SyntaxResponse): string {
-  return JSON.stringify(response, null, 2);
+  return JSON.stringify(response);
 }
 
 export function failure(
