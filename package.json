@@ -9,7 +9,10 @@
     "packages/*"
   ],
   "scripts": {
-    "hooks:install": "git config core.hooksPath .githooks"
+    "hooks:install": "git config core.hooksPath .githooks",
+    "benchmark:astrolabe": "bun packages/benchmarks/astrolabe/index.ts",
+    "format": "oxfmt .",
+    "lint": "oxlint ."
   },
   "peerDependencies": {
     "oxfmt": "latest",
