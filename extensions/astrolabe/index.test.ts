@@ -13,7 +13,21 @@ interface CapturedTool {
 interface SyntaxResponse {
   ok: boolean;
   action: string;
-  data?: { outline?: string; source?: string; matchCount?: number };
+  data?: {
+    outline?: string;
+    source?: string;
+    matchCount?: number;
+    candidateCount?: number;
+    mode?: "source" | "cards";
+    candidates?: Array<{
+      continuation: { token: string };
+      name: string;
+      source?: string;
+      signature: string;
+      flow: { calls: string[]; branches: number; returns: number; throws: number; awaits: number };
+      score: number;
+    }>;
+  };
   handles?: Array<{ continuation: { token: string }; capabilities: string[] }>;
   next?: Array<Record<string, unknown>>;
   error?: { code: string };
@@ -79,6 +93,104 @@ test("inspect path returns an executable next action and continuation source loo
   assert.equal("structure" in (sourcedResponse.data ?? {}), false);
   assert.doesNotMatch(sourced.content[0]?.text ?? "", /\n/);
   assert.equal(sourcedResponse.next?.[0]?.action, "replace");
+});
+
+test("locate returns a ranked source-inspected candidate usable for direct replacement", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
+  const path = join(dir, "sample.ts");
+  await writeFile(
+    path,
+    "class Parser { parse(input: string) { return input.trim(); } }\nfunction fallback() { return null; }\n",
+  );
+  const tool = setup(dir);
+  const located = await call(tool, dir, {
+    action: "locate",
+    scope: "sample.ts",
+    symbols: ["Parser.parse"],
+    terms: ["trim"],
+    maxCandidates: 1,
+  });
+  const response = responseOf(located);
+  assert.equal(response.ok, true);
+  assert.equal(response.data?.candidateCount, 1);
+  assert.equal(response.data?.mode, "source");
+  const metrics = located.details.metrics as {
+    actions: Record<string, number>;
+    locatedCandidates: number;
+    locatedSources: number;
+  };
+  assert.equal(metrics.actions.locate, 1);
+  assert.equal(metrics.locatedCandidates, 1);
+  assert.equal(metrics.locatedSources, 1);
+  const candidate = response.data?.candidates?.[0];
+  assert.equal(candidate?.name, "parse");
+  assert.match(candidate?.source ?? "", /return input\.trim/);
+
+  const replaced = await call(tool, dir, {
+    action: "replace",
+    continuation: candidate?.continuation,
+    replacement: "parse(input: string) { return input.toLowerCase(); }",
+  });
+  assert.equal(responseOf(replaced).ok, true);
+  assert.match(await readFile(path, "utf8"), /toLowerCase/);
+});
+
+test("locate omits bodies for ambiguous candidates and selected cards can be inspected", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
+  await writeFile(
+    join(dir, "sample.ts"),
+    "function first() { return parse(); }\nfunction second() { return parse(); }\n",
+  );
+  const tool = setup(dir);
+  const located = await call(tool, dir, {
+    action: "locate",
+    scope: "sample.ts",
+    terms: ["parse"],
+  });
+  const response = responseOf(located);
+  assert.equal(response.ok, true);
+  assert.equal(response.data?.mode, "cards");
+  const metrics = located.details.metrics as { locatedCards: number };
+  assert.equal(metrics.locatedCards, 1);
+  const candidate = response.data?.candidates?.[0];
+  assert.equal(candidate?.source, undefined);
+  assert.match(candidate?.signature ?? "", /function first/);
+  assert.deepEqual(candidate?.flow.calls, ["parse"]);
+  const inspected = await call(tool, dir, {
+    action: "inspect",
+    continuation: candidate?.continuation,
+    detail: "source",
+  });
+  assert.match(responseOf(inspected).data?.source ?? "", /function first/);
+});
+
+test("locate omits a high-confidence body that exceeds its size limit", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
+  await writeFile(join(dir, "sample.ts"), `function parse() { return "${"x".repeat(6_000)}"; }\n`);
+  const tool = setup(dir);
+  const located = await call(tool, dir, {
+    action: "locate",
+    scope: "sample.ts",
+    symbols: ["parse"],
+  });
+  const response = responseOf(located);
+  assert.equal(response.ok, true);
+  assert.equal(response.data?.mode, "cards");
+  assert.equal(response.data?.candidates?.[0]?.source, undefined);
+});
+
+test("locate rejects missing hints and returns no-candidate failures", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
+  await writeFile(join(dir, "sample.ts"), "function answer() { return 1; }\n");
+  const tool = setup(dir);
+  const missingHint = responseOf(await call(tool, dir, { action: "locate", scope: "sample.ts" }));
+  assert.equal(missingHint.ok, false);
+  assert.equal(missingHint.error?.code, "locate_requires_hint");
+  const noCandidates = responseOf(
+    await call(tool, dir, { action: "locate", scope: "sample.ts", symbols: ["missing"] }),
+  );
+  assert.equal(noCandidates.ok, false);
+  assert.equal(noCandidates.error?.code, "no_candidates");
 });
 
 test("directory search returns continuations usable for direct replacement", async () => {

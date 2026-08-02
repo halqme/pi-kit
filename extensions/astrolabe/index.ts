@@ -9,6 +9,7 @@ import {
   supportedLanguageIds,
   type LanguageId,
 } from "./src/language-profile.ts";
+import { locateDetailed } from "./src/locate.ts";
 import { createMetrics, record } from "./src/metrics.ts";
 import { HandleStore, type NodeHandle } from "./src/node-handles.ts";
 import { shutdownParserCaches, startParserCaches } from "./src/parser.ts";
@@ -17,17 +18,18 @@ import {
   failure,
   isContinuation,
   responseText,
+  type LocateCandidate,
   type SyntaxHandle,
   type SyntaxRequest,
   type SyntaxResponse,
 } from "./src/protocol.ts";
 import { syntaxSearchDetailed } from "./src/syntax-search.ts";
 
-const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDescription} source, prefer the astrolabe tool over read/edit; use read/edit for new, generated, configuration, or unsupported files.`;
+const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDescription} source, use locate to identify the target and return either its body or compact structural cards; use read/edit for new, generated, configuration, or unsupported files.`;
 
 const GUIDANCE = [
   `For existing ${supportedLanguageDescription} source, use astrolabe before read or edit. Do not use read/edit for a supported existing source file unless astrolabe reports unsupported, generated, or configuration content.`,
-  "Use search for a symbol or call, or inspect a file path for its outline. Follow the returned continuation or next action unchanged; source inspection and replace are safe, validated operations.",
+  "For an edit intent or known symbol, use locate first. It decides whether to include a single high-confidence small body or return compact structural cards; inspect only the selected card before replacing. Use search or outline inspection only when locate cannot identify the target.",
   "Use read or normal edits for unsupported languages, generated/configuration files, new files, or when astrolabe explicitly reports that the target is not applicable.",
 ];
 
@@ -39,6 +41,13 @@ const actionSchema = Type.Union([
     language: Type.Optional(StringEnum(supportedLanguageIds)),
     detail: Type.Optional(StringEnum(["outline", "source"] as const)),
     depth: Type.Optional(Type.Integer({ minimum: 0, maximum: 12 })),
+  }),
+  Type.Object({
+    action: Type.Literal("locate"),
+    scope: Type.String({ description: "Existing supported source file or directory scope" }),
+    symbols: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
+    terms: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
+    maxCandidates: Type.Optional(Type.Integer({ minimum: 1, maximum: 5 })),
   }),
   Type.Object({
     action: Type.Literal("search"),
@@ -76,6 +85,19 @@ function resultText(result: { content: readonly unknown[] }): string {
   return typeof first?.text === "string" ? first.text : "";
 }
 
+const AUTO_SOURCE_LIMIT = 6_000;
+
+function includeSource(matches: Awaited<ReturnType<typeof locateDetailed>>): boolean {
+  const first = matches[0];
+  const second = matches[1];
+  return Boolean(
+    first &&
+    first.score >= 90 &&
+    (!second || first.score - second.score >= 50) &&
+    Buffer.byteLength(first.source) <= AUTO_SOURCE_LIMIT,
+  );
+}
+
 function handleResponse(handles: HandleStore, handle: NodeHandle): SyntaxHandle | undefined {
   const token = handles.issueContinuation(handle.id);
   if (!token) return undefined;
@@ -107,6 +129,62 @@ async function dispatch(
   cwd: string,
   handles: HandleStore,
 ): Promise<SyntaxResponse> {
+  if (request.action === "locate") {
+    if ((request.symbols?.length ?? 0) + (request.terms?.length ?? 0) === 0) {
+      return failure(
+        "locate",
+        "locate_requires_hint",
+        "Provide at least one symbol or term to locate an edit target.",
+      );
+    }
+    const maxCandidates = request.maxCandidates ?? 3;
+    const matches = await locateDetailed(
+      { ...request, scope: normalizePath(request.scope) },
+      cwd,
+      handles,
+    );
+    if (matches.length === 0) {
+      return failure(
+        "locate",
+        "no_candidates",
+        "No structural declarations matched the supplied symbols or terms.",
+      );
+    }
+    const includeTopSource = includeSource(matches);
+    const candidates: LocateCandidate[] = matches
+      .slice(0, maxCandidates)
+      .flatMap((match, index) => {
+        const handle = handleResponse(handles, match.handle);
+        return handle
+          ? [
+              {
+                continuation: handle.continuation,
+                path: match.path,
+                type: match.handle.type,
+                name: match.name,
+                ...(match.parent ? { parent: match.parent } : {}),
+                signature: match.signature,
+                flow: match.flow,
+                range: handle.range,
+                score: match.score,
+                reasons: match.reasons,
+                sourceBytes: Buffer.byteLength(match.source),
+                ...(includeTopSource && index === 0 ? { source: match.source } : {}),
+              },
+            ]
+          : [];
+      });
+    return {
+      ok: true,
+      action: "locate",
+      data: {
+        candidateCount: candidates.length,
+        mode: includeTopSource ? "source" : "cards",
+        candidates,
+      },
+    };
+  }
+
   if (request.action === "search") {
     const scope = normalizePath(request.scope);
     const matches = await syntaxSearchDetailed({ ...request, scope }, cwd, handles);
@@ -320,7 +398,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
     renderCall(args, theme) {
       const request = args as SyntaxRequest;
       const target =
-        request.action === "search"
+        request.action === "search" || request.action === "locate"
           ? request.scope
           : request.action === "inspect"
             ? (request.path ?? "continuation")
@@ -345,15 +423,15 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
     },
     async execute(_id, params, _signal, _update, ctx) {
       const start = Date.now();
+      const request = params as SyntaxRequest;
       let response: SyntaxResponse;
       try {
-        response = await dispatch(params as SyntaxRequest, ctx.cwd, handles);
+        response = await dispatch(request, ctx.cwd, handles);
       } catch (error) {
-        const request = params as SyntaxRequest;
         response = failure(request.action, "syntax_error", String(error));
       }
       const text = responseText(response);
-      record(metrics, JSON.stringify(params).length, text, start);
+      record(metrics, request.action, JSON.stringify(params).length, text, start);
       return {
         content: [{ type: "text", text }],
         details: { metrics },

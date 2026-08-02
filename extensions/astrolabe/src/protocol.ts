@@ -1,7 +1,7 @@
 import type { LanguageId } from "./language-profile.ts";
 import type { SyntaxSearchKind } from "./syntax-search.ts";
 
-export type SyntaxAction = "inspect" | "search" | "replace" | "replace_many";
+export type SyntaxAction = "inspect" | "locate" | "search" | "replace" | "replace_many";
 export type InspectDetail = "outline" | "source";
 export type ContinuationCapability = "inspect" | "source" | "replace";
 
@@ -17,6 +17,14 @@ export interface InspectRequest {
   language?: LanguageId;
   detail?: InspectDetail;
   depth?: number;
+}
+
+export interface LocateRequest {
+  action: "locate";
+  scope: string;
+  symbols?: string[];
+  terms?: string[];
+  maxCandidates?: number;
 }
 
 export interface SearchRequest {
@@ -42,7 +50,12 @@ export interface ReplaceManyRequest {
   }>;
 }
 
-export type SyntaxRequest = InspectRequest | SearchRequest | ReplaceRequest | ReplaceManyRequest;
+export type SyntaxRequest =
+  | InspectRequest
+  | LocateRequest
+  | SearchRequest
+  | ReplaceRequest
+  | ReplaceManyRequest;
 
 export interface SyntaxHandle {
   continuation: Continuation;
@@ -53,6 +66,30 @@ export interface SyntaxHandle {
     end: { row: number; column: number };
   };
   capabilities: ContinuationCapability[];
+}
+
+export interface LocateCandidate {
+  continuation: Continuation;
+  path: string;
+  type: string;
+  name: string;
+  parent?: string;
+  signature: string;
+  flow: {
+    awaits: number;
+    branches: number;
+    calls: string[];
+    returns: number;
+    throws: number;
+  };
+  range: {
+    start: { row: number; column: number };
+    end: { row: number; column: number };
+  };
+  score: number;
+  reasons: string[];
+  sourceBytes: number;
+  source?: string;
 }
 
 export interface SyntaxError {

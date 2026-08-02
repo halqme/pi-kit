@@ -1,5 +1,11 @@
+import type { SyntaxAction } from "./protocol.ts";
+
 export interface Metrics {
   calls: number;
+  actions: Partial<Record<SyntaxAction, number>>;
+  locatedCandidates: number;
+  locatedCards: number;
+  locatedSources: number;
   inputChars: number;
   outputChars: number;
   inputTokens: number;
@@ -19,6 +25,10 @@ export interface Metrics {
 export function createMetrics(): Metrics {
   return {
     calls: 0,
+    actions: {},
+    locatedCandidates: 0,
+    locatedCards: 0,
+    locatedSources: 0,
     inputChars: 0,
     outputChars: 0,
     inputTokens: 0,
@@ -50,8 +60,29 @@ export function addOutput(metrics: Metrics, text: string): void {
   metrics.outputTokens += estimateTokens(text);
 }
 
-export function record(metrics: Metrics, inputChars: number, output: string, start: number): void {
+export function record(
+  metrics: Metrics,
+  action: SyntaxAction,
+  inputChars: number,
+  output: string,
+  start: number,
+): void {
   metrics.calls++;
+  metrics.actions[action] = (metrics.actions[action] ?? 0) + 1;
+  if (action === "locate") {
+    try {
+      const response = JSON.parse(output) as {
+        data?: { candidateCount?: unknown; mode?: unknown };
+      };
+      if (typeof response.data?.candidateCount === "number") {
+        metrics.locatedCandidates += response.data.candidateCount;
+      }
+      if (response.data?.mode === "cards") metrics.locatedCards++;
+      if (response.data?.mode === "source") metrics.locatedSources++;
+    } catch {
+      // Metrics must not affect a tool response.
+    }
+  }
   metrics.inputChars += inputChars;
   metrics.inputTokens += Math.ceil(inputChars / 4);
   addOutput(metrics, output);
