@@ -1,6 +1,6 @@
-import { labelsQuery, outlineQuery } from "./queries.ts";
+import { labelsQuery, outlineQuery, searchQueries } from "./queries.ts";
 import type { LanguageAdapter } from "../../src/language-profile.ts";
-export const javascriptAdapter: LanguageAdapter = {
+export const adapter: LanguageAdapter = {
   id: "javascript",
   extensions: [".js", ".mjs", ".cjs"],
   grammar: {
@@ -10,11 +10,7 @@ export const javascriptAdapter: LanguageAdapter = {
   },
   outlineQuery,
   labelsQuery,
-  searchQueries: {
-    function: `(function_declaration) @result (method_definition) @result`,
-    call: `(call_expression function: (_) @callee) @result`,
-    import: `(import_statement source: (string) @source) @result`,
-  },
+  searchQueries,
   declarationNodeTypes: new Set(["class_declaration", "function_declaration", "method_definition"]),
   importantNodeTypes: new Set([
     "class_declaration",
@@ -24,3 +20,5 @@ export const javascriptAdapter: LanguageAdapter = {
     "export_statement",
   ]),
 };
+
+export const javascriptAdapter = adapter;

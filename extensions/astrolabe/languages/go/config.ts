@@ -1,6 +1,6 @@
-import { labelsQuery, outlineQuery } from "./queries.ts";
+import { labelsQuery, outlineQuery, searchQueries } from "./queries.ts";
 import type { LanguageAdapter } from "../../src/language-profile.ts";
-export const goAdapter: LanguageAdapter = {
+export const adapter: LanguageAdapter = {
   id: "go",
   extensions: [".go"],
   grammar: {
@@ -10,11 +10,7 @@ export const goAdapter: LanguageAdapter = {
   },
   outlineQuery,
   labelsQuery,
-  searchQueries: {
-    function: `[(function_declaration) (method_declaration)] @result`,
-    call: `(call_expression function: (_) @callee) @result`,
-    import: `(import_declaration) @result`,
-  },
+  searchQueries,
   declarationNodeTypes: new Set(["function_declaration", "method_declaration", "type_declaration"]),
   importantNodeTypes: new Set([
     "function_declaration",
@@ -23,3 +19,5 @@ export const goAdapter: LanguageAdapter = {
     "import_declaration",
   ]),
 };
+
+export const goAdapter = adapter;

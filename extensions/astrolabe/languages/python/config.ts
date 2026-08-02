@@ -1,6 +1,6 @@
-import { labelsQuery, outlineQuery } from "./queries.ts";
+import { labelsQuery, outlineQuery, searchQueries } from "./queries.ts";
 import type { LanguageAdapter } from "../../src/language-profile.ts";
-export const pythonAdapter: LanguageAdapter = {
+export const adapter: LanguageAdapter = {
   id: "python",
   extensions: [".py", ".pyw"],
   grammar: {
@@ -10,11 +10,7 @@ export const pythonAdapter: LanguageAdapter = {
   },
   outlineQuery,
   labelsQuery,
-  searchQueries: {
-    function: `(function_definition) @result`,
-    call: `(call function: (_) @callee) @result`,
-    import: `[(import_statement) (import_from_statement)] @result`,
-  },
+  searchQueries,
   declarationNodeTypes: new Set(["class_definition", "function_definition"]),
   importantNodeTypes: new Set([
     "class_definition",
@@ -23,3 +19,5 @@ export const pythonAdapter: LanguageAdapter = {
     "import_from_statement",
   ]),
 };
+
+export const pythonAdapter = adapter;

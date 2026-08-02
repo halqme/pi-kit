@@ -4,7 +4,11 @@ import { type ExtensionAPI, withFileMutationQueue } from "@earendil-works/pi-cod
 import { Text } from "@earendil-works/pi-tui";
 import { editContinuationDetailed, editManyContinuationDetailed } from "./src/edit.ts";
 import { inspect } from "./src/inspect.ts";
-import { supportedLanguageIds, type LanguageId } from "./src/language-profile.ts";
+import {
+  supportedLanguageDescription,
+  supportedLanguageIds,
+  type LanguageId,
+} from "./src/language-profile.ts";
 import { createMetrics, record } from "./src/metrics.ts";
 import { HandleStore, type NodeHandle } from "./src/node-handles.ts";
 import { shutdownParserCaches, startParserCaches } from "./src/parser.ts";
@@ -19,11 +23,10 @@ import {
 } from "./src/protocol.ts";
 import { syntaxSearchDetailed } from "./src/syntax-search.ts";
 
-const TOOL_SELECTION_GUIDANCE =
-  "When modifying existing TypeScript, JavaScript, Python, or Go source, prefer the astrolabe tool over read/edit; use read/edit for new, generated, configuration, or unsupported files.";
+const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDescription} source, prefer the astrolabe tool over read/edit; use read/edit for new, generated, configuration, or unsupported files.`;
 
 const GUIDANCE = [
-  "For existing TypeScript, JavaScript, Python, or Go source, use astrolabe before read or edit. Do not use read/edit for a supported existing source file unless astrolabe reports unsupported, generated, or configuration content.",
+  `For existing ${supportedLanguageDescription} source, use astrolabe before read or edit. Do not use read/edit for a supported existing source file unless astrolabe reports unsupported, generated, or configuration content.`,
   "Use search for a symbol or call, or inspect a file path for its outline. Follow the returned continuation or next action unchanged; source inspection and replace are safe, validated operations.",
   "Use read or normal edits for unsupported languages, generated/configuration files, new files, or when astrolabe explicitly reports that the target is not applicable.",
 ];
@@ -309,8 +312,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "astrolabe",
     label: "Astrolabe",
-    description:
-      "Use first for existing TypeScript, JavaScript, Python, or Go source instead of read/edit: search symbols, inspect syntax, and safely replace validated nodes. Avoid for new, generated, configuration, or unsupported files.",
+    description: `Use first for existing ${supportedLanguageDescription} source instead of read/edit: search symbols, inspect syntax, and safely replace validated nodes. Avoid for new, generated, configuration, or unsupported files.`,
     promptSnippet:
       "Prefer for existing supported source; search, inspect, and safely replace validated syntax",
     promptGuidelines: GUIDANCE,

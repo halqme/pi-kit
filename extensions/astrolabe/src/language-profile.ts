@@ -1,8 +1,5 @@
+import { readdirSync } from "node:fs";
 import { extname } from "node:path";
-import { typescriptAdapter } from "../languages/typescript/config.ts";
-import { javascriptAdapter } from "../languages/javascript/config.ts";
-import { pythonAdapter } from "../languages/python/config.ts";
-import { goAdapter } from "../languages/go/config.ts";
 
 export type LanguageId = string;
 
@@ -25,14 +22,27 @@ export interface LanguageAdapter {
   importantNodeTypes: ReadonlySet<string>;
 }
 
-const adapters: readonly LanguageAdapter[] = [
-  typescriptAdapter,
-  javascriptAdapter,
-  pythonAdapter,
-  goAdapter,
-];
+const languageDirectories = readdirSync(new URL("../languages/", import.meta.url), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort();
+
+const adapters: readonly LanguageAdapter[] = await Promise.all(
+  languageDirectories.map(async (language) => {
+    const module = (await import(`../languages/${language}/config.ts`)) as {
+      adapter?: LanguageAdapter;
+    };
+    if (!module.adapter) {
+      throw new Error(`Invalid language adapter: ${language}/config.ts must export adapter.`);
+    }
+    return module.adapter;
+  }),
+);
 const adaptersById = new Map(adapters.map((adapter) => [adapter.id, adapter]));
 export const supportedLanguageIds = adapters.map((adapter) => adapter.id) as [string, ...string[]];
+export const supportedLanguageDescription = supportedLanguageIds.join(", ");
 const explicitlyUnsupportedExtensions = new Set([".tsx"]);
 
 export function adapterForLanguage(language: LanguageId): LanguageAdapter {
@@ -62,7 +72,7 @@ export function requireAdapterForPath(path: string, language?: LanguageId): Lang
     throw new Error(
       language
         ? `unsupported_language: Unknown language override: ${language}`
-        : "unsupported_language: Astrolabe supports TypeScript, JavaScript, Python, and Go files.",
+        : `unsupported_language: Astrolabe supports ${supportedLanguageDescription} files.`,
     );
   }
   return adapter;

@@ -44,7 +44,7 @@ languages/
     └── queries.ts
 ```
 
-outlineは言語アダプターが定義する宣言・重要ノードに絞り、制御文や式を一覧へ混ぜません。現在の対応言語と拡張子は、TypeScript（`.ts`、`.mts`、`.cts`）、JavaScript（`.js`、`.mjs`、`.cjs`）、Python（`.py`、`.pyw`）、Go（`.go`）です。TSXとその他の言語は`unsupported_language`で拒否します。拡張子で判定できない単一ファイルは、`astrolabe`の`language`で明示できます。
+outlineは各言語アダプターが定義する宣言・重要ノードに絞り、制御文や式を一覧へ混ぜません。対応言語は`languages/*/config.ts`から起動時に読み込み、各アダプターの拡張子と文法を登録します。TSXとアダプターのない言語は`unsupported_language`で拒否します。拡張子で判定できない単一ファイルは、`astrolabe`の`language`で明示できます。
 
 Queryは`queries.ts`の`String.raw`文字列として管理します。Astrolabe実行時に同じ文字列をTree-sitter Queryとしてコンパイルするため、外部エディタのQuery言語サーバーによる言語判別やparser設定には依存しません。
 

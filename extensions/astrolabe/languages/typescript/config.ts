@@ -14,7 +14,7 @@ const importantNodeTypes = new Set([
 
 const grammarPackage = "tree-sitter-typescript";
 
-export const typescriptAdapter: LanguageAdapter = {
+export const adapter: LanguageAdapter = {
   id: "typescript",
   extensions: [".ts", ".mts", ".cts"],
   grammar: {
@@ -36,3 +36,5 @@ export const typescriptAdapter: LanguageAdapter = {
   ]),
   importantNodeTypes,
 };
+
+export const typescriptAdapter = adapter;
