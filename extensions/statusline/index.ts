@@ -60,7 +60,7 @@ export default function statusline(pi: ExtensionAPI) {
               text: theme.fg("accent", model()),
             },
             { text: theme.fg(thinkingColor(ctx.thinkingLevel), ctx.thinkingLevel ?? "off") },
-            { text: theme.fg("muted", `${context}}`) },
+            { text: theme.fg("muted", `${context}`) },
             ...(branch ? [{ text: theme.fg("success", ` ${branch}`) }] : []),
           ];
           const statuses = new Map(
