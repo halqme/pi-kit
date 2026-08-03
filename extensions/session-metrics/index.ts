@@ -12,12 +12,15 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
     name: "session_metrics",
     label: "Session Metrics",
     description:
-      "Inspect indexed Pi session logs for actionable tool problems. Use this instead of arbitrary SQL for tool error, token outlier, and latency analysis. Refreshes the DuckDB index before querying.",
+      "Inspect indexed Pi session logs for tool errors, usage, turn tokens, token outliers, and latency. Refreshes the DuckDB index before querying.",
     parameters: Type.Object({
       analysis: Type.Union([
         Type.Literal("tool-errors"),
         Type.Literal("tool-token-outliers"),
         Type.Literal("tool-latency-outliers"),
+        Type.Literal("token-usage-summary"),
+        Type.Literal("turn-token-usage"),
+        Type.Literal("tool-usage-summary"),
       ]),
       tool: Type.Optional(Type.String({ description: "Limit the analysis to one tool name." })),
       since: Type.Optional(Type.String({ description: "UTC date filter, YYYY-MM-DD." })),
