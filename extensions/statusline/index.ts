@@ -44,6 +44,10 @@ export default function statusline(pi: ExtensionAPI) {
             usage?.percent !== null && usage?.percent !== undefined
               ? `ctx ${usage.percent.toFixed(1)}%/${formatTokens(usage.contextWindow)}`
               : "ctx ?";
+          const model = () => {
+            if (!ctx.model) return "no model";
+            return `${ctx.model.provider ?? ""}/${ctx.model.id ?? "no model"}`;
+          };
           const branch = footerData.getGitBranch();
           const primary = [
             {
@@ -53,13 +57,10 @@ export default function statusline(pi: ExtensionAPI) {
               ),
             },
             {
-              text: theme.fg(
-                "accent",
-                `${ctx.model?.provider ?? ""}/${ctx.model?.id ?? "no model"}`,
-              ),
+              text: theme.fg("accent", model()),
             },
             { text: theme.fg(thinkingColor(ctx.thinkingLevel), ctx.thinkingLevel ?? "off") },
-            { text: theme.fg("muted", context) },
+            { text: theme.fg("muted", `${context}}`) },
             ...(branch ? [{ text: theme.fg("success", ` ${branch}`) }] : []),
           ];
           const statuses = new Map(
