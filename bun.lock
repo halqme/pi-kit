@@ -72,6 +72,20 @@
         "typescript": "catalog:",
       },
     },
+    "extensions/statusline": {
+      "name": "@halqme/statusline",
+      "dependencies": {
+        "@earendil-works/pi-agent-core": "catalog:",
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "extensions/threads": {
       "name": "@halqme/threads",
       "dependencies": {
@@ -81,12 +95,6 @@
       "devDependencies": {
         "@types/node": "catalog:",
         "typescript": "catalog:",
-      },
-    },
-    "packages/benchmarks": {
-      "name": "@halqme/benchmarks",
-      "devDependencies": {
-        "@types/bun": "catalog:",
       },
     },
     "packages/session-metrics": {
@@ -194,13 +202,13 @@
 
     "@halqme/background-process": ["@halqme/background-process@workspace:extensions/background-process"],
 
-    "@halqme/benchmarks": ["@halqme/benchmarks@workspace:packages/benchmarks"],
-
     "@halqme/grill-plan": ["@halqme/grill-plan@workspace:extensions/grill-plan"],
 
     "@halqme/pi-session-metrics": ["@halqme/pi-session-metrics@workspace:packages/session-metrics"],
 
     "@halqme/pi-session-metrics-extension": ["@halqme/pi-session-metrics-extension@workspace:extensions/session-metrics"],
+
+    "@halqme/statusline": ["@halqme/statusline@workspace:extensions/statusline"],
 
     "@halqme/threads": ["@halqme/threads@workspace:extensions/threads"],
 
