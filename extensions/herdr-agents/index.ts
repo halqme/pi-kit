@@ -309,12 +309,12 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
             ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
           };
           const specs = params.agents.map((agent) =>
-            qualifyStartSpec(resolveStartSpec(agent, defaults, ctx), namespace),
+            qualifyStartSpec(resolveStartSpec(agent, defaults, ctx), namespace!),
           );
           const rawResults = await controller.startMany(specs, signal);
           const results = rawResults.map((result, index) =>
             result.ok
-              ? { ok: true as const, agent: presentAgent(result.agent, namespace) }
+              ? { ok: true as const, agent: presentAgent(result.agent, namespace!) }
               : {
                   ok: false as const,
                   name: logicalNames[index] ?? result.name,
