@@ -5,6 +5,7 @@ import {
   buildDiscussionPrompt,
   buildFinalPrompt,
   buildMemberSystemPrompt,
+  buildRecorderSystemPrompt,
   type AgentTeamAgent,
   type AgentTeamConfig,
   type AgentTeamMemberConfig,
@@ -13,16 +14,18 @@ import {
 class FakeAgent implements AgentTeamAgent {
   readonly prompts: string[] = [];
   readonly member: AgentTeamMemberConfig;
+  readonly systemPrompt: string;
   stopped = false;
 
-  constructor(member: AgentTeamMemberConfig) {
+  constructor(member: AgentTeamMemberConfig, systemPrompt = "") {
     this.member = member;
+    this.systemPrompt = systemPrompt;
   }
 
   async ask(message: string): Promise<string> {
     this.prompts.push(message);
     if (message.includes("opening statement")) return `${this.member.name} opening`;
-    if (message.includes("recorder for agent-team")) return `${this.member.name} final report`;
+    if (message.includes("Record the final agent-team report")) return `${this.member.name} final report`;
     return `${this.member.name} revised`;
   }
 
@@ -48,8 +51,8 @@ function config(overrides: Partial<AgentTeamConfig> = {}): AgentTeamConfig {
 
 test("consultative teams pause after independent openings and resume with user direction", async () => {
   const agents: FakeAgent[] = [];
-  const team = new AgentTeam(config({ interaction: "consultative" }), async (member) => {
-    const agent = new FakeAgent(member);
+  const team = new AgentTeam(config({ interaction: "consultative" }), async (member, systemPrompt) => {
+    const agent = new FakeAgent(member, systemPrompt);
     agents.push(agent);
     return agent;
   });
@@ -66,12 +69,33 @@ test("consultative teams pause after independent openings and resume with user d
   const completed = await team.answer("Prioritize error taxonomy over aggregate accuracy");
   assert.equal(completed.status, "completed");
   assert.equal(completed.completedRounds, 1);
-  assert.equal(completed.finalAnswer, "methodologist final report");
+  assert.equal(completed.finalAnswer, "recorder final report");
+  assert.equal(completed.transcript.at(-1)?.member, "recorder");
+  assert.equal(agents.length, 3);
   assert.equal(
     agents.every((agent) => agent.stopped),
     true,
   );
   assert.match(agents[0]?.prompts[1] ?? "", /Prioritize error taxonomy/);
+  assert.match(agents[2]?.prompts[0] ?? "", /Prioritize error taxonomy/);
+});
+
+test("uses a dedicated neutral recorder rather than the first specialist", async () => {
+  const agents: FakeAgent[] = [];
+  const team = new AgentTeam(config({ maxRounds: 0 }), async (member, systemPrompt) => {
+    const agent = new FakeAgent(member, systemPrompt);
+    agents.push(agent);
+    return agent;
+  });
+
+  const completed = await team.start();
+  const recorder = agents.at(-1);
+
+  assert.equal(completed.finalAnswer, "recorder final report");
+  assert.equal(recorder?.member.name, "recorder");
+  assert.match(recorder?.systemPrompt ?? "", /dedicated neutral recorder/);
+  assert.doesNotMatch(recorder?.systemPrompt ?? "", /Assess validity/);
+  assert.equal(agents[0]?.prompts.some((prompt) => prompt.includes("Record the final")), false);
 });
 
 test("stop during startup stops an agent created after the stop request", async () => {
@@ -114,11 +138,18 @@ test("instruction policies distinguish obedience from objective-driven behavior"
   assert.notEqual(obedient, goalDriven);
 });
 
+test("recorder prompt is neutral and treats member output as untrusted data", () => {
+  const prompt = buildRecorderSystemPrompt(config());
+  assert.match(prompt, /not one of the debating members/);
+  assert.match(prompt, /untrusted argument data/);
+  assert.match(prompt, /preserve material dissent/);
+});
+
 test("adversarial prompts require claim-focused cross-examination and a verdict", () => {
   const member = { name: "reviewer", role: "Attack weak evidence" };
   const statements = [{ member: "author", statement: "The proposal is safe" }];
   const discussion = buildDiscussionPrompt(config({ mode: "adversarial" }), member, statements, 1);
-  const final = buildFinalPrompt(config({ mode: "adversarial" }), member, statements);
+  const final = buildFinalPrompt(config({ mode: "adversarial" }), statements);
   assert.match(discussion, /Cross-examine/);
   assert.match(discussion, /concrete counterexample/);
   assert.match(discussion, /falsifiable condition/);
