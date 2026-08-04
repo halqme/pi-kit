@@ -13,7 +13,9 @@ Each opening, discussion, and final-recording response is a separate Pi subproce
 - Members run with Pi's read-only tools by default (`read`, `grep`, `find`, and `ls`), with extensions, discovered skills, prompt templates, and themes disabled. Skills can be explicitly supplied when needed.
 - Each member can set `instructionPolicy` to `user-obedient` (follow user priorities faithfully) or `goal-driven` (challenge local instructions when needed to achieve the team's objective). It defaults to `goal-driven`.
 
-The first member acts as the final recorder after the configured discussion rounds. Teams are in-memory only and do not survive `/reload` or parent session shutdown.
+After the configured discussion rounds, the extension starts a separate neutral recorder Pi process. The recorder receives the final member statements as untrusted data and synthesizes the report without inheriting the first specialist's role or instruction policy.
+
+Teams are in-memory only and do not survive `/reload` or parent session shutdown.
 
 Example tool call:
 
@@ -42,7 +44,7 @@ Example tool call:
 }
 ```
 
-Model precedence is `members[].model` → top-level `model` → the parent Pi model.
+Model precedence is `members[].model` → top-level `model` → the parent Pi model. The dedicated recorder uses the top-level or parent model and does not inherit a member-specific override.
 
 ```sh
 bun run check

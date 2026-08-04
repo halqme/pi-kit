@@ -60,7 +60,7 @@ export class HerdrAgentController {
     if (!spec.task.trim()) throw new Error("task is required");
     const isolation = spec.isolation ?? "worktree";
     const location = await this.createLocation(spec, isolation, signal);
-    const piArgs = [...(spec.piArgs ?? [])];
+    const piArgs = withDelegationBoundary(spec.piArgs);
     if (spec.model?.trim()) piArgs.unshift("--model", spec.model.trim());
     const startArgs = [
       "agent",
@@ -72,8 +72,9 @@ export class HerdrAgentController {
       location.paneId,
       "--timeout",
       String(Math.min(Math.max(spec.timeoutMs ?? 30_000, 3_001), 300_000)),
+      "--",
+      ...piArgs,
     ];
-    if (piArgs.length > 0) startArgs.push("--", ...piArgs);
 
     try {
       await this.client.json(startArgs, { signal });
@@ -182,7 +183,6 @@ export class HerdrAgentController {
     name: string,
     options: {
       removeWorktree?: boolean | undefined;
-      force?: boolean | undefined;
       signal?: AbortSignal | undefined;
     } = {},
   ): Promise<{ workspaceId: string; removedWorktree: boolean }> {
@@ -191,10 +191,15 @@ export class HerdrAgentController {
       signal: options.signal,
     });
     const agent = agentFromResponse(response);
+    if (agent.status !== "idle" && agent.status !== "done") {
+      throw new Error(
+        `Refusing to close ${name} while its lifecycle state is '${agent.status}'. Interrupt or wait for it to settle first.`,
+      );
+    }
     if (options.removeWorktree) {
-      const args = ["worktree", "remove", "--workspace", agent.workspaceId];
-      if (options.force) args.push("--force");
-      await this.client.json(args, { signal: options.signal });
+      await this.client.json(["worktree", "remove", "--workspace", agent.workspaceId], {
+        signal: options.signal,
+      });
       return { workspaceId: agent.workspaceId, removedWorktree: true };
     }
     await this.client.json(["workspace", "close", agent.workspaceId], {
@@ -259,6 +264,7 @@ export function buildDelegationPrompt(task: string): string {
   return [
     "You are a delegated implementation agent controlled by a parent Pi session through Herdr.",
     "Work directly in the current checkout. You may inspect and edit files and run validation commands.",
+    "Do not start, delegate to, or coordinate other agents. Return control to the parent Pi instead.",
     "Do not merge branches, remove the worktree, or modify another checkout.",
     "When the task is complete or blocked, report the result, changed files, checks run, and remaining risks.",
     "",
@@ -271,6 +277,11 @@ export function validateName(name: string): void {
   if (!/^[a-z][a-z0-9_-]{0,31}$/.test(name)) {
     throw new Error("agent name must match [a-z][a-z0-9_-]{0,31}");
   }
+}
+
+function withDelegationBoundary(piArgs: string[] | undefined): string[] {
+  const args = [...(piArgs ?? [])];
+  return args.includes("--no-extensions") ? args : ["--no-extensions", ...args];
 }
 
 function clampLines(lines: number): number {

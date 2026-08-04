@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 
+export const MIN_HERDR_VERSION = "0.8.0";
+
 export interface HerdrResponse {
   id?: string;
   result?: Record<string, unknown>;
@@ -44,6 +46,7 @@ export class HerdrCliError extends Error {
 
 export class HerdrCli {
   private serverStartPromise: Promise<void> | undefined;
+  private versionPromise: Promise<string> | undefined;
 
   constructor(
     private readonly executable = "herdr",
@@ -52,6 +55,7 @@ export class HerdrCli {
   ) {}
 
   async json(args: string[], options: HerdrCommandOptions = {}): Promise<HerdrResponse> {
+    await this.ensureCompatibleVersion(options.signal);
     const result = await this.runWithServer(args, options);
     const response = parseJsonResponse(result.stdout || result.stderr, args);
     if (response.error) {
@@ -66,8 +70,43 @@ export class HerdrCli {
   }
 
   async text(args: string[], options: HerdrCommandOptions = {}): Promise<string> {
+    await this.ensureCompatibleVersion(options.signal);
     const result = await this.runWithServer(args, options);
     return result.stdout.trimEnd();
+  }
+
+  async version(signal?: AbortSignal): Promise<string> {
+    return this.ensureCompatibleVersion(signal);
+  }
+
+  private async ensureCompatibleVersion(signal?: AbortSignal): Promise<string> {
+    if (!this.versionPromise) {
+      const pending = this.readVersion(signal);
+      this.versionPromise = pending;
+      void pending.catch(() => {
+        if (this.versionPromise === pending) this.versionPromise = undefined;
+      });
+    }
+    return this.versionPromise;
+  }
+
+  private async readVersion(signal?: AbortSignal): Promise<string> {
+    const args = ["--version"];
+    const result = await this.runCommand(this.executable, args, { signal });
+    if (result.exitCode !== 0) throw commandError(args, result);
+    const version = parseHerdrVersion(`${result.stdout}\n${result.stderr}`);
+    if (!version) {
+      throw new HerdrCliError("Could not determine the installed Herdr version", args);
+    }
+    if (!isSupportedHerdrVersion(version)) {
+      throw new HerdrCliError(
+        `Herdr ${MIN_HERDR_VERSION} or later is required; found ${version}`,
+        args,
+        "",
+        "unsupported_version",
+      );
+    }
+    return version;
   }
 
   private async runWithServer(
@@ -119,11 +158,30 @@ export class HerdrCli {
   }
 }
 
+export function parseHerdrVersion(text: string): string | undefined {
+  const match = text.match(/\b(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?\b/);
+  return match ? `${match[1]}.${match[2]}.${match[3]}` : undefined;
+}
+
+export function isSupportedHerdrVersion(version: string): boolean {
+  return compareVersions(version, MIN_HERDR_VERSION) >= 0;
+}
+
 export function isServerNotRunning(result: HerdrCommandResult): boolean {
   const body = `${result.stdout}\n${result.stderr}`;
   if (body.includes('"code":"server_not_running"')) return true;
   if (body.includes('"code": "server_not_running"')) return true;
   return /no herdr server is running/i.test(body);
+}
+
+function compareVersions(left: string, right: string): number {
+  const a = left.split(".").map(Number);
+  const b = right.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
 }
 
 function parseJsonResponse(text: string, args: string[]): HerdrResponse {
