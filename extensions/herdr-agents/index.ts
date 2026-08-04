@@ -9,6 +9,7 @@ import {
   type SettledStatus,
 } from "./controller.ts";
 import { HerdrCli, HerdrCliError } from "./herdr-cli.ts";
+import { createAgentNamespace, type AgentNamespace } from "./namespace.ts";
 
 const TOOL_NAME = "herdr_agents";
 const STATUS_KEY = "herdr-agents";
@@ -43,8 +44,12 @@ interface HerdrAgentsParams {
   timeoutMs?: number;
   lines?: number;
   removeWorktree?: boolean;
-  force?: boolean;
 }
+
+type PresentedAgent<T extends { name: string }> = Omit<T, "name"> & {
+  name: string;
+  physicalName: string;
+};
 
 function parentModel(ctx: ExtensionContext): string | undefined {
   return ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
@@ -76,6 +81,27 @@ function resolveStartSpec(
   };
 }
 
+function qualifyStartSpec(spec: AgentStartSpec, namespace: AgentNamespace): AgentStartSpec {
+  return { ...spec, name: namespace.qualify(spec.name) };
+}
+
+function presentAgent<T extends { name: string }>(
+  agent: T,
+  namespace: AgentNamespace,
+): PresentedAgent<T> {
+  return {
+    ...agent,
+    name: namespace.logicalName(agent.name) ?? agent.name,
+    physicalName: agent.name,
+  };
+}
+
+function managedAgents(agents: AgentSummary[], namespace: AgentNamespace): AgentSummary[] {
+  return agents
+    .filter((agent) => namespace.owns(agent.name))
+    .map((agent) => presentAgent(agent, namespace));
+}
+
 function formatAgent(agent: AgentSummary): string {
   const location = agent.cwd ?? agent.paneId;
   return `${agent.name} [${agent.status}] ${location}`;
@@ -84,10 +110,11 @@ function formatAgent(agent: AgentSummary): string {
 async function updateStatus(
   ctx: ExtensionContext,
   controller: HerdrAgentController,
+  namespace: AgentNamespace,
   autoStart: boolean,
 ): Promise<void> {
   try {
-    const agents = await controller.list(undefined, autoStart);
+    const agents = managedAgents(await controller.list(undefined, autoStart), namespace);
     const working = agents.filter((agent) => agent.status === "working").length;
     const blocked = agents.filter((agent) => agent.status === "blocked").length;
     const done = agents.filter((agent) => agent.status === "done").length;
@@ -114,6 +141,15 @@ async function updateStatus(
 
 export default function herdrAgentsExtension(pi: ExtensionAPI): void {
   const controller = new HerdrAgentController(new HerdrCli());
+  const namespaceCache = new Map<string, Promise<AgentNamespace>>();
+  const namespaceFor = (ctx: ExtensionContext): Promise<AgentNamespace> => {
+    let pending = namespaceCache.get(ctx.cwd);
+    if (!pending) {
+      pending = createAgentNamespace(ctx.cwd);
+      namespaceCache.set(ctx.cwd, pending);
+    }
+    return pending;
+  };
 
   pi.registerTool({
     name: TOOL_NAME,
@@ -127,6 +163,7 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
       "Use start_many when tasks are independent and can run concurrently.",
       "Use check or wait to collect results; do not poll repeatedly while agents are still working.",
       "Inspect and integrate each worktree deliberately. Never assume a completed agent's changes are safe to merge.",
+      "Delegated Pi agents do not auto-load extensions. Add only specifically required extensions through piArgs.",
     ],
     parameters: Type.Object({
       action: Type.Union([
@@ -139,12 +176,14 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
         Type.Literal("interrupt"),
         Type.Literal("close"),
       ]),
-      name: Type.Optional(Type.String({ description: "Herdr agent name" })),
+      name: Type.Optional(
+        Type.String({ description: "Repository-local agent name, up to 25 characters" }),
+      ),
       task: Type.Optional(Type.String({ description: "Initial implementation task" })),
       agents: Type.Optional(
         Type.Array(
           Type.Object({
-            name: Type.String(),
+            name: Type.String({ description: "Repository-local name, up to 25 characters" }),
             task: Type.String(),
             cwd: Type.Optional(Type.String()),
             isolation: Type.Optional(
@@ -170,7 +209,10 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
       branch: Type.Optional(Type.String({ description: "Branch name for a worktree agent" })),
       base: Type.Optional(Type.String({ description: "Base ref for a new worktree" })),
       piArgs: Type.Optional(
-        Type.Array(Type.String(), { description: "Additional Pi CLI arguments" }),
+        Type.Array(Type.String(), {
+          description:
+            "Additional Pi CLI arguments. Automatic extension discovery stays disabled; use -e for explicit extensions.",
+        }),
       ),
       prompt: Type.Optional(Type.String({ description: "Follow-up instruction" })),
       wait: Type.Optional(Type.Boolean({ description: "Wait for the submitted turn to settle" })),
@@ -187,9 +229,11 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
       timeoutMs: Type.Optional(Type.Integer({ minimum: 1_000, maximum: 3_600_000 })),
       lines: Type.Optional(Type.Integer({ minimum: 1, maximum: 2_000, default: 80 })),
       removeWorktree: Type.Optional(
-        Type.Boolean({ description: "Remove the Herdr-managed worktree when closing" }),
+        Type.Boolean({
+          description:
+            "Remove the worktree when closing. Dirty worktrees and active agents are rejected.",
+        }),
       ),
-      force: Type.Optional(Type.Boolean({ description: "Force dirty worktree removal" })),
     }),
     renderCall(args, theme, _context) {
       const action = typeof args.action === "string" ? args.action : "";
@@ -209,28 +253,35 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
       _onUpdate: unknown,
       ctx: ExtensionContext,
     ) {
+      let namespace: AgentNamespace | undefined;
       try {
+        namespace = await namespaceFor(ctx);
+
         if (params.action === "start") {
           if (!params.name?.trim()) throw new Error("name is required for start");
           if (!params.task?.trim()) throw new Error("task is required for start");
-          const spec = resolveStartSpec(
-            {
-              name: params.name,
-              task: params.task,
-              ...(params.cwd ? { cwd: params.cwd } : {}),
-              ...(params.isolation ? { isolation: params.isolation } : {}),
-              ...(params.model ? { model: params.model } : {}),
-              ...(params.branch ? { branch: params.branch } : {}),
-              ...(params.base ? { base: params.base } : {}),
-              ...(params.piArgs ? { piArgs: params.piArgs } : {}),
-              ...(params.wait !== undefined ? { wait: params.wait } : {}),
-              ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
-            },
-            {},
-            ctx,
+          const spec = qualifyStartSpec(
+            resolveStartSpec(
+              {
+                name: params.name,
+                task: params.task,
+                ...(params.cwd ? { cwd: params.cwd } : {}),
+                ...(params.isolation ? { isolation: params.isolation } : {}),
+                ...(params.model ? { model: params.model } : {}),
+                ...(params.branch ? { branch: params.branch } : {}),
+                ...(params.base ? { base: params.base } : {}),
+                ...(params.piArgs ? { piArgs: params.piArgs } : {}),
+                ...(params.wait !== undefined ? { wait: params.wait } : {}),
+                ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
+              },
+              {},
+              ctx,
+            ),
+            namespace,
           );
-          const agent = await controller.start(spec, signal);
-          await updateStatus(ctx, controller, true);
+          const rawAgent = await controller.start(spec, signal);
+          const agent = presentAgent(rawAgent, namespace);
+          await updateStatus(ctx, controller, namespace, true);
           return {
             content: [
               {
@@ -244,6 +295,10 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
 
         if (params.action === "start_many") {
           if (!params.agents?.length) throw new Error("agents is required for start_many");
+          const logicalNames = params.agents.map((agent) => agent.name.trim());
+          if (new Set(logicalNames).size !== logicalNames.length) {
+            throw new Error("agent names must be unique");
+          }
           const defaults = {
             ...(params.cwd ? { cwd: params.cwd } : {}),
             ...(params.isolation ? { isolation: params.isolation } : {}),
@@ -253,9 +308,20 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
             ...(params.wait !== undefined ? { wait: params.wait } : {}),
             ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
           };
-          const specs = params.agents.map((agent) => resolveStartSpec(agent, defaults, ctx));
-          const results = await controller.startMany(specs, signal);
-          await updateStatus(ctx, controller, true);
+          const specs = params.agents.map((agent) =>
+            qualifyStartSpec(resolveStartSpec(agent, defaults, ctx), namespace),
+          );
+          const rawResults = await controller.startMany(specs, signal);
+          const results = rawResults.map((result, index) =>
+            result.ok
+              ? { ok: true as const, agent: presentAgent(result.agent, namespace) }
+              : {
+                  ok: false as const,
+                  name: logicalNames[index] ?? result.name,
+                  error: result.error,
+                },
+          );
+          await updateStatus(ctx, controller, namespace, true);
           return {
             content: [
               {
@@ -275,13 +341,15 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
         }
 
         if (params.action === "list") {
-          const agents = await controller.list(signal);
-          await updateStatus(ctx, controller, true);
+          const agents = managedAgents(await controller.list(signal), namespace);
+          await updateStatus(ctx, controller, namespace, true);
           return {
             content: [
               {
                 type: "text" as const,
-                text: agents.length ? agents.map(formatAgent).join("\n") : "No live Herdr agents.",
+                text: agents.length
+                  ? agents.map(formatAgent).join("\n")
+                  : "No live Herdr agents for this repository.",
               },
             ],
             details: agents,
@@ -289,11 +357,13 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
         }
 
         if (!params.name?.trim()) throw new Error(`name is required for ${params.action}`);
-        const name = params.name.trim();
+        const logicalName = params.name.trim();
+        const name = namespace.qualify(logicalName);
 
         if (params.action === "check") {
-          const result = await controller.check(name, params.lines ?? 80, signal);
-          await updateStatus(ctx, controller, true);
+          const rawResult = await controller.check(name, params.lines ?? 80, signal);
+          const result = { ...rawResult, agent: presentAgent(rawResult.agent, namespace) };
+          await updateStatus(ctx, controller, namespace, true);
           return {
             content: [
               {
@@ -307,12 +377,13 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
 
         if (params.action === "prompt") {
           if (!params.prompt?.trim()) throw new Error("prompt is required for prompt");
-          const agent = await controller.prompt(name, params.prompt, {
+          const rawAgent = await controller.prompt(name, params.prompt, {
             wait: params.wait ?? false,
             ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
             signal,
           });
-          await updateStatus(ctx, controller, true);
+          const agent = presentAgent(rawAgent, namespace);
+          await updateStatus(ctx, controller, namespace, true);
           return {
             content: [{ type: "text" as const, text: formatAgent(agent) }],
             details: agent,
@@ -320,19 +391,20 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
         }
 
         if (params.action === "wait") {
-          const agent = await controller.wait(
+          await controller.wait(
             name,
             params.until ?? ["idle", "done", "blocked"],
             params.timeoutMs,
             signal,
           );
-          const result = await controller.check(name, params.lines ?? 80, signal);
-          await updateStatus(ctx, controller, true);
+          const rawResult = await controller.check(name, params.lines ?? 80, signal);
+          const result = { ...rawResult, agent: presentAgent(rawResult.agent, namespace) };
+          await updateStatus(ctx, controller, namespace, true);
           return {
             content: [
               {
                 type: "text" as const,
-                text: `${formatAgent(agent)}\n\n${result.output || "(no terminal output)"}`,
+                text: `${formatAgent(result.agent)}\n\n${result.output || "(no terminal output)"}`,
               },
             ],
             details: result,
@@ -340,8 +412,8 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
         }
 
         if (params.action === "interrupt") {
-          const agent = await controller.interrupt(name, signal);
-          await updateStatus(ctx, controller, true);
+          const agent = presentAgent(await controller.interrupt(name, signal), namespace);
+          await updateStatus(ctx, controller, namespace, true);
           return {
             content: [{ type: "text" as const, text: `Interrupted ${agent.name}` }],
             details: agent,
@@ -350,26 +422,27 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
 
         const result = await controller.close(name, {
           removeWorktree: params.removeWorktree ?? false,
-          force: params.force ?? false,
           signal,
         });
-        await updateStatus(ctx, controller, true);
+        await updateStatus(ctx, controller, namespace, true);
         return {
           content: [
             {
               type: "text" as const,
               text: result.removedWorktree
-                ? `Closed ${name} and removed worktree ${result.workspaceId}`
-                : `Closed ${name} workspace ${result.workspaceId}`,
+                ? `Closed ${logicalName} and removed worktree ${result.workspaceId}`
+                : `Closed ${logicalName} workspace ${result.workspaceId}`,
             },
           ],
-          details: result,
+          details: { ...result, name: logicalName, physicalName: name },
         };
       } catch (error) {
-        try {
-          await updateStatus(ctx, controller, false);
-        } catch {
-          // Preserve the operation error.
+        if (namespace) {
+          try {
+            await updateStatus(ctx, controller, namespace, false);
+          } catch {
+            // Preserve the operation error.
+          }
         }
         return {
           content: [{ type: "text" as const, text: String(error) }],
@@ -381,7 +454,8 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("session_start", async (_event: unknown, ctx: ExtensionContext) => {
-    await updateStatus(ctx, controller, false);
+    const namespace = await namespaceFor(ctx);
+    await updateStatus(ctx, controller, namespace, false);
   });
   pi.on("session_shutdown", async (_event: unknown, ctx: ExtensionContext) => {
     // Herdr owns agent lifetimes. Parent Pi shutdown must not terminate delegated work.
