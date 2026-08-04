@@ -27,15 +27,7 @@ type StartInput = {
 };
 
 interface HerdrAgentsParams {
-  action:
-    | "start"
-    | "start_many"
-    | "list"
-    | "check"
-    | "prompt"
-    | "wait"
-    | "interrupt"
-    | "close";
+  action: "start" | "start_many" | "list" | "check" | "prompt" | "wait" | "interrupt" | "close";
   name?: string;
   task?: string;
   agents?: StartInput[];

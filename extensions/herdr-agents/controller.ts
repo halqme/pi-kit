@@ -210,15 +210,7 @@ export class HerdrAgentController {
   ): Promise<{ workspaceId: string; paneId: string; cwd: string; branch?: string }> {
     const label = `pi-agent:${spec.name}`;
     if (isolation === "worktree") {
-      const args = [
-        "worktree",
-        "create",
-        "--cwd",
-        spec.cwd,
-        "--label",
-        label,
-        "--no-focus",
-      ];
+      const args = ["worktree", "create", "--cwd", spec.cwd, "--label", label, "--no-focus"];
       if (spec.branch?.trim()) args.push("--branch", spec.branch.trim());
       if (spec.base?.trim()) args.push("--base", spec.base.trim());
       const response = await this.client.json(args, { signal });
