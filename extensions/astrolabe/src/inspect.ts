@@ -68,7 +68,7 @@ export async function inspect(
     return `stale_node: ${resolution.reason}. Run syntax_inspect again.`;
   }
   const node = resolution.node;
-  const depth = Math.max(0, Math.min(params.depth ?? 3, 12));
+  const depth = Math.max(0, Math.min(params.depth ?? 2, 12));
   if (view === "source") {
     const output = source(file, node);
     if (handle) handles.markSourceInspected(handle.id);

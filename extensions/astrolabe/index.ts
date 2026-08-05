@@ -115,7 +115,7 @@ function outlineRequest(path: string, language: LanguageId | undefined): SyntaxR
 }
 
 function handlesFromOutput(handles: HandleStore, output: string): SyntaxHandle[] {
-  return [...new Set([...output.matchAll(/nodeId=(n\d+)/g)].map((match) => match[1]))].flatMap(
+  return [...new Set([...output.matchAll(/node=(n\d+)/g)].map((match) => match[1]))].flatMap(
     (id) => {
       const handle = id ? handles.get(id) : undefined;
       const result = handle ? handleResponse(handles, handle) : undefined;
@@ -166,9 +166,6 @@ async function dispatch(
                 signature: match.signature,
                 flow: match.flow,
                 range: handle.range,
-                score: match.score,
-                reasons: match.reasons,
-                sourceBytes: Buffer.byteLength(match.source),
                 ...(includeTopSource && index === 0 ? { source: match.source } : {}),
               },
             ]
@@ -265,7 +262,7 @@ async function dispatch(
     return {
       ok: true,
       action: "inspect",
-      data: detail === "source" ? { source: output } : { outline: output },
+      ...(detail === "source" ? { source: output } : { outline: output }),
       ...(detail === "outline" && responseHandles.length > 0
         ? {
             next: responseHandles.map((item) => ({
@@ -322,7 +319,7 @@ async function dispatch(
       return {
         ok: true,
         action: "replace_many" as const,
-        data: { message: result.message, ...(result.details ? { edit: result.details } : {}) },
+        message: "ok",
         ...(nextHandle
           ? {
               next: [
@@ -362,7 +359,7 @@ async function dispatch(
     return {
       ok: true,
       action: "replace",
-      data: { message: result.message, ...(result.details ? { edit: result.details } : {}) },
+      message: "ok",
       ...(nextHandle
         ? {
             next: [{ action: "inspect", continuation: nextHandle.continuation, detail: "source" }],

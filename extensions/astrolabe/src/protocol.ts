@@ -86,9 +86,9 @@ export interface LocateCandidate {
     start: { row: number; column: number };
     end: { row: number; column: number };
   };
-  score: number;
-  reasons: string[];
-  sourceBytes: number;
+  score?: number;
+  reasons?: string[];
+  sourceBytes?: number;
   source?: string;
 }
 
@@ -100,6 +100,9 @@ export interface SyntaxError {
 export interface SyntaxResponse {
   ok: boolean;
   action: SyntaxAction;
+  outline?: string;
+  source?: string;
+  message?: string;
   data?: Record<string, unknown>;
   handles?: SyntaxHandle[];
   next?: SyntaxRequest[];

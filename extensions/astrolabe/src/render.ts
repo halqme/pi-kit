@@ -69,7 +69,7 @@ function namedLabel(node: Node, file: ParsedFile, context: RenderContext): strin
 }
 
 function declarationSummary(node: Node, file: ParsedFile, context: RenderContext): string {
-  const classification = context.classifications.get(node.id) ?? node.type;
+  const classification = (context.classifications.get(node.id) ?? node.type).replace(/[_.]/g, " ");
   const name = namedLabel(node, file, context);
 
   if (
@@ -130,7 +130,7 @@ export function outline(file: ParsedFile, node: Node, handles: HandleStore, dept
       return;
     }
     const handle = handles.issue(file, current, "outline");
-    lines.push(`${"  ".repeat(level)}nodeId=${handle.id} ${label(current, file, context)}`);
+    lines.push(`${"  ".repeat(level)}node=${handle.id} ${label(current, file, context)}`);
     for (const child of current.namedChildren) if (child) visit(child, level + 1);
   };
   for (const child of node.namedChildren) if (child) visit(child, 0);

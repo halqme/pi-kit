@@ -82,14 +82,14 @@ test("inspect path returns an executable next action and continuation source loo
   });
   const outlinedResponse = responseOf(outlined);
   assert.equal(outlinedResponse.ok, true);
-  assert.match(outlinedResponse.data?.outline ?? "", /answer/);
+  assert.match(outlinedResponse.outline ?? "", /answer/);
   const next = outlinedResponse.next?.[0];
   assert.ok(next);
 
   const sourced = await call(tool, dir, next);
   const sourcedResponse = responseOf(sourced);
   assert.equal(sourcedResponse.ok, true);
-  assert.match(sourcedResponse.data?.source ?? "", /return 1/);
+  assert.match(sourcedResponse.source ?? "", /return 1/);
   assert.equal("structure" in (sourcedResponse.data ?? {}), false);
   assert.doesNotMatch(sourced.content[0]?.text ?? "", /\n/);
   assert.equal(sourcedResponse.next?.[0]?.action, "replace");
@@ -161,7 +161,7 @@ test("locate omits bodies for ambiguous candidates and selected cards can be ins
     continuation: candidate?.continuation,
     detail: "source",
   });
-  assert.match(responseOf(inspected).data?.source ?? "", /function first/);
+  assert.match(responseOf(inspected).source ?? "", /function first/);
 });
 
 test("locate omits a high-confidence body that exceeds its size limit", async () => {
@@ -344,5 +344,5 @@ test("source request without a target returns a directly executable recovery act
   const recovered = await call(tool, dir, next);
   const recoveredResponse = responseOf(recovered);
   assert.equal(recoveredResponse.ok, true);
-  assert.match(recoveredResponse.data?.outline ?? "", /answer/);
+  assert.match(recoveredResponse.outline ?? "", /answer/);
 });

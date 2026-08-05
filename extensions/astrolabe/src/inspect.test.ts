@@ -16,11 +16,11 @@ test("TypeScript outline maps a file by declarations without statement-level noi
   );
   const handles = new HandleStore();
   const output = await inspect({ path, view: "outline", depth: 5 }, dir, handles);
-  assert.match(output, /declaration\.import/);
-  assert.match(output, /declaration\.export/);
-  assert.match(output, /declaration\.type Service/);
-  assert.match(output, /declaration\.method run/);
-  assert.match(output, /declaration\.function answer/);
+  assert.match(output, /declaration import/);
+  assert.match(output, /declaration export/);
+  assert.match(output, /declaration type Service/);
+  assert.match(output, /declaration method run/);
+  assert.match(output, /declaration function answer/);
   assert.doesNotMatch(output, /control\.|statement\./);
   clearFileCache(path);
 });
@@ -45,12 +45,12 @@ test("outline summarizes signatures, inheritance, members, and imports", async (
   ].join("\n");
   await writeFile(path, source);
   const output = await inspect({ path, view: "outline" }, dir, new HandleStore());
-  assert.match(output, /declaration\.import .*parseSource.*Previous.*\.\/parser\.js/);
-  assert.match(output, /declaration\.type Runnable extends Base.*members: run/);
-  assert.match(output, /declaration\.type Service extends Base implements Runnable.*members: run/);
+  assert.match(output, /declaration import .*parseSource.*Previous.*\.\/parser\.js/);
+  assert.match(output, /declaration type Runnable extends Base.*members: run/);
+  assert.match(output, /declaration type Service extends Base implements Runnable.*members: run/);
   assert.match(
     output,
-    /declaration\.function parseSource\(path: string, source: string, previous\?: Previous\): Promise<ParsedFile>/,
+    /declaration function parseSource\(path: string, source: string, previous\?: Previous\): Promise<ParsedFile>/,
   );
   assert.ok(output.length < source.length);
   clearFileCache(path);
@@ -67,7 +67,7 @@ test("syntax_inspect rematches a stale handle instead of using its old range", a
   const handle = handles.issue(file, node);
   assert.match(
     await inspect({ path, view: "outline" }, dir, handles),
-    /function_declaration|declaration\.function/,
+    /function declaration|declaration function/,
   );
   await writeFile(path, "// こんにちは🌍\nfunction answer() { return 1; }\n");
   assert.equal(
@@ -105,7 +105,7 @@ test("syntax_inspect supports an explicit language override for an unknown exten
     dir,
     new HandleStore(),
   );
-  assert.match(output, /declaration\.function answer/);
+  assert.match(output, /declaration function answer/);
   clearFileCache(path);
 });
 
@@ -138,7 +138,7 @@ test("syntax_inspect lets an outlined node advance directly to source", async ()
   await writeFile(path, "class Service { answer() { return 42; } }\n");
   const handles = new HandleStore();
   const outline = await inspect({ path, view: "outline" }, dir, handles);
-  const outlineId = /nodeId=(n\d+) declaration\.type Service/.exec(outline)?.[1];
+  const outlineId = /node=(n\d+) declaration type Service/.exec(outline)?.[1];
   assert.ok(outlineId);
   await assert.rejects(
     inspect({ path, view: "structure" }, dir, handles),
