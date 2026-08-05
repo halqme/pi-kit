@@ -25,7 +25,8 @@ class FakeAgent implements AgentTeamAgent {
   async ask(message: string): Promise<string> {
     this.prompts.push(message);
     if (message.includes("opening statement")) return `${this.member.name} opening`;
-    if (message.includes("Record the final agent-team report")) return `${this.member.name} final report`;
+    if (message.includes("Record the final agent-team report"))
+      return `${this.member.name} final report`;
     return `${this.member.name} revised`;
   }
 
@@ -51,11 +52,14 @@ function config(overrides: Partial<AgentTeamConfig> = {}): AgentTeamConfig {
 
 test("consultative teams pause after independent openings and resume with user direction", async () => {
   const agents: FakeAgent[] = [];
-  const team = new AgentTeam(config({ interaction: "consultative" }), async (member, systemPrompt) => {
-    const agent = new FakeAgent(member, systemPrompt);
-    agents.push(agent);
-    return agent;
-  });
+  const team = new AgentTeam(
+    config({ interaction: "consultative" }),
+    async (member, systemPrompt) => {
+      const agent = new FakeAgent(member, systemPrompt);
+      agents.push(agent);
+      return agent;
+    },
+  );
 
   const waiting = await team.start();
   assert.equal(waiting.status, "awaiting-user");
@@ -95,7 +99,10 @@ test("uses a dedicated neutral recorder rather than the first specialist", async
   assert.equal(recorder?.member.name, "recorder");
   assert.match(recorder?.systemPrompt ?? "", /dedicated neutral recorder/);
   assert.doesNotMatch(recorder?.systemPrompt ?? "", /Assess validity/);
-  assert.equal(agents[0]?.prompts.some((prompt) => prompt.includes("Record the final")), false);
+  assert.equal(
+    agents[0]?.prompts.some((prompt) => prompt.includes("Record the final")),
+    false,
+  );
 });
 
 test("stop during startup stops an agent created after the stop request", async () => {

@@ -272,10 +272,7 @@ export class AgentTeam {
     if (signal?.aborted) throw new Error("agent-team was aborted");
     await onUpdate(`Synthesizing ${this.config.mode} report`);
     const recorderMember = createRecorderMember();
-    const recorder = await this.createAgent(
-      recorderMember,
-      buildRecorderSystemPrompt(this.config),
-    );
+    const recorder = await this.createAgent(recorderMember, buildRecorderSystemPrompt(this.config));
     if (this.stopRequested) {
       await recorder.stop();
       return;

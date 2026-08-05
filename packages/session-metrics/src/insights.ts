@@ -3,6 +3,7 @@ export type InsightName =
   | "tool-token-outliers"
   | "tool-latency-outliers"
   | "cache-usage-summary"
+  | "cache-anomalies"
   | "token-usage-summary"
   | "turn-token-usage"
   | "tool-usage-summary";
@@ -64,6 +65,25 @@ JOIN messages m ON m.event_id = u.event_id
 WHERE 1 = 1${options.since ? ` AND CAST(m.created_at AS DATE) >= ${literal(options.since)}` : ""}
 GROUP BY u.model
 ORDER BY cache_read_tokens DESC
+${limit};`;
+  if (analysis === "cache-anomalies")
+    return `WITH turns AS (
+  SELECT u.source_path, u.session_id, u.model, m.created_at,
+    u.input_tokens, u.cache_read_tokens, u.total_tokens,
+    lag(m.created_at) OVER (PARTITION BY u.session_id ORDER BY m.created_at) AS previous_at
+  FROM assistant_usage u
+  JOIN messages m ON m.event_id = u.event_id
+  WHERE 1 = 1${options.since ? ` AND CAST(m.created_at AS DATE) >= ${literal(options.since)}` : ""}
+)
+SELECT source_path, session_id, model, created_at, previous_at,
+  date_diff('minute', previous_at, created_at) AS gap_minutes,
+  input_tokens, cache_read_tokens, total_tokens
+FROM turns
+WHERE cache_read_tokens = 0
+  AND input_tokens >= 1000
+  AND previous_at IS NOT NULL
+  AND date_diff('minute', previous_at, created_at) <= 10
+ORDER BY created_at DESC
 ${limit};`;
   if (analysis === "token-usage-summary")
     return `SELECT u.model, count(*) AS turns, sum(u.input_tokens) AS input_tokens,
