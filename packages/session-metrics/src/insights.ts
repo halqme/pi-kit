@@ -2,6 +2,7 @@ export type InsightName =
   | "tool-errors"
   | "tool-token-outliers"
   | "tool-latency-outliers"
+  | "cache-usage-summary"
   | "token-usage-summary"
   | "turn-token-usage"
   | "tool-usage-summary";
@@ -49,6 +50,20 @@ FROM tool_results r
 WHERE r.duration_ms IS NOT NULL${tool}${since}
 GROUP BY r.tool_name
 ORDER BY calls DESC, r.tool_name
+${limit};`;
+  if (analysis === "cache-usage-summary")
+    return `SELECT u.model, count(*) AS turns,
+  sum(u.input_tokens) AS uncached_input_tokens,
+  sum(u.cache_read_tokens) AS cache_read_tokens,
+  sum(u.cache_write_tokens) AS cache_write_tokens,
+  round(100.0 * sum(u.cache_read_tokens) /
+    NULLIF(sum(u.input_tokens) + sum(u.cache_read_tokens), 0), 2) AS cache_hit_percent,
+  round(sum(u.cache_rebill_cost), 6) AS cache_rebill_cost
+FROM assistant_usage u
+JOIN messages m ON m.event_id = u.event_id
+WHERE 1 = 1${options.since ? ` AND CAST(m.created_at AS DATE) >= ${literal(options.since)}` : ""}
+GROUP BY u.model
+ORDER BY cache_read_tokens DESC
 ${limit};`;
   if (analysis === "token-usage-summary")
     return `SELECT u.model, count(*) AS turns, sum(u.input_tokens) AS input_tokens,
