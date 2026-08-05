@@ -47,7 +47,27 @@ function costPerMTokens(cost: number, tokens: number): string {
   return tokens > 0 ? `$${((cost / tokens) * 1_000_000).toFixed(4)}` : "—";
 }
 
-const BRAILLE_LEVELS = ["⠀", "⠆", "⡇", "⡷", "⣿"];
+const BRAILLE_LEVELS = [
+  "  ",
+  "▏ ",
+  "▎ ",
+  "▍ ",
+  "▌ ",
+  "▋ ",
+  "▊ ",
+  "▉ ",
+  "█ ",
+  "█ ",
+  "█▏",
+  "█▎",
+  "█▍",
+  "█▌",
+  "█▋",
+  "█▊",
+  "█▉",
+  "██",
+  "██",
+];
 
 function brailleLevel(levels: string[], fraction: number): string {
   const index = Math.max(
@@ -251,16 +271,17 @@ function renderSummaryMarkdown(report: MetricsReport, options: ReportOptions = {
   return renderToolTable(report, limit);
 }
 
-const ACTIVITY_CELLS = ["⠀", "⠄⠀", "⠆⠀", "⠇⠀", "⠧⠀", "⠷⠀", "⠿⠀", "⠿⠄", "⠿⠆", "⠿⠇"];
+const ACTIVITY_CELLS = BRAILLE_LEVELS;
 
 function activityChart(entries: Array<[string, MetricSummary]>): string {
   if (entries.length === 0) return "Recent activity (tokens, 30 days)\n(no activity)";
   const byDate = new Map(entries);
   const end = new Date(`${entries[0]![0]}T00:00:00Z`);
+  const start = new Date(end);
+  start.setUTCDate(end.getUTCDate() - 29);
+  start.setUTCDate(start.getUTCDate() - start.getUTCDay());
   const points: Array<[string, MetricSummary]> = [];
-  for (let offset = 29; offset >= 0; offset--) {
-    const date = new Date(end);
-    date.setUTCDate(end.getUTCDate() - offset);
+  for (const date = new Date(start); date <= end; date.setUTCDate(date.getUTCDate() + 1)) {
     const key = date.toISOString().slice(0, 10);
     points.push([key, byDate.get(key) ?? createMetrics()]);
   }
@@ -272,10 +293,14 @@ function activityChart(entries: Array<[string, MetricSummary]>): string {
     ]!;
   };
   const weekdays = ["S", "M", "T", "W", "T", "F", "S"];
+  const weeks = Math.ceil(points.length / 7);
   const lines = ["Recent activity (tokens, 30 days)"];
   for (const [weekdayIndex, weekday] of weekdays.entries()) {
     lines.push(
-      `${weekday} ${points.map(([date, metrics]) => (new Date(`${date}T00:00:00Z`).getUTCDay() === weekdayIndex ? cell(metrics.tokens.total) : "  ")).join("")}`,
+      `${weekday} ${Array.from({ length: weeks }, (_, weekIndex) => {
+        const point = points[weekIndex * 7 + weekdayIndex];
+        return point ? cell(point[1].tokens.total) : ACTIVITY_CELLS[0]!;
+      }).join("")}`,
     );
   }
   return lines.join("\n");

@@ -53,6 +53,31 @@ test("supports period views, since, and limit", () => {
   assert.doesNotMatch(output, /2026-04-01/);
 });
 
+test("keeps activity chart columns aligned across weekday rows", () => {
+  const report = createReport();
+  addToReport(
+    report,
+    analyzeLines([
+      JSON.stringify({
+        type: "session",
+        id: "s1",
+        timestamp: "2026-04-12T00:00:00Z",
+      }),
+      JSON.stringify({
+        type: "message",
+        message: { role: "assistant", usage: { totalTokens: 100 } },
+      }),
+    ]),
+  );
+  const output = renderSummary(report);
+  const lines = output.split("\n");
+  const start = lines.indexOf("Recent activity (tokens, 30 days)");
+  assert.notEqual(start, -1);
+  const rows = lines.slice(start + 1, start + 8);
+  assert.equal(rows.length, 7);
+  assert.equal(new Set(rows.map((row) => row.length)).size, 1);
+});
+
 test("renders empty reports without throwing", () => {
   assert.match(renderSummary(createReport()), /\| 0 \| 0 \| 0 \| 0 \| 0 \| \$0\.00 \| 0 \|/);
 });
