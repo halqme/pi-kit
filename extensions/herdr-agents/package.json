@@ -5,8 +5,8 @@
   "scripts": {
     "check": "bun run typecheck && bun test",
     "typecheck": "tsc --noEmit",
-    "test": "node --test",
-    "test:integration": "HERDR_INTEGRATION=1 node --test integration.test.ts",
+    "test": "bun test",
+    "test:integration": "HERDR_INTEGRATION=1 bun test integration.test.ts",
     "dev": "pi -e ./index.ts",
     "smoke": "pi -e ./index.ts --list-models __extension_smoke__"
   },
