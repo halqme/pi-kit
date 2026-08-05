@@ -6,7 +6,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { PiRpc } from "./rpc.ts";
 
 const threads = new Map<string, { id: string; sessionFile: string; rpc: PiRpc }>();
-const root = (ctx: ExtensionContext) => join(ctx.sessionManager.getSessionDir(), "threads");
+const root = (ctx: ExtensionContext) => ctx.sessionManager.getSessionDir();
 const text = (value: unknown) =>
   typeof value === "string" ? value : JSON.stringify(value, null, 2);
 
@@ -36,6 +36,7 @@ export default function (pi: ExtensionAPI): void {
           const id = randomUUID();
           const dir = root(ctx);
           await mkdir(dir, { recursive: true });
+          // Keep the file in Pi's normal session directory so /resume can discover it.
           const sessionFile = join(dir, `${id}.jsonl`);
           const args = params.model ? ["--model", params.model] : [];
           const rpc = new PiRpc(
@@ -45,7 +46,12 @@ export default function (pi: ExtensionAPI): void {
           );
           threads.set(id, { id, sessionFile, rpc });
           if (params.message?.trim()) await rpc.prompt(params.message);
-          return result({ id, sessionFile, status: params.message?.trim() ? "running" : "idle" });
+          return result({
+            id,
+            sessionFile,
+            resumeCommand: `pi --session ${sessionFile}`,
+            status: params.message?.trim() ? "running" : "idle",
+          });
         }
         if (!params.threadId) throw new Error("threadId is required");
         const thread = threads.get(params.threadId);
