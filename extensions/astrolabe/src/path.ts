@@ -30,8 +30,8 @@ export async function resolveExistingScope(
     throw new Error("scope must stay within the working directory");
   }
   const targetStat = await stat(realTarget);
-  if (targetStat.isFile()) return { path: realTarget, kind: "file" };
-  if (targetStat.isDirectory()) return { path: realTarget, kind: "directory" };
+  if (targetStat.isFile()) return { path: lexicalPath, kind: "file" };
+  if (targetStat.isDirectory()) return { path: lexicalPath, kind: "directory" };
   throw new Error("scope must refer to an existing file or directory");
 }
 
