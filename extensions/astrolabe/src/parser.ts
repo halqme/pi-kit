@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import * as ParserModule from "web-tree-sitter";
-import type { Edit, Node, Parser, Point, Tree } from "web-tree-sitter";
+import { Edit, type Node, type Parser, type Point, type Tree } from "web-tree-sitter";
 import { requireAdapterForPath, type LanguageAdapter } from "./language-profile.ts";
 
 const require = createRequire(import.meta.url);
@@ -157,14 +157,14 @@ export function createTreeEdit(
   }
   const startPosition = pointAtStringIndex(source, startIndex);
   const oldEndPosition = pointAtStringIndex(source, oldEndIndex);
-  return {
+  return new Edit({
     startIndex,
     oldEndIndex,
     newEndIndex: startIndex + replacement.length,
     startPosition,
     oldEndPosition,
     newEndPosition: advancePoint(startPosition, replacement),
-  };
+  });
 }
 
 function collectSyntaxIssues(tree: Tree): SyntaxIssue[] {

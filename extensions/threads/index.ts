@@ -80,7 +80,7 @@ export default function (pi: ExtensionAPI): void {
       }
     },
   });
-  (pi.registerCommand("threads", {
+  pi.registerCommand("threads", {
     description: "List Pi sessions spawned by the current parent session",
     handler: async (_args, ctx) => {
       const spawned = recordedThreads(ctx.sessionManager.getEntries());
@@ -91,10 +91,10 @@ export default function (pi: ExtensionAPI): void {
         "info",
       );
     },
-  }),
-    pi.on("session_shutdown", async () => {
-      await Promise.all([...threads.values()].map((thread) => thread.rpc.stop()));
-    }));
+  });
+  pi.on("session_shutdown", async () => {
+    await Promise.all([...threads.values()].map((thread) => thread.rpc.stop()));
+  });
 }
 
 function result(value: unknown) {
