@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -52,17 +52,36 @@ function errorKind(text: string): string | null {
   return "tool_error";
 }
 
-async function run(database: string, sql: string, json = false): Promise<string> {
-  try {
-    const args = [database, ...(json ? ["-json"] : []), "-c", sql];
-    const result = await execFileAsync(DUCKDB, args, { maxBuffer: 20 * 1024 * 1024 });
-    return result.stdout.trim();
-  } catch (error: any) {
-    const detail = error?.stderr?.trim() || error?.message || String(error);
-    if (error?.code === "ENOENT")
-      throw new Error("DuckDB CLI was not found. Install DuckDB or set DUCKDB_PATH.");
-    throw new Error(`DuckDB error: ${detail}`);
+async function withDatabaseLock<T>(database: string, operation: () => Promise<T>): Promise<T> {
+  const lock = `${database}.lock`;
+  for (;;) {
+    try {
+      await mkdir(lock);
+      try {
+        return await operation();
+      } finally {
+        await rm(lock, { recursive: true, force: true });
+      }
+    } catch (error: any) {
+      if (error?.code !== "EEXIST") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
   }
+}
+
+async function run(database: string, sql: string, json = false): Promise<string> {
+  return withDatabaseLock(database, async () => {
+    try {
+      const args = [database, ...(json ? ["-json"] : []), "-c", sql];
+      const result = await execFileAsync(DUCKDB, args, { maxBuffer: 20 * 1024 * 1024 });
+      return result.stdout.trim();
+    } catch (error: any) {
+      const detail = error?.stderr?.trim() || error?.message || String(error);
+      if (error?.code === "ENOENT")
+        throw new Error("DuckDB CLI was not found. Install DuckDB or set DUCKDB_PATH.");
+      throw new Error(`DuckDB error: ${detail}`);
+    }
+  });
 }
 
 async function ensureSchema(database: string): Promise<void> {
