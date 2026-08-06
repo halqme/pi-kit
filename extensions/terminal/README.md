@@ -1,26 +1,28 @@
 # terminal
 
-Herdr上の永続TTYを、Agentから非同期に操作・監視する拡張機能です。SSH、REPL、シェル、ログストリームなど、後から入力したり複数の条件を監視したりする対話型プロセスに使います。
+tmux上の永続TTYを、Agentから非同期に操作・監視する拡張機能です。SSH、REPL、シェル、ログストリームなど、後から入力したり複数の条件を監視したりする対話型プロセスに使います。
 
-この拡張はAgent専用です。人間向けのattach UIは提供しません。Herdr 0.8.0以降が`PATH`に必要です。
+この拡張はAgent専用です。人間向けのattach UIは提供しません。`tmux`が`PATH`に必要です。Piのreloadや再起動後もtmuxセッションは残ります。
 
 ## Actions
 
 - `create`: 名前付きTTYを作り、コマンドを起動する
 - `list`: 管理中のTTYを一覧する
 - `send`: TTYへ文字列を非同期送信する
-- `read`: 最新の端末出力を読む
+- `read`: 最新の端末状態を読む
+- `call`: 既存TTYの文脈でコマンドを実行し、完了結果を非同期通知する
 - `watch`: 出力パターンの監視を登録する。複数登録可能で、既定では最初の一致後に解除する
 - `cancel_watch`: 監視を解除する
-- `close`: TTYとHerdr workspaceを閉じる
+- `close`: tmuxセッションを閉じる
 
-`send`と`watch`は待機せずに返ります。監視に一致すると、親Piへ通知されて次のAgent turnが起動します。
+`send`、`call`、`watch`は待機せずに返ります。call完了または監視一致時は、親Piへ通知されて次のAgent turnが起動します。
 
 ## Example
 
 ```json
 {"action":"create","name":"server","command":"ssh user@example.com"}
 {"action":"send","name":"server","text":"tail -f app.log\n"}
+{"action":"call","name":"server","command":"pwd"}
 {"action":"watch","name":"server","pattern":"ERROR","once":false}
 {"action":"read","name":"server","lines":100}
 ```
