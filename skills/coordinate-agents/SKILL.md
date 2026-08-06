@@ -1,6 +1,6 @@
 ---
 name: coordinate-agents
-description: Selects and coordinates Pi threads and Herdr implementation workers, including delegation boundaries, parallel ownership, waiting, handoff, and integration. Use for a human-resumable agent conversation or parallel, isolated, write-enabled implementation. Do not use for a single direct task, read-only expert deliberation, or merely running a long-lived shell command.
+description: Selects and coordinates Pi threads for persistent conversations and human handoff. Use for a human-resumable agent conversation. Do not use for a single direct task, read-only expert deliberation, or merely running a long-lived shell command.
 ---
 
 # Coordinate Agents
@@ -14,7 +14,6 @@ Classify the work before launching an agent:
 1. **Direct**: one coherent task, shared context, or significant coordination; do it in the current session.
 2. **Consult**: independent opinions or a design/diagnostic comparison; use `agent_team` and keep members read-only.
 3. **Persistent conversation**: future human handoff or a conversation that must retain its own context; use `threads`.
-4. **Parallel implementation**: two or more independently verifiable workstreams with separable ownership; use `herdr_agents`.
 
 For parallel implementation, split by stable ownership (for example, server/client, parser/tests, or implementation/review), not by arbitrary file count. Start one worker when tasks depend on one another. Use `start_many` only when each task can make progress without another worker's uncommitted changes. Prefer two or three workers; add more only when the work has that many genuinely independent streams and integration cost remains lower than serial execution. If the split is uncertain, use one worker or consult first rather than creating speculative parallelism.
 
@@ -23,7 +22,6 @@ After classification, state internally: selected mode, number of workers, owners
 ## Choose the execution model
 
 - Use `threads` for a normal Pi conversation that a human may open with `/resume`. While the current extension process owns the thread, the parent can continue it through the tool; do not assume that tool control survives an extension restart.
-- Use `herdr_agents` for bounded, write-enabled implementation delegated to a worker with an observable lifecycle and, by default, an isolated Git worktree.
 - Use `agent_team` instead for read-only expert exploration, comparison, or adversarial review.
 - Use `background_process` instead for a long-running command that does not need an agent to reason or edit.
 - Work directly when delegation overhead exceeds the expected benefit.
@@ -62,37 +60,5 @@ Before starting anything:
 
 A thread response is advice or work product, not proof. Verify material claims and inspect any changes in the actual workspace.
 
-## Implementation with `herdr_agents`
-
-1. Prefer `isolation: "worktree"`. Use `shared` only when concurrent writes are intentional and file ownership is explicitly partitioned. Do not request a worktree from a linked-worktree checkout.
-2. Use `start_many` only for independent tasks; otherwise start one worker and delegate dependent work after its prerequisite settles.
-3. Give every worker a unique name and a task containing:
-   - exact scope and owned paths;
-   - required behavior and compatibility constraints;
-   - focused validation commands;
-   - assigned model or explicit default-model fallback;
-   - required final report: changed files, checks, failures, commit or branch state, model actually used, and unresolved risks.
-4. Continue independent parent work after launch. Use `wait` to collect a needed result; use `check` for an explicitly requested progress snapshot or when diagnosing a suspected stall, not as a polling loop.
-5. If a worker is `blocked`, inspect the reason and use `prompt` with the smallest missing decision or evidence. Do not silently broaden its scope.
-6. Interrupt only a demonstrably wrong or unsafe action. Close workers after their output has been inspected and any desired changes have been integrated. Preserve the worktree unless removal is explicitly intended and safe.
-
-## Adapt during execution
 
 Treat lifecycle output and worker reports as evidence, not as a fixed plan. If a worker reveals a hidden dependency, overlapping ownership, insufficient capability, or a failed model launch, stop or re-plan the affected stream: reduce parallelism, change the task boundary, or retry with a stronger available model. Do not blindly restart the same task and do not change models solely because progress is slow without checking the actual blocker.
-
-## Inspect and integrate
-
-For each completed delegate:
-
-1. Read its report, then independently inspect the claimed branch, diff, status, and test output. Never infer completion only from a lifecycle state.
-2. Reject unrelated edits, overlapping ownership, hidden dependencies, generated noise, secrets, and unverified claims.
-3. Integrate deliberately in dependency order. Herdr never merges worker branches automatically; obtaining a result is not authorization to alter Git history.
-4. Run checks in the integration workspace because isolated-worker success does not establish combined correctness.
-5. Report which thread or worker produced each result, what was accepted or rejected, checks performed, worktrees or branches left behind, and remaining risk.
-
-## Failure and recovery
-
-- If creation fails, preserve successful workers from the same batch and report partial startup instead of duplicating them.
-- If a worker is unknown, blocked, or times out, inspect available output once and ask for direction when recovery would change scope or discard work.
-- If ownership overlaps or the base moved, stop concurrent writes and re-plan before integration.
-- Never force-remove a dirty worktree, discard delegate changes, or force-update a branch without explicit approval.

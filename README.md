@@ -48,8 +48,6 @@ Additional standalone packages live under `packages/`. See each package's docume
 
 `agent-team` runs its discussion members as isolated Pi subprocesses through the bundled `background-process` extension.
 
-`herdr-agents` delegates persistent, write-enabled Pi workers through Herdr and isolates their edits in Git worktrees by default.
-
 ## Development
 
 Install dependencies from the repository root:
