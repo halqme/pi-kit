@@ -1,4 +1,6 @@
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { readdir, readFile } from "node:fs/promises";
+import { basename, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -24,6 +26,7 @@ export default function (pi: ExtensionAPI): void {
         Type.Literal("read"),
       ]),
       threadId: Type.Optional(Type.String()),
+      sessionId: Type.Optional(Type.String()),
       message: Type.Optional(Type.String()),
       cwd: Type.Optional(Type.String()),
       timeoutMs: Type.Optional(Type.Number()),
@@ -58,17 +61,31 @@ export default function (pi: ExtensionAPI): void {
             status: params.message?.trim() ? "running" : "idle",
           });
         }
-        if (!params.threadId) throw new Error("threadId is required");
-        const thread = threads.get(params.threadId);
-        if (!thread) throw new Error(`Unknown live thread: ${params.threadId}`);
+        const key = params.threadId ?? params.sessionId;
+        if (!key) throw new Error("threadId or sessionId is required");
+        const spawned =
+          recordedThreads(ctx.sessionManager.getEntries()).find(
+            (thread) => thread.id === key || thread.sessionId === key,
+          ) ?? (await findSession(key));
+        if (!spawned) throw new Error(`Unknown thread or session: ${key}`);
+        let thread = threads.get(spawned.id);
+        if (!thread) {
+          const rpc = new PiRpc(
+            spawned.sessionFile,
+            spawned.cwd,
+            params.model ? ["--model", params.model] : [],
+          );
+          thread = { id: spawned.id, sessionFile: spawned.sessionFile, rpc };
+          threads.set(spawned.id, thread);
+        }
         if (params.action === "send_message") {
           if (!params.message?.trim()) throw new Error("message is required");
           await thread.rpc.prompt(params.message, "followUp");
-          return result({ id: thread.id, status: "accepted" });
+          return result({ id: thread.id, sessionId: spawned.sessionId, status: "accepted" });
         }
         if (params.action === "wait") {
           await thread.rpc.wait(params.timeoutMs ?? 300_000);
-          return result({ id: thread.id, status: "settled" });
+          return result({ id: thread.id, sessionId: spawned.sessionId, status: "settled" });
         }
         const response = await thread.rpc.command(
           "get_entries",
@@ -95,6 +112,46 @@ export default function (pi: ExtensionAPI): void {
   pi.on("session_shutdown", async () => {
     await Promise.all([...threads.values()].map((thread) => thread.rpc.stop()));
   });
+}
+
+async function findSession(sessionId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return undefined;
+  const root = resolve(homedir(), ".pi", "agent", "sessions");
+  const sessionFile = await findFile(root, `_${sessionId}.jsonl`);
+  if (!sessionFile) return undefined;
+  let cwd = process.cwd();
+  try {
+    const firstLine = (await readFile(sessionFile, "utf8")).split("\n", 1)[0] ?? "";
+    const header = JSON.parse(firstLine) as { cwd?: unknown };
+    if (typeof header.cwd === "string") cwd = header.cwd;
+  } catch {
+    // The RPC process can still open the session with the current directory.
+  }
+  return {
+    id: sessionId,
+    sessionId,
+    sessionFile,
+    cwd,
+    createdAt: "",
+  };
+}
+
+async function findFile(directory: string, suffix: string): Promise<string | undefined> {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+  for (const entry of entries) {
+    const path = resolve(directory, entry.name);
+    if (entry.isFile() && basename(path).endsWith(suffix)) return path;
+    if (entry.isDirectory()) {
+      const found = await findFile(path, suffix);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }
 
 function result(value: unknown) {
