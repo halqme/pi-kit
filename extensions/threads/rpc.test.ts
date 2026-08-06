@@ -18,6 +18,22 @@ test("PiRpc sends commands and correlates responses", async () => {
   }
 });
 
+test("PiRpc can reopen an existing session after the process exits", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-threads-test-"));
+  const sessionFile = join(dir, "session.jsonl");
+  const first = new PiRpc(sessionFile, dir);
+  await first.command("get_state");
+  await first.stop();
+
+  const second = new PiRpc(sessionFile, dir);
+  try {
+    const response = await second.command("get_state");
+    assert.equal(response.success, true);
+  } finally {
+    await second.stop();
+  }
+});
+
 test("PiRpc wait times out", async () => {
   const dir = await mkdtemp(join(tmpdir(), "pi-threads-test-"));
   const rpc = new PiRpc(join(dir, "session.jsonl"), dir);

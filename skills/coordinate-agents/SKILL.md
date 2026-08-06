@@ -15,8 +15,6 @@ Classify the work before launching an agent:
 2. **Consult**: independent opinions or a design/diagnostic comparison; use `agent_team` and keep members read-only.
 3. **Persistent conversation**: future human handoff or a conversation that must retain its own context; use `threads`.
 
-For parallel implementation, split by stable ownership (for example, server/client, parser/tests, or implementation/review), not by arbitrary file count. Start one worker when tasks depend on one another. Use `start_many` only when each task can make progress without another worker's uncommitted changes. Prefer two or three workers; add more only when the work has that many genuinely independent streams and integration cost remains lower than serial execution. If the split is uncertain, use one worker or consult first rather than creating speculative parallelism.
-
 After classification, state internally: selected mode, number of workers, ownership boundaries, dependency order, and the acceptance check for each worker.
 
 ## Choose the execution model
@@ -59,6 +57,3 @@ Before starting anything:
 5. If a human may join, explicitly state ownership and avoid simultaneous writes until control is handed back. Treat concurrent use as uncoordinated.
 
 A thread response is advice or work product, not proof. Verify material claims and inspect any changes in the actual workspace.
-
-
-Treat lifecycle output and worker reports as evidence, not as a fixed plan. If a worker reveals a hidden dependency, overlapping ownership, insufficient capability, or a failed model launch, stop or re-plan the affected stream: reduce parallelism, change the task boundary, or retry with a stronger available model. Do not blindly restart the same task and do not change models solely because progress is slow without checking the actual blocker.

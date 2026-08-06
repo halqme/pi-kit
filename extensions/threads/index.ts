@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { PiRpc } from "./rpc.ts";
 import { THREAD_ENTRY_TYPE, createThreadSession, recordedThreads } from "./session-store.ts";
 
@@ -22,14 +22,12 @@ export default function (pi: ExtensionAPI): void {
         Type.Literal("create"),
         Type.Literal("list"),
         Type.Literal("send_message"),
-        Type.Literal("wait"),
         Type.Literal("read"),
       ]),
       threadId: Type.Optional(Type.String()),
       sessionId: Type.Optional(Type.String()),
       message: Type.Optional(Type.String()),
       cwd: Type.Optional(Type.String()),
-      timeoutMs: Type.Optional(Type.Number()),
       since: Type.Optional(Type.String()),
       model: Type.Optional(Type.String()),
     }),
@@ -48,11 +46,7 @@ export default function (pi: ExtensionAPI): void {
             id,
           );
           pi.appendEntry(THREAD_ENTRY_TYPE, spawned);
-          const rpc = new PiRpc(
-            spawned.sessionFile,
-            cwd,
-            params.model ? ["--model", params.model] : [],
-          );
+          const rpc = createRpc(spawned.sessionFile, cwd, params.model, id, ctx);
           threads.set(id, { id, sessionFile: spawned.sessionFile, rpc });
           if (params.message?.trim()) await rpc.prompt(params.message);
           return result({
@@ -69,12 +63,8 @@ export default function (pi: ExtensionAPI): void {
           ) ?? (await findSession(key));
         if (!spawned) throw new Error(`Unknown thread or session: ${key}`);
         let thread = threads.get(spawned.id);
-        if (!thread) {
-          const rpc = new PiRpc(
-            spawned.sessionFile,
-            spawned.cwd,
-            params.model ? ["--model", params.model] : [],
-          );
+        if (!thread || !thread.rpc.isAlive) {
+          const rpc = createRpc(spawned.sessionFile, spawned.cwd, params.model, spawned.id, ctx);
           thread = { id: spawned.id, sessionFile: spawned.sessionFile, rpc };
           threads.set(spawned.id, thread);
         }
@@ -82,10 +72,6 @@ export default function (pi: ExtensionAPI): void {
           if (!params.message?.trim()) throw new Error("message is required");
           await thread.rpc.prompt(params.message, "followUp");
           return result({ id: thread.id, sessionId: spawned.sessionId, status: "accepted" });
-        }
-        if (params.action === "wait") {
-          await thread.rpc.wait(params.timeoutMs ?? 300_000);
-          return result({ id: thread.id, sessionId: spawned.sessionId, status: "settled" });
         }
         const response = await thread.rpc.command(
           "get_entries",
@@ -152,6 +138,18 @@ async function findFile(directory: string, suffix: string): Promise<string | und
     }
   }
   return undefined;
+}
+
+function createRpc(
+  sessionFile: string,
+  cwd: string,
+  model: string | undefined,
+  threadId: string,
+  ctx: ExtensionContext,
+): PiRpc {
+  return new PiRpc(sessionFile, cwd, model ? ["--model", model] : [], (event) => {
+    if (event.type === "agent_settled") ctx.ui.notify(`Thread ${threadId} completed`, "info");
+  });
 }
 
 function result(value: unknown) {
