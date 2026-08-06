@@ -453,10 +453,24 @@ export default function herdrAgentsExtension(pi: ExtensionAPI): void {
     },
   });
 
-  pi.on("session_start", async (_event: unknown, ctx: ExtensionContext) => {
-    const namespace = await namespaceFor(ctx);
-    await updateStatus(ctx, controller, namespace, false);
-  });
+  (pi.registerCommand("herdr-agents", {
+    description: "List Herdr worker threads for this repository",
+    handler: async (_args, ctx) => {
+      const namespace = await namespaceFor(ctx);
+      const agents = managedAgents(await controller.list(undefined), namespace);
+      ctx.ui.notify(
+        agents.length
+          ? agents.map(formatAgent).join("\n")
+          : "No live Herdr agents for this repository.",
+        "info",
+      );
+      await updateStatus(ctx, controller, namespace, true);
+    },
+  }),
+    pi.on("session_start", async (_event: unknown, ctx: ExtensionContext) => {
+      const namespace = await namespaceFor(ctx);
+      await updateStatus(ctx, controller, namespace, false);
+    }));
   pi.on("session_shutdown", async (_event: unknown, ctx: ExtensionContext) => {
     // Herdr owns agent lifetimes. Parent Pi shutdown must not terminate delegated work.
     ctx.ui.setStatus(STATUS_KEY, undefined);

@@ -16,7 +16,7 @@ The `herdr_agents` tool supports:
 
 - `start`: create one worker, using an isolated worktree by default, start an interactive Pi agent, and submit the initial task.
 - `start_many`: create up to eight independent workers concurrently. Individual launch failures do not discard successful workers.
-- `list`: show live agents belonging to the current Git repository.
+- `list`: show live worker threads belonging to the current Git repository, including lifecycle state, workspace, cwd, and physical Herdr name. Humans can run `/herdr-agents` for the same repository-scoped view.
 - `check`: show lifecycle state and bounded terminal output.
 - `prompt`: send another instruction, optionally waiting for the turn to settle.
 - `wait`: wait for exact lifecycle states such as `done` or `blocked`.
@@ -74,6 +74,12 @@ Run independent tasks in parallel:
     }
   ]
 }
+```
+
+List the repository's Herdr worker threads:
+
+```json
+{ "action": "list" }
 ```
 
 Inspect a worker and then wait for it:

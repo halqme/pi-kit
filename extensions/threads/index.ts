@@ -1,12 +1,11 @@
-import { mkdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { PiRpc } from "./rpc.ts";
+import { THREAD_ENTRY_TYPE, createThreadSession, recordedThreads } from "./session-store.ts";
 
 const threads = new Map<string, { id: string; sessionFile: string; rpc: PiRpc }>();
-const root = (ctx: ExtensionContext) => ctx.sessionManager.getSessionDir();
 const text = (value: unknown) =>
   typeof value === "string" ? value : JSON.stringify(value, null, 2);
 
@@ -15,10 +14,11 @@ export default function (pi: ExtensionAPI): void {
     name: "threads",
     label: "Threads",
     description:
-      "Create and communicate with persistent Pi sessions. Humans can join them with /resume.",
+      "Create, list, and communicate with persistent Pi sessions. list returns only sessions spawned by this extension, including their parent session.",
     parameters: Type.Object({
       action: Type.Union([
         Type.Literal("create"),
+        Type.Literal("list"),
         Type.Literal("send_message"),
         Type.Literal("wait"),
         Type.Literal("read"),
@@ -32,30 +32,35 @@ export default function (pi: ExtensionAPI): void {
     }),
     async execute(_callId, params, _signal, _update, ctx) {
       try {
+        const sessionDir = ctx.sessionManager.getSessionDir();
+        if (params.action === "list")
+          return result(recordedThreads(ctx.sessionManager.getEntries()));
         if (params.action === "create") {
           const id = randomUUID();
-          const dir = root(ctx);
-          await mkdir(dir, { recursive: true });
-          // Keep the file in Pi's normal session directory so /resume can discover it.
-          const sessionFile = join(dir, `${id}.jsonl`);
-          const args = params.model ? ["--model", params.model] : [];
-          const rpc = new PiRpc(
-            sessionFile,
-            params.cwd ? resolve(ctx.cwd, params.cwd) : ctx.cwd,
-            args,
+          const cwd = params.cwd ? resolve(ctx.cwd, params.cwd) : ctx.cwd;
+          const spawned = createThreadSession(
+            cwd,
+            sessionDir,
+            ctx.sessionManager.getSessionFile(),
+            id,
           );
-          threads.set(id, { id, sessionFile, rpc });
+          pi.appendEntry(THREAD_ENTRY_TYPE, spawned);
+          const rpc = new PiRpc(
+            spawned.sessionFile,
+            cwd,
+            params.model ? ["--model", params.model] : [],
+          );
+          threads.set(id, { id, sessionFile: spawned.sessionFile, rpc });
           if (params.message?.trim()) await rpc.prompt(params.message);
           return result({
-            id,
-            sessionFile,
-            resumeCommand: `pi --session ${sessionFile}`,
+            ...spawned,
+            resumeCommand: `pi --session ${spawned.sessionFile}`,
             status: params.message?.trim() ? "running" : "idle",
           });
         }
         if (!params.threadId) throw new Error("threadId is required");
         const thread = threads.get(params.threadId);
-        if (!thread) throw new Error(`Unknown thread: ${params.threadId}`);
+        if (!thread) throw new Error(`Unknown live thread: ${params.threadId}`);
         if (params.action === "send_message") {
           if (!params.message?.trim()) throw new Error("message is required");
           await thread.rpc.prompt(params.message, "followUp");
@@ -71,18 +76,25 @@ export default function (pi: ExtensionAPI): void {
         );
         return result(response.data ?? response);
       } catch (error) {
-        return {
-          content: [{ type: "text" as const, text: String(error) }],
-          details: {},
-          isError: true,
-        };
+        throw error instanceof Error ? error : new Error(String(error));
       }
     },
   });
-
-  pi.on("session_shutdown", async () => {
-    await Promise.all([...threads.values()].map((thread) => thread.rpc.stop()));
-  });
+  (pi.registerCommand("threads", {
+    description: "List Pi sessions spawned by the current parent session",
+    handler: async (_args, ctx) => {
+      const spawned = recordedThreads(ctx.sessionManager.getEntries());
+      ctx.ui.notify(
+        spawned.length
+          ? spawned.map((thread) => `${thread.id} ${thread.sessionFile}`).join("\n")
+          : "No spawned Pi sessions for this parent session.",
+        "info",
+      );
+    },
+  }),
+    pi.on("session_shutdown", async () => {
+      await Promise.all([...threads.values()].map((thread) => thread.rpc.stop()));
+    }));
 }
 
 function result(value: unknown) {

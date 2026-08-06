@@ -113,14 +113,25 @@ export class HerdrCli {
     args: string[],
     options: HerdrCommandOptions,
   ): Promise<HerdrCommandResult> {
-    const result = await this.runCommand(this.executable, args, options);
+    let result = await this.runCommand(this.executable, args, options);
     if (result.exitCode === 0) return result;
 
     if ((options.autoStart ?? true) && isServerNotRunning(result)) {
       await this.ensureServer(options.signal);
-      const retry = await this.runCommand(this.executable, args, options);
-      if (retry.exitCode === 0) return retry;
-      throw commandError(args, retry);
+      result = await this.runCommand(this.executable, args, options);
+      if (result.exitCode === 0) return result;
+    }
+
+    if (args[0] === "agent" && args[1] === "start") {
+      for (
+        let attempt = 0;
+        attempt < 50 && result.stderr.includes('"code":"agent_pane_busy"');
+        attempt++
+      ) {
+        await delay(100, undefined, { signal: options.signal });
+        result = await this.runCommand(this.executable, args, options);
+        if (result.exitCode === 0) return result;
+      }
     }
 
     throw commandError(args, result);

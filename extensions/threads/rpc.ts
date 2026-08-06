@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { basename, dirname } from "node:path";
 
 export type RpcEvent = Record<string, unknown>;
 
@@ -14,7 +15,11 @@ export class PiRpc {
   private resolveSettled = () => {};
 
   constructor(sessionFile: string, cwd: string, args: string[] = []) {
-    this.child = spawn("pi", ["--mode", "rpc", "--session", sessionFile, ...args], {
+    const match = basename(sessionFile).match(/_([0-9a-f-]{36})\.jsonl$/);
+    const sessionArgs = match?.[1]
+      ? ["--session-id", match[1], "--session-dir", dirname(sessionFile)]
+      : ["--session", sessionFile];
+    this.child = spawn("pi", ["--mode", "rpc", ...sessionArgs, ...args], {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
     });
