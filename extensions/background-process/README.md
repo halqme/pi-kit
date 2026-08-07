@@ -12,6 +12,8 @@ The `background_process` tool supports:
 
 `start_many` reports successfully started processes and per-item launch failures separately. Each process remains independently inspectable and stoppable by its returned ID.
 
+Choose this tool for detached non-interactive processes, including long-lived development servers and watchers, when later stdin, TTY state, control keys, or output-pattern watches are unnecessary. Expected lifetime is not the boundary: use `terminal` instead when the process needs interactive TTY control or pattern-based wakeups.
+
 After starting a long-running process, end the turn instead of using `sleep`, polling, `ps`, or repeated `check` calls. Completion is automatically delivered as a follow-up turn; if the session was interrupted, an unchecked completion is delivered when the session resumes. Completion notifications are acknowledged automatically after delivery.
 
 Phases are `pending`, `running`, `unchecked`, and `completed`. Exit disposition is stored separately as `success`, `failed`, `stopped`, or `lost`.

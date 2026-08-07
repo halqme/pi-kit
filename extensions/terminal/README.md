@@ -2,7 +2,7 @@
 
 tmux上の永続TTYを、Agentから非同期に操作・監視する拡張機能です。SSH、REPL、シェル、ログストリームなど、後から入力したり複数の条件を監視したりする対話型プロセスに使います。
 
-この拡張はAgent専用です。人間向けのattach UIは提供しません。`tmux`が`PATH`に必要です。Piのreloadや再起動後もtmuxセッションは残ります。
+この拡張はAgent専用です。人間向けのattach UIは提供しません。`tmux`が`PATH`に必要です。Piのreloadや再起動後もtmuxセッションは残り、管理中のpending callとwatchもPiセッション内のruntime snapshotから復元されます。
 
 ## Actions
 
@@ -17,6 +17,8 @@ tmux上の永続TTYを、Agentから非同期に操作・監視する拡張機�
 
 `send`、`call`、`watch`は待機せずに返ります。call完了または監視一致時は、親Piへ通知されて次のAgent turnが起動します。`call`は端末ごとに1件だけ実行でき、`timeoutMs`は完了追跡を終了するだけでコマンド自体は停止しません。出力はtmuxのscrollbackに依存するため、長大な出力は切り捨てられることがあります。
 
+session reload時はterminal登録とruntime snapshotを復元したあと、即座にpollを行います。callはtmux内のmarkerと`/tmp`のstatus fileを再確認し、watchは保存されたpane snapshotとの差分を再確認するため、reload中に完了・一致したイベントもscrollbackが保持されていれば検出できます。TTYそのものが失われた場合はpending callとwatchを終了し、親Piへ一度通知します。
+
 ## Example
 
 ```json
@@ -27,4 +29,4 @@ tmux上の永続TTYを、Agentから非同期に操作・監視する拡張機�
 {"action":"read","name":"server","lines":100}
 ```
 
-監視は各自のwatch IDで独立しています。TTYのworkspaceとpaneはHerdrが保持し、terminalの登録情報はPiセッションへ記録されるため、拡張reload後も再発見できます。通常の一回限りのコマンドには`background_process`を使ってください。
+監視は各自のwatch IDで独立しています。TTYのworkspaceとpaneはtmuxが保持し、terminalの登録情報とruntime stateはPiセッションへ記録されるため、拡張reload後も再発見できます。TTY、後続stdin、control key、pattern watchが不要な非対話型プロセスには`background_process`を使ってください。
