@@ -1,4 +1,4 @@
 {
   "extends": "../tsconfig.json",
-  "include": ["*.ts", "../../packages/session-metrics/src/*.ts"]
+  "include": ["*.ts"]
 }

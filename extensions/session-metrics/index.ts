@@ -3,9 +3,13 @@ import { watch, type FSWatcher } from "node:fs";
 import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { runInsight, type InsightName } from "../../packages/session-metrics/src/insights.ts";
-import { buildReport } from "../../packages/session-metrics/src/database-report.ts";
-import { ingestSessions, recordLiveEvent } from "../../packages/session-metrics/src/storage.ts";
+import {
+  buildReport,
+  ingestSessions,
+  recordLiveEvent,
+  runInsight,
+  type InsightName,
+} from "@halqme/pi-session-metrics";
 
 const SESSIONS_ROOT = join(homedir(), ".pi", "agent", "sessions");
 

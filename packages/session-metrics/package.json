@@ -5,6 +5,9 @@
     "session-metrics": "cli.ts"
   },
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "check": "bun run typecheck && bun test",
     "typecheck": "tsc --noEmit",

@@ -119,6 +119,7 @@
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
+        "@halqme/pi-session-metrics": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "catalog:",
