@@ -1,13 +1,113 @@
 import { homedir } from "node:os";
+import { watch, type FSWatcher } from "node:fs";
 import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { insightQuery, type InsightName } from "../../packages/session-metrics/src/insights.ts";
-import { ingestSessions, queryDatabase } from "../../packages/session-metrics/src/storage.ts";
+import {
+  ingestSessions,
+  queryDatabase,
+  recordLiveEvent,
+} from "../../packages/session-metrics/src/storage.ts";
 
 const SESSIONS_ROOT = join(homedir(), ".pi", "agent", "sessions");
 
 export default function sessionMetricsExtension(pi: ExtensionAPI): void {
+  const liveDatabase = undefined;
+  let sessionWatcher: FSWatcher | undefined;
+  let syncTimer: ReturnType<typeof setTimeout> | undefined;
+  let syncing = false;
+  let syncAgain = false;
+  const syncSessions = async () => {
+    if (syncing) {
+      syncAgain = true;
+      return;
+    }
+    syncing = true;
+    try {
+      await ingestSessions(SESSIONS_ROOT, liveDatabase);
+    } catch {
+      // The next filesystem event retries the sync; metrics must not interrupt Pi.
+    } finally {
+      syncing = false;
+      if (syncAgain) {
+        syncAgain = false;
+        void syncSessions();
+      }
+    }
+  };
+  const scheduleSync = () => {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => void syncSessions(), 250);
+  };
+  const record = (event: Parameters<typeof recordLiveEvent>[0]) =>
+    recordLiveEvent(event, liveDatabase).catch(() => undefined);
+
+  pi.on("session_start", async () => {
+    sessionWatcher?.close();
+    sessionWatcher = watch(SESSIONS_ROOT, { recursive: true }, (_event, filename) => {
+      if (filename?.toString().endsWith(".jsonl")) scheduleSync();
+    });
+    scheduleSync();
+  });
+
+  pi.on("session_shutdown", async () => {
+    sessionWatcher?.close();
+    sessionWatcher = undefined;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = undefined;
+    await syncSessions();
+  });
+
+  pi.on("before_agent_start", async (event, ctx) => {
+    record({
+      sessionId: ctx.sessionManager.getSessionId(),
+      eventType: "request",
+      payload: { prompt: event.prompt, images: event.images?.length ?? 0, model: ctx.model?.id },
+    });
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    const sessionId = ctx.sessionManager.getSessionId();
+    record({
+      sessionId,
+      eventType: "tool_call",
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      payload: event.input,
+    });
+    const action = (event.input as { action?: unknown }).action;
+    if (typeof action === "string")
+      record({
+        sessionId,
+        eventType: "tool_action",
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        payload: { action, input: event.input },
+      });
+  });
+
+  pi.on("turn_end", async (event, ctx) => {
+    const message = event.message as { role?: string; model?: string; usage?: unknown };
+    if (message.role === "assistant")
+      record({
+        sessionId: ctx.sessionManager.getSessionId(),
+        eventType: "assistant_usage",
+        payload: { model: message.model, usage: message.usage },
+      });
+  });
+
+  pi.on("tool_result", async (event, ctx) => {
+    record({
+      sessionId: ctx.sessionManager.getSessionId(),
+      eventType: "tool_result",
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      payload: { input: event.input, content: event.content, details: event.details },
+      isError: event.isError,
+    });
+  });
+
   pi.registerTool({
     name: "session_metrics",
     label: "Session Metrics",
