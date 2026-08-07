@@ -1,10 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-  buildAgentStartPrompt,
-  buildTurnBoundaryPrompt,
-  createTurnObservation,
-  observeToolResult,
-} from "./prompts.ts";
+import { createTurnObservation, observeToolResult } from "./observation.ts";
+import { buildAgentStartPrompt } from "./prompts/agent-start.ts";
+import { buildTurnBoundaryPrompt } from "./prompts/turn-boundary.ts";
 
 const REMINDER_TYPE = "inception:reminder";
 
