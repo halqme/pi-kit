@@ -22,8 +22,7 @@ Stable deterministic behavior still belongs in extensions/tools rather than prom
 From the repository root:
 
 ```sh
-node --test extensions/inception/index.test.ts
-bun x tsc --noEmit -p extensions/tsconfig.json
+bun run --cwd extensions/inception check
 oxfmt extensions/inception
 oxlint extensions/inception
 ```
