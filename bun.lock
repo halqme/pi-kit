@@ -39,16 +39,6 @@
         "typescript": "catalog:",
       },
     },
-    "extensions/auto-reload": {
-      "name": "@halqme/pi-auto-reload",
-      "dependencies": {
-        "@earendil-works/pi-coding-agent": "catalog:",
-      },
-      "devDependencies": {
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
     "extensions/background-process": {
       "name": "@halqme/background-process",
       "dependencies": {
@@ -92,6 +82,27 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "extensions/suggest_reload": {
+      "name": "suggest_reload",
+      "dependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "extensions/terminal": {
+      "name": "@halqme/terminal",
+      "dependencies": {
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+      },
+      "devDependencies": {
         "@types/node": "catalog:",
         "typescript": "catalog:",
       },
@@ -221,6 +232,8 @@
     "@halqme/pi-session-metrics-extension": ["@halqme/pi-session-metrics-extension@workspace:extensions/session-metrics"],
 
     "@halqme/statusline": ["@halqme/statusline@workspace:extensions/statusline"],
+
+    "@halqme/terminal": ["@halqme/terminal@workspace:extensions/terminal"],
 
     "@halqme/threads": ["@halqme/threads@workspace:extensions/threads"],
 
@@ -691,6 +704,8 @@
     "stackback": ["stackback@0.0.2", "", {}, "sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw=="],
 
     "std-env": ["std-env@4.2.0", "", {}, "sha512-oCUKSupKTHX53EyjDtuZQ64pjLJ6yYCtpmEw0goYxtjG9KpbRe8KAsl2tBUGU9DyMcJ0RwJ8GqJAFzMXcXW1Rw=="],
+
+    "suggest_reload": ["suggest_reload@workspace:extensions/suggest_reload"],
 
     "tinybench": ["tinybench@2.9.0", "", {}, "sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg=="],
 
