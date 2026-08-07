@@ -24,6 +24,7 @@ export interface AgentEndResult {
 }
 
 type Persist = (state: LoopState | undefined) => void;
+type ExhaustedHandler = (state: LoopState) => void;
 
 function copyState(state: LoopState | undefined): LoopState | undefined {
   return state ? structuredClone(state) : undefined;
@@ -76,9 +77,14 @@ export function validateLoopState(value: unknown): LoopState {
 class LoopController {
   private state: LoopState | undefined;
   private persist: Persist = () => {};
+  private exhaustedHandlers = new Map<LoopOwner, ExhaustedHandler>();
 
   configure(persist: Persist): void {
     this.persist = persist;
+  }
+
+  setExhaustedHandler(owner: LoopOwner, handler: ExhaustedHandler): void {
+    this.exhaustedHandlers.set(owner, handler);
   }
 
   restore(value: unknown): void {
@@ -158,6 +164,8 @@ class LoopController {
       state.status = "exhausted";
       state.stopReason = `Maximum turn count reached (${state.maxTurns})`;
       this.save();
+      const snapshot = this.snapshot()!;
+      this.exhaustedHandlers.get(snapshot.owner)?.(snapshot);
       return { exhausted: true };
     }
 
