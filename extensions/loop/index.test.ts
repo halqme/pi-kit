@@ -6,7 +6,6 @@ import { loopController } from "./control.ts";
 
 test("loop follows up only while the task remains unfinished", async () => {
   let tool: any;
-  let before: any;
   let end: any;
   let startSession: any;
   const sent: string[] = [];
@@ -17,7 +16,6 @@ test("loop follows up only while the task remains unfinished", async () => {
       tool = value;
     },
     on(name: string, handler: any) {
-      if (name === "before_agent_start") before = handler;
       if (name === "agent_end") end = handler;
       if (name === "session_start") startSession = handler;
     },
@@ -35,7 +33,6 @@ test("loop follows up only while the task remains unfinished", async () => {
   loopExtension(pi);
   const ctx = { sessionManager: { getEntries: () => entries } } as any;
   await startSession({}, ctx);
-  await before({}, ctx);
 
   const started = await tool.execute(
     "id",
@@ -52,7 +49,6 @@ test("loop follows up only while the task remains unfinished", async () => {
   assert.match(sent[0], /No completion report/);
   assert.match(sent[0], /finish the change/);
 
-  await before({}, ctx);
   const continued = await tool.execute(
     "id",
     { action: "report", status: "continue", summary: "tests still running" },
@@ -65,7 +61,6 @@ test("loop follows up only while the task remains unfinished", async () => {
   assert.equal(sent.length, 2);
   assert.match(sent[1], /tests still running/);
 
-  await before({}, ctx);
   const done = await tool.execute(
     "id",
     { action: "report", status: "done", summary: "verified" },
@@ -80,9 +75,8 @@ test("loop follows up only while the task remains unfinished", async () => {
   assert.equal(loopController.snapshot()?.lastSummary, "verified");
 });
 
-test("loop ignores duplicate agent_end events within one agent turn", async () => {
+test("failed model runs do not consume loop turns or queued reports", async () => {
   let tool: any;
-  let before: any;
   let end: any;
   let startSession: any;
   const sent: string[] = [];
@@ -92,7 +86,6 @@ test("loop ignores duplicate agent_end events within one agent turn", async () =
       tool = value;
     },
     on(name: string, handler: any) {
-      if (name === "before_agent_start") before = handler;
       if (name === "agent_end") end = handler;
       if (name === "session_start") startSession = handler;
     },
@@ -108,27 +101,41 @@ test("loop ignores duplicate agent_end events within one agent turn", async () =
   loopExtension(pi);
   const ctx = { sessionManager: { getEntries: () => entries } } as any;
   await startSession({}, ctx);
-  await before({}, ctx);
-  await tool.execute("id", { action: "start", task: "dedupe", maxTurns: 4 });
-  await tool.execute("id", { action: "report", status: "continue", summary: "first turn" });
+  await tool.execute("id", { action: "start", task: "recover", maxTurns: 4 });
+  await tool.execute("id", {
+    action: "report",
+    status: "continue",
+    summary: "keep this report across retry",
+  });
 
-  await end({}, ctx);
-  await end({}, ctx);
-  assert.equal(sent.length, 1, "duplicate agent_end must not send a second follow-up");
-  assert.equal(loopController.snapshot()?.turns, 1, "duplicate agent_end must not consume a turn");
-  assert.match(sent[0], /first turn/);
+  await end(
+    {
+      messages: [
+        { role: "assistant", stopReason: "error", errorMessage: "connection timeout", content: [] },
+      ],
+    },
+    ctx,
+  );
+  assert.equal(sent.length, 0, "failed model runs must not enqueue a continuation");
+  assert.equal(loopController.snapshot()?.turns, 0, "failed model runs must not consume maxTurns");
+  assert.equal(
+    loopController.snapshot()?.pendingReport?.summary,
+    "keep this report across retry",
+    "a retry must preserve the report for the eventual successful turn end",
+  );
 
-  await before({}, ctx);
-  await tool.execute("id", { action: "report", status: "continue", summary: "second turn" });
-  await end({}, ctx);
-  assert.equal(sent.length, 2, "the next agent turn may send its own follow-up");
-  assert.equal(loopController.snapshot()?.turns, 2);
-  assert.match(sent[1], /second turn/);
+  await end(
+    { messages: [{ role: "assistant", stopReason: "stop", content: [] }] },
+    ctx,
+  );
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /keep this report across retry/);
+  assert.equal(loopController.snapshot()?.turns, 1);
+  assert.equal(loopController.snapshot()?.pendingReport, undefined);
 });
 
 test("loop exhausts instead of continuing forever", async () => {
   let tool: any;
-  let before: any;
   let end: any;
   let startSession: any;
   const sent: string[] = [];
@@ -139,7 +146,6 @@ test("loop exhausts instead of continuing forever", async () => {
       tool = value;
     },
     on(name: string, handler: any) {
-      if (name === "before_agent_start") before = handler;
       if (name === "agent_end") end = handler;
       if (name === "session_start") startSession = handler;
     },
@@ -156,7 +162,6 @@ test("loop exhausts instead of continuing forever", async () => {
   loopExtension(pi);
   const ctx = { sessionManager: { getEntries: () => entries } };
   await startSession({}, ctx);
-  await before({}, ctx);
   await tool.execute("id", { action: "start", task: "bounded", maxTurns: 1 });
   await end({}, ctx);
   assert.equal(sent.length, 0);
