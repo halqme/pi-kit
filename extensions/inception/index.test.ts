@@ -11,10 +11,7 @@ import {
 } from "./prompts.ts";
 
 test("agent-start prompt keeps core bias and adds request-specific guidance", () => {
-  const prompt = buildAgentStartPrompt({
-    prompt: "この設計をリファクタしてバグも修正して",
-    cwd: "/repo",
-  });
+  const prompt = buildAgentStartPrompt("この設計をリファクタしてバグも修正して");
   assert.match(prompt, /smallest complete change/);
   assert.match(prompt, /Repeated deterministic behavior belongs in code/);
   assert.match(prompt, /preserve observable behavior/);
@@ -23,7 +20,7 @@ test("agent-start prompt keeps core bias and adds request-specific guidance", ()
 
 test("tool classification distinguishes edits, checks, and async launches", () => {
   assert.equal(classifyTool("astrolabe", { action: "replace", replacement: "x" }), "mutation");
-  assert.equal(classifyTool("astrolabe", { action: "locate", scope: "." }), "inspection");
+  assert.equal(classifyTool("astrolabe", { action: "locate", scope: "." }), "other");
   assert.equal(classifyTool("bash", { command: "bun run test" }), "verification");
   assert.equal(
     classifyTool("bash", { command: "bun run --cwd extensions/inception check" }),
@@ -73,10 +70,10 @@ test("extension injects baseline in system prompt and one transient reminder aft
   } as unknown as ExtensionAPI;
   inceptionExtension(pi);
 
-  const before = await handlers.get("before_agent_start")?.(
-    { prompt: "fix this", systemPrompt: "base" },
-    { cwd: "/repo" },
-  );
+  const before = await handlers.get("before_agent_start")?.({
+    prompt: "fix this",
+    systemPrompt: "base",
+  });
   assert.match(before.systemPrompt, /^base/);
   assert.match(before.systemPrompt, /<inception>/);
 
@@ -97,7 +94,7 @@ test("extension injects baseline in system prompt and one transient reminder aft
   assert.equal(secondContext, undefined, "reminders are transient and consumed once");
 });
 
-test("inspection-only turns do not create reminder noise", async () => {
+test("read-only turns do not create reminder noise", async () => {
   const handlers = new Map<string, (...args: any[]) => any>();
   const pi = {
     on(name: string, handler: (...args: any[]) => any) {
@@ -106,10 +103,7 @@ test("inspection-only turns do not create reminder noise", async () => {
   } as unknown as ExtensionAPI;
   inceptionExtension(pi);
 
-  await handlers.get("before_agent_start")?.(
-    { prompt: "inspect this", systemPrompt: "base" },
-    { cwd: "/repo" },
-  );
+  await handlers.get("before_agent_start")?.({ prompt: "inspect this", systemPrompt: "base" });
   await handlers.get("tool_result")?.({
     toolName: "read",
     input: { path: "x.ts" },
