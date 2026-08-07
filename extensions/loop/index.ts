@@ -16,6 +16,8 @@ function restore(ctx: ExtensionContext): void {
 }
 
 export default function loopExtension(pi: ExtensionAPI): void {
+  let agentEndHandled = false;
+
   pi.registerTool({
     name: "loop",
     label: "Loop",
@@ -109,13 +111,21 @@ export default function loopExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    agentEndHandled = false;
     loopController.configure((state) => {
       if (state) pi.appendEntry(LOOP_STATE_ENTRY, state);
     });
     restore(ctx);
   });
 
+  pi.on("before_agent_start", async () => {
+    agentEndHandled = false;
+  });
+
   pi.on("agent_end", async () => {
+    if (agentEndHandled) return;
+    agentEndHandled = true;
+
     const result = loopController.onAgentEnd();
     if (result.followUp) pi.sendUserMessage(result.followUp, { deliverAs: "followUp" });
     if (result.exhausted) {
