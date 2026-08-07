@@ -6,14 +6,21 @@ Always-on engineering-bias reminders for Pi. Inception has no tool, slash comman
 
 Inception uses two decision boundaries:
 
-- `before_agent_start`: appends a short engineering bias to the system prompt for the current request. `prompts.ts` may add request-specific guidance for refactoring, design, debugging, or review work.
-- `tool_result` + `turn_end` + `context`: observes tool outcomes during a turn, builds at most one contextual reminder at the turn boundary, then injects it as a hidden transient custom message before the next LLM call. Inspection-only turns produce no reminder.
+- `before_agent_start`: appends a short engineering bias to the system prompt for the current request. `prompts/agent-start.ts` selects request-specific guidance for refactoring, design, debugging, or review work.
+- `tool_result` + `turn_end` + `context`: observes tool outcomes during a turn, builds at most one contextual reminder with `prompts/turn-boundary.ts`, then injects it as a hidden transient custom message before the next LLM call. Read-only turns produce no reminder.
 
-The turn-boundary reminder currently reacts to project mutations, failed tool/check results, repeated mutations, and successful verification after mutation. It is intentionally transient: `context` modification does not persist reminder messages into the session history.
+The turn-boundary reminder currently reacts to project mutations, failed tool/check results, repeated mutations, and synchronous verification after mutation. It is intentionally transient: `context` modification does not persist reminder messages into the session history.
 
 ## Prompt ownership
 
-`index.ts` only wires Pi lifecycle events and keeps ephemeral per-turn state. Prompt prose, tool classification, and context-sensitive prompt selection live in `prompts.ts`. Keep that boundary: changing the personality should normally change `prompts.ts`; changing injection mechanics should normally change `index.ts`.
+Injection mechanics and prompt content are separate:
+
+- `index.ts`: Pi lifecycle wiring and ephemeral per-turn state
+- `observation.ts`: tool-result classification and accumulated signals
+- `prompts/agent-start.ts`: prompt injected at agent start and its request-context selection
+- `prompts/turn-boundary.ts`: prompt injected after relevant tool activity and its context-dependent construction
+
+Keep prompt text with its injection timing. TypeScript is intentional: each prompt module can select or construct guidance from the context available at that boundary without coupling the prose to hook plumbing.
 
 Stable deterministic behavior still belongs in extensions/tools rather than prompt prose. Inception is for judgment bias that cannot be mechanically enforced without changing the meaning of the task.
 
