@@ -30,12 +30,10 @@ Prefer `threads` instead when the important abstraction is a separately tracked 
 
 ## Coordination boundaries
 
-`agent_team` is advisory deliberation, not an execution stage. Its output may inform either the human or the parent agent; do not invent a mandatory implementation handoff after it.
-
 When several threads or child agents can mutate shared state, the coordinator is responsible for choosing an appropriate concurrency strategy from the facts exposed by the tools and repository. Do not hard-code worktree or file-partition policy here when the agents can determine the safe strategy from the task.
 
 ## Evidence and completion
 
-Preserve durable handles for any operation that can outlive the current turn. Treat process completion, loop completion, watch matches, child claims, and agent-team conclusions only as the evidence they actually provide. Apply the task's normal verification workflow before reporting semantic completion.
+Preserve durable handles for any operation that can outlive the current turn. Treat process completion, loop completion, watch matches, child claims, and deliberative conclusions only as the evidence they actually provide. Apply the task's normal verification workflow before reporting semantic completion.
 
 Before finishing, report any operation resources that intentionally remain active.
