@@ -23,11 +23,23 @@ function taskFor(state: PlanState): string {
 
 export default function runnerExtension(pi: ExtensionAPI): void {
   let state: PlanState = emptyPlan("runner");
+
+  loopController.setExhaustedHandler("runner", (loop) => {
+    if (state.status !== "running") return;
+    state.status = "stopped";
+    state.stopReason = loop.stopReason ?? `Runner loop exhausted after ${loop.maxTurns} turns`;
+    savePlanState(pi, state);
+  });
+
+  pi.on("session_start", async (_event, ctx) => {
+    state = restorePlanState(ctx.sessionManager.getEntries()) ?? state;
+  });
+
   pi.registerTool({
     name: "runner",
     label: "Runner",
     description:
-      "Execute an approved TODO plan through the shared loop continuation controller. start claims the loop for the plan but does not create a new turn; begin work immediately in the current turn. Before ending each running turn, call progress with completed steps and/or a concise summary. progress keeps the loop active while steps remain and completes it when the plan is finished. stop ends both the plan and its loop.",
+      "Execute an approved TODO plan through the shared loop continuation controller. start claims the loop for the plan but does not create a new turn; begin work immediately in the current turn. Before ending each running turn, call progress with completed steps and/or a concise summary. progress keeps the loop active while steps remain and completes it when the plan is finished. stop ends both the plan and its loop. If maxTurns is exhausted, the running plan is stopped automatically.",
     promptGuidelines: [
       "After runner.start, execute the first remaining step in the current turn instead of waiting for a follow-up.",
       "Before every agent_end while runner is active, call runner.progress even when no whole step completed; use summary to report partial progress.",
