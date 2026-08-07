@@ -1,17 +1,18 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { loopController, validateLoopState } from "./control.ts";
+import { loopController } from "./control.ts";
 
 const LOOP_STATE_ENTRY = "loop-state";
 
 function restore(ctx: ExtensionContext): void {
-  const entry = [...ctx.sessionManager.getEntries()]
-    .reverse()
-    .find(
-      (candidate) =>
-        candidate?.type === "custom" && candidate.customType === LOOP_STATE_ENTRY,
-    );
-  loopController.restore(entry?.data === undefined ? undefined : validateLoopState(entry.data));
+  for (const candidate of [...ctx.sessionManager.getEntries()].reverse()) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const entry = candidate as { type?: unknown; customType?: unknown; data?: unknown };
+    if (entry.type !== "custom" || entry.customType !== LOOP_STATE_ENTRY) continue;
+    loopController.restore(entry.data);
+    return;
+  }
+  loopController.restore(undefined);
 }
 
 export default function loopExtension(pi: ExtensionAPI): void {
