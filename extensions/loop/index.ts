@@ -15,12 +15,26 @@ function restore(ctx: ExtensionContext): void {
   loopController.restore(undefined);
 }
 
+function endedWithModelError(event: unknown): boolean {
+  if (!event || typeof event !== "object") return false;
+  const messages = (event as { messages?: unknown }).messages;
+  if (!Array.isArray(messages)) return false;
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (!message || typeof message !== "object") continue;
+    const candidate = message as { role?: unknown; stopReason?: unknown };
+    if (candidate.role !== "assistant") continue;
+    return candidate.stopReason === "error";
+  }
+  return false;
+}
+
 export default function loopExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "loop",
     label: "Loop",
     description:
-      "Manage one bounded self-continuation task. start defines the task but does not send an immediate follow-up. While a loop is active, report continue, done, or blocked before ending each turn; agent_end sends a follow-up only while the task remains unfinished. maxTurns is a runaway guard, not a completion condition. Runner-owned loops must be reported through runner instead of this tool.",
+      "Manage one bounded self-continuation task. start defines the task but does not send an immediate follow-up. While a loop is active, report continue, done, or blocked before ending each turn; agent_end sends a follow-up only while the task remains unfinished. Failed model runs do not consume a loop turn. maxTurns is a runaway guard, not a completion condition. Runner-owned loops must be reported through runner instead of this tool.",
     promptGuidelines: [
       "Use loop when one task needs multiple agent turns and the agent can judge its own completion state.",
       "After start, work on the task in the current turn; do not end the turn just to wait for the loop.",
@@ -115,7 +129,8 @@ export default function loopExtension(pi: ExtensionAPI): void {
     restore(ctx);
   });
 
-  pi.on("agent_end", async () => {
+  pi.on("agent_end", async (event) => {
+    if (endedWithModelError(event)) return;
     const result = loopController.onAgentEnd();
     if (result.followUp) pi.sendUserMessage(result.followUp, { deliverAs: "followUp" });
     if (result.exhausted) {

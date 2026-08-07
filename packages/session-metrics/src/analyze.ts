@@ -45,6 +45,8 @@ export interface MetricSummary {
     string,
     { model: string; effort: string; messages: number; usage: UsageTotals }
   >;
+  toolErrors: number;
+  modelErrors: number;
   errors: number;
   tokens: UsageTotals;
 }
@@ -77,6 +79,8 @@ export function createMetrics(): SessionMetrics {
     models: {},
     thinkingLevels: {},
     modelEfforts: {},
+    toolErrors: 0,
+    modelErrors: 0,
     errors: 0,
     tokens: {
       input: 0,
@@ -104,6 +108,8 @@ export function createReport(): MetricsReport {
 export function analyzeLines(lines: Iterable<string>): SessionMetrics {
   const result = createMetrics();
   let thinkingLevel = "unknown";
+  let explicitTurnEnds = 0;
+  let assistantTurnEnds = 0;
   for (const line of lines) {
     if (!line.trim()) continue;
     let entry: any;
@@ -124,7 +130,7 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
       continue;
     }
     if (entry.type === "turn_end") {
-      result.turns++;
+      explicitTurnEnds++;
       continue;
     }
     if (entry.type !== "message") continue;
@@ -144,6 +150,11 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
     }
     if (message?.role === "assistant") {
       result.assistantMessages++;
+      if (message.stopReason === "stop") assistantTurnEnds++;
+      if (message.stopReason === "error") {
+        result.modelErrors++;
+        result.errors++;
+      }
       const usage = message.usage;
       const model = message.model ?? "unknown";
       const modelUsage = (result.models[model] ??= {
@@ -239,7 +250,10 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
         }
     }
     if (message?.role === "toolResult") {
-      if (message.isError) result.errors++;
+      if (message.isError) {
+        result.toolErrors++;
+        result.errors++;
+      }
       const tool = (result.toolUsage[message.toolName] ??= {
         calls: 0,
         estimatedResultTokens: 0,
@@ -255,6 +269,7 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
       if (message.isError) tool.errors++;
     }
   }
+  result.turns = assistantTurnEnds > 0 ? assistantTurnEnds : explicitTurnEnds;
   return result;
 }
 
@@ -303,6 +318,8 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.toolResults += source.toolResults;
   target.turns += source.turns;
   target.toolCalls += source.toolCalls;
+  target.toolErrors += source.toolErrors;
+  target.modelErrors += source.modelErrors;
   target.errors += source.errors;
   for (const [name, count] of Object.entries(source.toolCallsByName))
     target.toolCallsByName[name] = (target.toolCallsByName[name] ?? 0) + count;

@@ -170,7 +170,7 @@ export async function locateDetailed(
         if (score > 0) {
           const parent = parentName(file, node, adapter);
           matches.push({
-            handle: handles.issue(file, node, "source"),
+            handle: handles.issue(file, node, "structure"),
             path,
             name,
             ...(parent ? { parent } : {}),

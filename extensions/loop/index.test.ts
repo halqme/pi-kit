@@ -75,6 +75,65 @@ test("loop follows up only while the task remains unfinished", async () => {
   assert.equal(loopController.snapshot()?.lastSummary, "verified");
 });
 
+test("failed model runs do not consume loop turns or queued reports", async () => {
+  let tool: any;
+  let end: any;
+  let startSession: any;
+  const sent: string[] = [];
+  const entries: any[] = [];
+  const pi = {
+    registerTool(value: any) {
+      tool = value;
+    },
+    on(name: string, handler: any) {
+      if (name === "agent_end") end = handler;
+      if (name === "session_start") startSession = handler;
+    },
+    appendEntry(type: string, data: unknown) {
+      entries.push({ type: "custom", customType: type, data });
+    },
+    sendUserMessage(message: string) {
+      sent.push(message);
+    },
+    sendMessage() {},
+  } as unknown as ExtensionAPI;
+
+  loopExtension(pi);
+  const ctx = { sessionManager: { getEntries: () => entries } } as any;
+  await startSession({}, ctx);
+  await tool.execute("id", { action: "start", task: "recover", maxTurns: 4 });
+  await tool.execute("id", {
+    action: "report",
+    status: "continue",
+    summary: "keep this report across retry",
+  });
+
+  await end(
+    {
+      messages: [
+        { role: "assistant", stopReason: "error", errorMessage: "connection timeout", content: [] },
+      ],
+    },
+    ctx,
+  );
+  assert.equal(sent.length, 0, "failed model runs must not enqueue a continuation");
+  assert.equal(loopController.snapshot()?.turns, 0, "failed model runs must not consume maxTurns");
+  assert.equal(
+    loopController.snapshot()?.pendingReport?.summary,
+    "keep this report across retry",
+    "a retry must preserve the report for the eventual successful turn end",
+  );
+
+  await end(
+    { messages: [{ role: "assistant", stopReason: "stop", content: [] }] },
+    ctx,
+  );
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /keep this report across retry/);
+  assert.equal(loopController.snapshot()?.turns, 1);
+  assert.equal(loopController.snapshot()?.pendingReport, undefined);
+});
+
 test("loop exhausts instead of continuing forever", async () => {
   let tool: any;
   let end: any;
