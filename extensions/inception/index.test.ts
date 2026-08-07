@@ -2,13 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import inceptionExtension from "./index.ts";
-import {
-  buildAgentStartPrompt,
-  buildTurnBoundaryPrompt,
-  classifyTool,
-  createTurnObservation,
-  observeToolResult,
-} from "./prompts.ts";
+import { classifyTool, createTurnObservation, observeToolResult } from "./observation.ts";
+import { buildAgentStartPrompt } from "./prompts/agent-start.ts";
+import { buildTurnBoundaryPrompt } from "./prompts/turn-boundary.ts";
 
 test("agent-start prompt keeps core bias and adds request-specific guidance", () => {
   const prompt = buildAgentStartPrompt("この設計をリファクタしてバグも修正して");
