@@ -90,17 +90,8 @@ function inputRecord(input: unknown): Record<string, unknown> | undefined {
 }
 
 function commandFromInput(input: unknown): string | undefined {
-  const record = inputRecord(input);
-  if (!record) return undefined;
-  if (typeof record.command === "string") return record.command;
-  if (Array.isArray(record.processes))
-    return record.processes
-      .flatMap((item) => {
-        const process = inputRecord(item);
-        return typeof process?.command === "string" ? [process.command] : [];
-      })
-      .join("\n");
-  return undefined;
+  const command = inputRecord(input)?.command;
+  return typeof command === "string" ? command : undefined;
 }
 
 function actionFromInput(input: unknown): string | undefined {
@@ -109,13 +100,13 @@ function actionFromInput(input: unknown): string | undefined {
 }
 
 function looksLikeVerification(command: string): boolean {
-  return /(?:^|[;&|]\s*|\s)(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?(?:test|check|lint|typecheck)\b|\b(?:pytest|cargo\s+test|go\s+test|tsc\s+--noEmit|oxlint|git\s+diff\s+--check)\b/i.test(
+  return /\b(?:bun|npm|pnpm|yarn)\b[^\n]*\b(?:test|check|lint|typecheck)\b|\b(?:pytest|cargo\s+test|go\s+test|tsc\s+--noEmit|oxlint|git\s+diff\s+--check)\b/i.test(
     command,
   );
 }
 
 function looksLikeMutation(command: string): boolean {
-  return /\bgit\s+(?:add|commit|checkout|switch|reset|restore|merge|rebase)\b|\b(?:rm|mv|cp|mkdir|touch)\b|\b(?:sed\s+-i|perl\s+-pi)\b|(?:^|\s)(?:>|>>)(?:\s|$)/i.test(
+  return /\bgit\s+(?:add|commit|checkout|switch|reset|restore|merge|rebase)\b|\b(?:rm|mv|cp|mkdir|touch)\b|\b(?:sed\s+-i|perl\s+-pi)\b|(?:^|\s)(?:>>|>)(?:\s|$)/i.test(
     command,
   );
 }
@@ -131,23 +122,9 @@ export function classifyTool(toolName: string, input: unknown): ToolKind {
   if (["read", "grep", "find", "ls", "web_search", "web_fetch"].includes(name))
     return "inspection";
 
-  if (name === "background_process") {
-    if (action !== "start" && action !== "start_many") return "other";
-    const command = commandFromInput(input);
-    if (!command) return "other";
-    if (looksLikeVerification(command)) return "verification";
-    if (looksLikeMutation(command)) return "mutation";
-    return "other";
-  }
-
-  if (name === "terminal") {
-    if (action !== "call") return "other";
-    const command = commandFromInput(input);
-    if (!command) return "other";
-    if (looksLikeVerification(command)) return "verification";
-    if (looksLikeMutation(command)) return "mutation";
-    return "other";
-  }
+  // background_process start and terminal call return acceptance, not command completion.
+  // Do not infer mutation or verification success from an asynchronous launch result.
+  if (name === "background_process" || name === "terminal") return "other";
 
   if (name === "bash") {
     const command = commandFromInput(input);
