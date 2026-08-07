@@ -93,8 +93,10 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
     name: TOOL_NAME,
     label: "Background Process",
     description:
-      "Start one or more durable background shell commands, list, check, or stop them. Use for dev servers, watchers, builds, tests, and other commands that should outlive the current turn. After starting a long-running command, do not wait with sleep, polling, ps, or repeated check calls: report that it started and end the turn. Completion is delivered automatically, or on session resume if the session was interrupted. Completed processes are hidden unless explicitly requested.",
+      "Manage durable detached, non-interactive shell commands. Use for dev servers, watchers, builds, tests, batch jobs, and other commands that may outlive the current turn when later stdin, TTY state, control keys, and output-pattern watches are unnecessary; use terminal when those interactive capabilities are required. After starting a process, do not wait with sleep, polling, ps, or repeated check calls. Completion is delivered automatically, including after session resume. Completed processes are hidden unless explicitly requested.",
     promptGuidelines: [
+      "Choose background_process by interaction model, not by expected duration: long-lived servers and watchers are valid when they do not need later TTY interaction.",
+      "Use terminal instead when later stdin, control keys, interactive TTY state, or pattern watches are required.",
       "Use start or start_many for commands that may take longer than the current turn.",
       "After starting a background process, do not use sleep, polling, ps, or check to wait for completion.",
       "Report that the process started and end the turn; background-process will notify you when it completes.",
