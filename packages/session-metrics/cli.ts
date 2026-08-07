@@ -1,9 +1,8 @@
 #!/usr/bin/env bun
-import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { addSkillAvailability, addToReport, analyzeFile, createReport } from "./src/analyze.ts";
+import { buildDatabaseReport } from "./src/database-report.ts";
 import { reportSections, type ReportOptions, type ReportView } from "./src/report.ts";
 import { ingestSessions, queryDatabase, showStats } from "./src/storage.ts";
 
@@ -13,17 +12,6 @@ interface CliOptions extends ReportOptions {
   target: string;
   database?: string | undefined;
   sql?: string | undefined;
-}
-
-async function sessionFiles(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) files.push(...(await sessionFiles(path)));
-    else if (entry.isFile() && entry.name.endsWith(".jsonl")) files.push(path);
-  }
-  return files.sort();
 }
 
 function usage(): string {
@@ -69,18 +57,10 @@ function parseArgs(args: string[]): CliOptions {
   return { command, target, view, json, since, limit, database, sql };
 }
 
-async function buildReport(target: string) {
-  const files = target.endsWith(".jsonl") ? [target] : await sessionFiles(target);
-  const result = createReport();
-  for (const file of files) addToReport(result, await analyzeFile(file));
-  await addSkillAvailability(result);
-  return result;
-}
-
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const options = parseArgs(args);
   if (options.command === "report") {
-    const result = await buildReport(options.target);
+    const result = await buildDatabaseReport(options.database, options.since, options.limit);
     if (options.json) console.log(JSON.stringify(result, null, 2));
     else {
       const output = reportSections(result, options)

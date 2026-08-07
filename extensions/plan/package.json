@@ -1,0 +1,14 @@
+{
+  "name": "@halqme/plan",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun run typecheck",
+    "typecheck": "tsc --noEmit",
+    "dev": "pi -e ./index.ts"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -8,16 +8,20 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const DEFAULT_DATABASE = join(homedir(), ".pi", "agent", "session-metrics.duckdb");
 const DUCKDB = process.env.DUCKDB_PATH ?? "duckdb";
+const INGEST_VERSION = 5;
 
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sessions (event_id VARCHAR PRIMARY KEY, source_path VARCHAR, session_id VARCHAR, cwd VARCHAR, started_at TIMESTAMP);
+CREATE TABLE IF NOT EXISTS requests (event_id VARCHAR PRIMARY KEY, source_path VARCHAR, session_id VARCHAR, prompt VARCHAR, model VARCHAR, image_count INTEGER, created_at TIMESTAMP);
 CREATE TABLE IF NOT EXISTS messages (event_id VARCHAR PRIMARY KEY, source_path VARCHAR, session_id VARCHAR, role VARCHAR, model VARCHAR, created_at TIMESTAMP);
 CREATE TABLE IF NOT EXISTS turns (event_id VARCHAR PRIMARY KEY, source_path VARCHAR, session_id VARCHAR, created_at TIMESTAMP);
 CREATE TABLE IF NOT EXISTS assistant_usage (event_id VARCHAR PRIMARY KEY, source_path VARCHAR, session_id VARCHAR, model VARCHAR, input_tokens BIGINT, output_tokens BIGINT, cache_read_tokens BIGINT, cache_write_tokens BIGINT, reasoning_tokens BIGINT, total_tokens BIGINT, cost DOUBLE, cache_rebill_cost DOUBLE);
 CREATE TABLE IF NOT EXISTS tool_calls (event_id VARCHAR PRIMARY KEY, source_path VARCHAR, session_id VARCHAR, tool_call_id VARCHAR, tool_name VARCHAR, input_bytes BIGINT, created_at TIMESTAMP);
+CREATE TABLE IF NOT EXISTS tool_actions (event_id VARCHAR PRIMARY KEY, source_path VARCHAR, session_id VARCHAR, tool_call_id VARCHAR, tool_name VARCHAR, action_name VARCHAR, payload VARCHAR, created_at TIMESTAMP);
 CREATE TABLE IF NOT EXISTS tool_results (event_id VARCHAR PRIMARY KEY, source_path VARCHAR, session_id VARCHAR, tool_call_id VARCHAR, tool_name VARCHAR, is_error BOOLEAN, error_kind VARCHAR, reported_tokens BIGINT, estimated_tokens BIGINT, input_bytes BIGINT, output_bytes BIGINT, duration_ms BIGINT, result_hash VARCHAR, preview VARCHAR, created_at TIMESTAMP);
 CREATE TABLE IF NOT EXISTS skill_events (event_id VARCHAR PRIMARY KEY, source_path VARCHAR, session_id VARCHAR, skill_name VARCHAR, event_kind VARCHAR, created_at TIMESTAMP);
-CREATE TABLE IF NOT EXISTS indexed_files (path VARCHAR PRIMARY KEY, session_id VARCHAR, mtime_ms BIGINT, size BIGINT, sha256 VARCHAR, indexed_at TIMESTAMP DEFAULT current_timestamp);
+CREATE TABLE IF NOT EXISTS indexed_files (path VARCHAR PRIMARY KEY, session_id VARCHAR, mtime_ms BIGINT, size BIGINT, sha256 VARCHAR, parser_version INTEGER DEFAULT 1, indexed_at TIMESTAMP DEFAULT current_timestamp);
+CREATE TABLE IF NOT EXISTS live_events (event_id VARCHAR PRIMARY KEY, session_id VARCHAR, event_type VARCHAR, tool_call_id VARCHAR, tool_name VARCHAR, payload VARCHAR, is_error BOOLEAN, created_at TIMESTAMP);
 `;
 
 export interface IngestResult {
@@ -98,7 +102,8 @@ ALTER TABLE tool_results ADD COLUMN IF NOT EXISTS input_bytes BIGINT;
 ALTER TABLE tool_results ADD COLUMN IF NOT EXISTS output_bytes BIGINT;
 ALTER TABLE tool_results ADD COLUMN IF NOT EXISTS duration_ms BIGINT;
 ALTER TABLE tool_results ADD COLUMN IF NOT EXISTS result_hash VARCHAR;
-ALTER TABLE tool_results ADD COLUMN IF NOT EXISTS preview VARCHAR;`,
+ALTER TABLE tool_results ADD COLUMN IF NOT EXISTS preview VARCHAR;
+ALTER TABLE indexed_files ADD COLUMN IF NOT EXISTS parser_version INTEGER DEFAULT 1;`,
   );
 }
 
@@ -149,6 +154,9 @@ function eventRows(path: string, text: string): { sessionId: string | undefined;
           .filter((block: any) => block?.type === "text")
           .map((block: any) => block.text)
           .join("\n");
+        sql.push(
+          `INSERT INTO requests VALUES (${quote(eventId)}, ${quote(path)}, ${quote(sessionId)}, ${quote(textContent)}, NULL, 0, ${timestamp(entry.timestamp)});`,
+        );
         let skillIndex = 0;
         for (const match of textContent.matchAll(/(?:^|\s)\/skill:([a-z0-9-]+)/gi))
           sql.push(
@@ -170,11 +178,16 @@ function eventRows(path: string, text: string): { sessionId: string | undefined;
               inputBytes,
               ...(callTimestamp !== undefined ? { timestamp: callTimestamp } : {}),
             });
+            const actionName = typeof block.arguments?.action === "string" ? block.arguments.action : undefined;
+            if (actionName)
+              sql.push(
+                `INSERT INTO tool_actions VALUES (${quote(`${eventId}:action:${index}`)}, ${quote(path)}, ${quote(sessionId)}, ${quote(toolCallId)}, ${quote(block.name ?? "unknown")}, ${quote(actionName)}, ${quote(JSON.stringify(block.arguments ?? {}))}, ${timestamp(entry.timestamp)});`,
+              );
             sql.push(
               `INSERT INTO tool_calls (event_id, source_path, session_id, tool_call_id, tool_name, input_bytes, created_at) VALUES (${quote(`${eventId}:tool:${index}`)}, ${quote(path)}, ${quote(sessionId)}, ${quote(toolCallId)}, ${quote(block.name ?? "unknown")}, ${quote(inputBytes)}, ${timestamp(entry.timestamp)});`,
             );
-            const skillPath = String(block.arguments?.path ?? block.arguments?.file ?? "").match(
-              /(?:^|[/\\])skills[/\\]([^/\\]+)[/\\]SKILL\\.md$/i,
+            const skillPath = JSON.stringify(block.arguments ?? {}).match(
+              /(?:^|[/\\])skills[/\\]([^/\\]+)[/\\]SKILL\.md/i,
             );
             if (skillPath?.[1])
               sql.push(
@@ -221,7 +234,7 @@ export async function ingestSessions(
     const sha256 = createHash("sha256").update(text).digest("hex");
     const existing = await run(
       database,
-      `SELECT path, sha256, size, mtime_ms FROM indexed_files WHERE path = ${quote(path)};`,
+      `SELECT path, sha256, size, mtime_ms, parser_version FROM indexed_files WHERE path = ${quote(path)};`,
       true,
     );
     if (existing) {
@@ -230,11 +243,13 @@ export async function ingestSessions(
           sha256: string;
           size: number;
           mtime_ms: number;
+          parser_version?: number;
         }>;
         if (
           rows[0]?.sha256 === sha256 &&
           Number(rows[0].size) === info.size &&
-          Number(rows[0].mtime_ms) === Math.trunc(info.mtimeMs)
+          Number(rows[0].mtime_ms) === Math.trunc(info.mtimeMs) &&
+          Number(rows[0].parser_version ?? 1) === INGEST_VERSION
         ) {
           skipped++;
           continue;
@@ -244,23 +259,29 @@ export async function ingestSessions(
       }
     }
     const parsed = eventRows(path, text);
-    const deleteSql = [
-      "BEGIN;",
-      ...[
-        "sessions",
-        "messages",
-        "turns",
-        "assistant_usage",
-        "tool_calls",
-        "tool_results",
-        "skill_events",
-      ].map((table) => `DELETE FROM ${table} WHERE source_path = ${quote(path)};`),
-      `DELETE FROM indexed_files WHERE path = ${quote(path)};`,
-      ...parsed.sql,
-      `INSERT INTO indexed_files (path, session_id, mtime_ms, size, sha256) VALUES (${quote(path)}, ${quote(parsed.sessionId ?? null)}, ${quote(Math.trunc(info.mtimeMs))}, ${quote(info.size)}, ${quote(sha256)});`,
-      "COMMIT;",
-    ].join("\n");
-    await run(database, deleteSql);
+    const tables = [
+      "sessions",
+      "requests",
+      "messages",
+      "turns",
+      "assistant_usage",
+      "tool_calls",
+      "tool_actions",
+      "tool_results",
+      "skill_events",
+    ];
+    await run(
+      database,
+      ["BEGIN;", ...tables.map((table) => `DELETE FROM ${table} WHERE source_path = ${quote(path)};`), `DELETE FROM indexed_files WHERE path = ${quote(path)};`, "COMMIT;"].join("\n"),
+    );
+    const chunkSize = 500;
+    for (let index = 0; index < parsed.sql.length; index += chunkSize) {
+      await run(database, ["BEGIN;", ...parsed.sql.slice(index, index + chunkSize), "COMMIT;"].join("\n"));
+    }
+    await run(
+      database,
+      `INSERT INTO indexed_files (path, session_id, mtime_ms, size, sha256, parser_version) VALUES (${quote(path)}, ${quote(parsed.sessionId ?? null)}, ${quote(Math.trunc(info.mtimeMs))}, ${quote(info.size)}, ${quote(sha256)}, ${quote(INGEST_VERSION)});`,
+    );
     indexed++;
   }
   return { indexed, skipped };
@@ -270,10 +291,12 @@ export async function showStats(database = DEFAULT_DATABASE): Promise<string> {
   await ensureSchema(database);
   const tables = [
     "sessions",
+    "requests",
     "messages",
     "turns",
     "assistant_usage",
     "tool_calls",
+    "tool_actions",
     "tool_results",
     "skill_events",
     "indexed_files",
@@ -283,6 +306,26 @@ export async function showStats(database = DEFAULT_DATABASE): Promise<string> {
       .map((table) => `SELECT ${quote(table)} AS table_name, count(*) AS rows FROM ${table}`)
       .join(" UNION ALL ") + ";";
   return await run(database, sql, true);
+}
+
+export async function recordLiveEvent(
+  event: {
+    sessionId: string;
+    eventType: string;
+    toolCallId?: string;
+    toolName?: string;
+    payload?: unknown;
+    isError?: boolean;
+    createdAt?: number;
+  },
+  database = DEFAULT_DATABASE,
+): Promise<void> {
+  await ensureSchema(database);
+  const eventId = `${event.sessionId}:${event.eventType}:${event.toolCallId ?? randomUUID()}:${event.createdAt ?? Date.now()}`;
+  await run(
+    database,
+    `INSERT INTO live_events VALUES (${quote(eventId)}, ${quote(event.sessionId)}, ${quote(event.eventType)}, ${quote(event.toolCallId ?? null)}, ${quote(event.toolName ?? null)}, ${quote(JSON.stringify(event.payload ?? null))}, ${quote(event.isError ?? false)}, ${timestamp(event.createdAt ?? Date.now())});`,
+  );
 }
 
 export async function queryDatabase(sql: string, database = DEFAULT_DATABASE): Promise<string> {

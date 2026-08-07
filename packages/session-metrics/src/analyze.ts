@@ -303,18 +303,27 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
     target.toolCallsByName[name] = (target.toolCallsByName[name] ?? 0) + count;
   for (const [name, usage] of Object.entries(source.toolUsage)) {
     const item = (target.toolUsage[name] ??= {
+      available: usage.available ?? false,
       calls: 0,
       estimatedResultTokens: 0,
       reportedTokens: 0,
       errors: 0,
     });
+    if (usage.available !== undefined) item.available = usage.available;
     item.calls += usage.calls;
     item.estimatedResultTokens += usage.estimatedResultTokens;
     item.reportedTokens += usage.reportedTokens;
     item.errors += usage.errors;
   }
   for (const [name, skill] of Object.entries(source.skills)) {
-    const item = (target.skills[name] ??= { reads: 0, explicit: 0 });
+    const item = (target.skills[name] ??= {
+      reads: 0,
+      explicit: 0,
+      existsGlobally: skill.existsGlobally ?? false,
+      existsInProject: skill.existsInProject ?? false,
+    });
+    if (skill.existsGlobally !== undefined) item.existsGlobally = skill.existsGlobally;
+    if (skill.existsInProject !== undefined) item.existsInProject = skill.existsInProject;
     item.reads += skill.reads;
     item.explicit += skill.explicit;
   }

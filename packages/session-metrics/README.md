@@ -1,6 +1,6 @@
 # session-metrics
 
-PiのセッションJSONLを集計するCLIです。デフォルトでは人間向けのサマリーを表示します。表示にはBun組み込みの `Bun.markdown.ansi()` を使い、Markdownテーブルを端末向けの枠線・色付き表示へ変換します。
+DuckDBに記録されたPiのメトリクスを集計するCLIです。デフォルトでは人間向けのサマリーを表示します。JSONLの同期はsession-metrics拡張が継続的に行います。表示にはBun組み込みの `Bun.markdown.ansi()` を使い、Markdownテーブルを端末向けの枠線・色付き表示へ変換します。
 
 ```sh
 session-metrics
@@ -13,7 +13,7 @@ session-metrics --skills
 session-metrics --tools
 ```
 
-`--json` は既存の `MetricsReport` をJSONとして出力します。スクリプトから利用する場合はこの形式を使用してください。JSONLファイルまたはセッションディレクトリを最初の引数に指定できます。省略時は `~/.pi/agent/sessions` です。
+`--json` は既存の `MetricsReport` をJSONとして出力します。スクリプトから利用する場合はこの形式を使用してください。レポートはDuckDBのみを参照します。JSONLの取り込みを手動で行う場合だけ `ingest [path]` を使用します。
 
 ## DuckDBストレージ
 
