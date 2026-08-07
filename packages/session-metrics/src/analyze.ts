@@ -32,14 +32,11 @@ export interface MetricSummary {
   sessions: number;
   messages: number;
   userMessages: number;
-  humanUserMessages: number;
-  syntheticUserMessages: number;
   assistantMessages: number;
   toolResults: number;
   turns: number;
   toolCalls: number;
   toolCallsByName: Record<string, number>;
-  toolCallsByOperation: Record<string, number>;
   toolUsage: Record<string, ToolMetrics>;
   skills: Record<string, SkillMetrics>;
   models: Record<string, { messages: number; usage: UsageTotals }>;
@@ -67,32 +64,16 @@ export interface MetricsReport extends MetricSummary {
   projects: Record<string, MetricSummary>;
 }
 
-function createUsage(): UsageTotals {
-  return {
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
-    reasoning: 0,
-    total: 0,
-    cost: 0,
-    cacheCost: 0,
-  };
-}
-
 export function createMetrics(): SessionMetrics {
   return {
     sessions: 0,
     messages: 0,
     userMessages: 0,
-    humanUserMessages: 0,
-    syntheticUserMessages: 0,
     assistantMessages: 0,
     toolResults: 0,
     turns: 0,
     toolCalls: 0,
     toolCallsByName: {},
-    toolCallsByOperation: {},
     toolUsage: {},
     skills: {},
     models: {},
@@ -101,7 +82,16 @@ export function createMetrics(): SessionMetrics {
     toolErrors: 0,
     modelErrors: 0,
     errors: 0,
-    tokens: createUsage(),
+    tokens: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: 0,
+      total: 0,
+      cost: 0,
+      cacheCost: 0,
+    },
   };
 }
 
@@ -113,28 +103,6 @@ export function createReport(): MetricsReport {
     monthly: {},
     projects: {},
   };
-}
-
-function textContent(message: any): string {
-  return (message?.content ?? [])
-    .filter((block: any) => block.type === "text")
-    .map((block: any) => block.text)
-    .join("\n");
-}
-
-function isSyntheticContinuationMessage(text: string): boolean {
-  if (!text.includes("\n\nContinue the active task:\n\n")) return false;
-  if (!text.includes("Before ending the next turn,")) return false;
-  return (
-    text.startsWith("Previous progress report:") ||
-    text.startsWith("No completion report was submitted in the previous turn.")
-  );
-}
-
-function operationName(toolName: unknown, args: unknown): string | undefined {
-  if (typeof toolName !== "string" || !args || typeof args !== "object") return undefined;
-  const action = (args as Record<string, unknown>).action;
-  return typeof action === "string" && action ? `${toolName}.${action}` : undefined;
 }
 
 export function analyzeLines(lines: Iterable<string>): SessionMetrics {
@@ -168,17 +136,18 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
     if (entry.type !== "message") continue;
     const message = entry.message;
     result.messages++;
+    if (message?.role === "user") result.userMessages++;
+    if (message?.role === "toolResult") result.toolResults++;
     if (message?.role === "user") {
-      result.userMessages++;
-      const text = textContent(message);
-      if (isSyntheticContinuationMessage(text)) result.syntheticUserMessages++;
-      else result.humanUserMessages++;
+      const text = (message.content ?? [])
+        .filter((block: any) => block.type === "text")
+        .map((block: any) => block.text)
+        .join("\n");
       for (const match of text.matchAll(/(?:^|\s)\/skill:([a-z0-9-]+)/gi)) {
         const skill = (result.skills[match[1]] ??= { reads: 0, explicit: 0 });
         skill.explicit++;
       }
     }
-    if (message?.role === "toolResult") result.toolResults++;
     if (message?.role === "assistant") {
       result.assistantMessages++;
       if (message.stopReason === "stop") assistantTurnEnds++;
@@ -188,11 +157,32 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
       }
       const usage = message.usage;
       const model = message.model ?? "unknown";
-      const modelUsage = (result.models[model] ??= { messages: 0, usage: createUsage() });
+      const modelUsage = (result.models[model] ??= {
+        messages: 0,
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          reasoning: 0,
+          total: 0,
+          cost: 0,
+          cacheCost: 0,
+        },
+      });
       modelUsage.messages++;
       const effortUsage = (result.thinkingLevels[thinkingLevel] ??= {
         messages: 0,
-        usage: createUsage(),
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          reasoning: 0,
+          total: 0,
+          cost: 0,
+          cacheCost: 0,
+        },
       });
       effortUsage.messages++;
       const modelEffortKey = `${model}\0${thinkingLevel}`;
@@ -200,7 +190,16 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
         model,
         effort: thinkingLevel,
         messages: 0,
-        usage: createUsage(),
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          reasoning: 0,
+          total: 0,
+          cost: 0,
+          cacheCost: 0,
+        },
       });
       modelEffort.messages++;
       if (usage)
@@ -241,11 +240,6 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
           tool.calls++;
           result.toolCallsByName[block.name] = (result.toolCallsByName[block.name] ?? 0) + 1;
           const args = block.arguments ?? {};
-          const operation = operationName(block.name, args);
-          if (operation) {
-            result.toolCallsByOperation[operation] =
-              (result.toolCallsByOperation[operation] ?? 0) + 1;
-          }
           if (block.name !== "read") continue;
           const path = String(args.path ?? args.file ?? "");
           const match = path.match(/(?:^|[/\\])skills[/\\]([^/\\]+)[/\\]SKILL\.md$/i);
@@ -266,7 +260,10 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
         reportedTokens: 0,
         errors: 0,
       });
-      const text = textContent(message);
+      const text = (message.content ?? [])
+        .filter((block: any) => block.type === "text")
+        .map((block: any) => block.text)
+        .join("\n");
       tool.estimatedResultTokens += Math.ceil(text.length / 4);
       tool.reportedTokens += Number(message.usage?.totalTokens ?? 0);
       if (message.isError) tool.errors++;
@@ -317,8 +314,6 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.sessions += source.sessions;
   target.messages += source.messages;
   target.userMessages += source.userMessages;
-  target.humanUserMessages += source.humanUserMessages;
-  target.syntheticUserMessages += source.syntheticUserMessages;
   target.assistantMessages += source.assistantMessages;
   target.toolResults += source.toolResults;
   target.turns += source.turns;
@@ -328,8 +323,6 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.errors += source.errors;
   for (const [name, count] of Object.entries(source.toolCallsByName))
     target.toolCallsByName[name] = (target.toolCallsByName[name] ?? 0) + count;
-  for (const [name, count] of Object.entries(source.toolCallsByOperation))
-    target.toolCallsByOperation[name] = (target.toolCallsByOperation[name] ?? 0) + count;
   for (const [name, usage] of Object.entries(source.toolUsage)) {
     const item = (target.toolUsage[name] ??= {
       available: usage.available ?? false,
@@ -357,13 +350,37 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
     item.explicit += skill.explicit;
   }
   for (const [name, model] of Object.entries(source.models)) {
-    const item = (target.models[name] ??= { messages: 0, usage: createUsage() });
+    const item = (target.models[name] ??= {
+      messages: 0,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        reasoning: 0,
+        total: 0,
+        cost: 0,
+        cacheCost: 0,
+      },
+    });
     item.messages += model.messages;
     for (const key of Object.keys(item.usage) as (keyof UsageTotals)[])
       item.usage[key] += model.usage[key];
   }
   for (const [name, effort] of Object.entries(source.thinkingLevels)) {
-    const item = (target.thinkingLevels[name] ??= { messages: 0, usage: createUsage() });
+    const item = (target.thinkingLevels[name] ??= {
+      messages: 0,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        reasoning: 0,
+        total: 0,
+        cost: 0,
+        cacheCost: 0,
+      },
+    });
     item.messages += effort.messages;
     for (const key of Object.keys(item.usage) as (keyof UsageTotals)[])
       item.usage[key] += effort.usage[key];
@@ -373,7 +390,16 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
       model: effort.model,
       effort: effort.effort,
       messages: 0,
-      usage: createUsage(),
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        reasoning: 0,
+        total: 0,
+        cost: 0,
+        cacheCost: 0,
+      },
     });
     item.messages += effort.messages;
     for (const usageKey of Object.keys(item.usage) as (keyof UsageTotals)[])
