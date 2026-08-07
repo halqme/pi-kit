@@ -1,9 +1,4 @@
-export type ToolKind = "mutation" | "verification" | "inspection" | "other";
-
-export interface AgentStartPromptContext {
-  prompt: string;
-  cwd: string;
-}
+export type ToolKind = "mutation" | "verification" | "other";
 
 export interface ToolResultObservation {
   toolName: string;
@@ -14,9 +9,7 @@ export interface ToolResultObservation {
 export interface TurnObservation {
   mutations: number;
   verifications: number;
-  inspections: number;
   failures: number;
-  tools: string[];
   failedTools: string[];
 }
 
@@ -33,70 +26,36 @@ const CORE_BIAS = [
   "</inception>",
 ].join("\n");
 
-const REFACTOR_HINT =
-  "For refactoring work, preserve observable behavior unless the request explicitly changes it; prefer deleting accidental structure over replacing it with a new framework.";
+const REQUEST_HINTS: Array<{ when: RegExp; text: string }> = [
+  {
+    when: /\b(?:refactor|rewrite|cleanup|restructure)\b|リファクタ|整理|書き直|作り直/i,
+    text: "For refactoring work, preserve observable behavior unless the request explicitly changes it; prefer deleting accidental structure over replacing it with a new framework.",
+  },
+  {
+    when: /\b(?:design|architecture|architect|abstraction|framework)\b|設計|アーキテクチャ|抽象化|構成/i,
+    text: "For design work, separate stable mechanism from policy: mechanize deterministic behavior, but do not create infrastructure for requirements that are only imagined.",
+  },
+  {
+    when: /\b(?:fix|bug|error|failure|debug|diagnos(?:e|is))\b|修正|バグ|エラー|失敗|原因|診断/i,
+    text: "For debugging work, establish the causal mechanism before changing code; distinguish product defects from environment, tool, and test failures.",
+  },
+  {
+    when: /\b(?:review|audit|critique)\b|レビュー|監査|評価/i,
+    text: "For review work, search for concrete failure modes and unnecessary complexity rather than rewarding abstraction by default.",
+  },
+];
 
-const DESIGN_HINT =
-  "For design work, separate stable mechanism from policy: mechanize deterministic behavior, but do not create infrastructure for requirements that are only imagined.";
-
-const DEBUG_HINT =
-  "For debugging work, establish the causal mechanism before changing code; distinguish product defects from environment, tool, and test failures.";
-
-const REVIEW_HINT =
-  "For review work, search for concrete failure modes and unnecessary complexity rather than rewarding abstraction by default.";
-
-function includesAny(value: string, patterns: readonly RegExp[]): boolean {
-  return patterns.some((pattern) => pattern.test(value));
-}
-
-export function buildAgentStartPrompt(context: AgentStartPromptContext): string {
-  const prompt = context.prompt;
-  const hints: string[] = [];
-
-  if (
-    includesAny(prompt, [
-      /\b(?:refactor|rewrite|cleanup|restructure)\b/i,
-      /リファクタ|整理|書き直|作り直/,
-    ])
-  )
-    hints.push(REFACTOR_HINT);
-
-  if (
-    includesAny(prompt, [
-      /\b(?:design|architecture|architect|abstraction|framework)\b/i,
-      /設計|アーキテクチャ|抽象化|構成/,
-    ])
-  )
-    hints.push(DESIGN_HINT);
-
-  if (
-    includesAny(prompt, [
-      /\b(?:fix|bug|error|failure|debug|diagnos(?:e|is))\b/i,
-      /修正|バグ|エラー|失敗|原因|診断/,
-    ])
-  )
-    hints.push(DEBUG_HINT);
-
-  if (includesAny(prompt, [/\b(?:review|audit|critique)\b/i, /レビュー|監査|評価/]))
-    hints.push(REVIEW_HINT);
-
+export function buildAgentStartPrompt(userPrompt: string): string {
+  const hints = REQUEST_HINTS.filter(({ when }) => when.test(userPrompt)).map(({ text }) => text);
   return hints.length
     ? `${CORE_BIAS}\n\nContext for this request:\n${hints.map((hint) => `- ${hint}`).join("\n")}`
     : CORE_BIAS;
 }
 
-function inputRecord(input: unknown): Record<string, unknown> | undefined {
-  return input && typeof input === "object" ? (input as Record<string, unknown>) : undefined;
-}
-
-function commandFromInput(input: unknown): string | undefined {
-  const command = inputRecord(input)?.command;
-  return typeof command === "string" ? command : undefined;
-}
-
-function actionFromInput(input: unknown): string | undefined {
-  const action = inputRecord(input)?.action;
-  return typeof action === "string" ? action : undefined;
+function field(input: unknown, name: string): string | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = (input as Record<string, unknown>)[name];
+  return typeof value === "string" ? value : undefined;
 }
 
 function looksLikeVerification(command: string): boolean {
@@ -113,21 +72,18 @@ function looksLikeMutation(command: string): boolean {
 
 export function classifyTool(toolName: string, input: unknown): ToolKind {
   const name = toolName.toLowerCase();
-  const action = actionFromInput(input)?.toLowerCase();
-
   if (["edit", "write", "apply_patch", "patch"].includes(name)) return "mutation";
-  if (name === "astrolabe")
-    return action === "replace" || action === "replace_many" ? "mutation" : "inspection";
 
-  if (["read", "grep", "find", "ls", "web_search", "web_fetch"].includes(name))
-    return "inspection";
+  if (name === "astrolabe") {
+    const action = field(input, "action")?.toLowerCase();
+    return action === "replace" || action === "replace_many" ? "mutation" : "other";
+  }
 
-  // background_process start and terminal call return acceptance, not command completion.
-  // Do not infer mutation or verification success from an asynchronous launch result.
+  // These return launch/acceptance, not command completion. Do not turn that into evidence.
   if (name === "background_process" || name === "terminal") return "other";
 
   if (name === "bash") {
-    const command = commandFromInput(input);
+    const command = field(input, "command");
     if (!command) return "other";
     if (looksLikeVerification(command)) return "verification";
     if (looksLikeMutation(command)) return "mutation";
@@ -137,14 +93,7 @@ export function classifyTool(toolName: string, input: unknown): ToolKind {
 }
 
 export function createTurnObservation(): TurnObservation {
-  return {
-    mutations: 0,
-    verifications: 0,
-    inspections: 0,
-    failures: 0,
-    tools: [],
-    failedTools: [],
-  };
+  return { mutations: 0, verifications: 0, failures: 0, failedTools: [] };
 }
 
 export function observeToolResult(
@@ -152,10 +101,8 @@ export function observeToolResult(
   result: ToolResultObservation,
 ): void {
   const kind = classifyTool(result.toolName, result.input);
-  observation.tools.push(result.toolName);
   if (kind === "mutation") observation.mutations += 1;
   if (kind === "verification") observation.verifications += 1;
-  if (kind === "inspection") observation.inspections += 1;
   if (result.isError) {
     observation.failures += 1;
     observation.failedTools.push(result.toolName);
@@ -173,11 +120,10 @@ export function buildTurnBoundaryPrompt(observation: TurnObservation): string | 
     );
   }
 
-  if (observation.mutations > 0) {
+  if (observation.mutations > 0)
     reminders.push(
       "Project state changed. Re-read the affected behavior and resulting diff before continuing; remove incidental complexity, reuse existing mechanisms, and do not broaden scope beyond the requested outcome.",
     );
-  }
 
   if (observation.mutations >= 3)
     reminders.push(
