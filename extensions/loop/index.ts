@@ -1,67 +1,133 @@
 import { Type } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { loopController, validateLoopState } from "./control.ts";
 
-interface Loop {
-  message: string;
-  remaining: number;
-  intervalMs: number;
-  active: boolean;
+const LOOP_STATE_ENTRY = "loop-state";
+
+function restore(ctx: ExtensionContext): void {
+  const entry = [...ctx.sessionManager.getEntries()]
+    .reverse()
+    .find(
+      (candidate) =>
+        candidate?.type === "custom" && candidate.customType === LOOP_STATE_ENTRY,
+    );
+  loopController.restore(entry?.data === undefined ? undefined : validateLoopState(entry.data));
 }
+
 export default function loopExtension(pi: ExtensionAPI): void {
-  let loop: Loop | undefined;
   pi.registerTool({
     name: "loop",
     label: "Loop",
     description:
-      "Start, inspect, or stop a generic agent-end loop. Use it to repeat a bounded follow-up action until a caller-defined condition is met.",
+      "Manage one bounded self-continuation task. start defines the task but does not send an immediate follow-up. While a loop is active, report continue, done, or blocked before ending each turn; agent_end sends a follow-up only while the task remains unfinished. maxTurns is a runaway guard, not a completion condition. Runner-owned loops must be reported through runner instead of this tool.",
+    promptGuidelines: [
+      "Use loop when one task needs multiple agent turns and the agent can judge its own completion state.",
+      "After start, work on the task in the current turn; do not end the turn just to wait for the loop.",
+      "Before ending each active loop turn, report continue, done, or blocked. Include a concise progress summary when continuing.",
+      "Do not use loop as a timer, background process, implementation delegate, or substitute for verifying results.",
+    ],
     parameters: Type.Object({
-      action: Type.Union([Type.Literal("start"), Type.Literal("status"), Type.Literal("stop")]),
-      message: Type.Optional(Type.String()),
-      iterations: Type.Optional(Type.Integer({ minimum: 1 })),
-      intervalMs: Type.Optional(Type.Integer({ minimum: 0 })),
+      action: Type.Union([
+        Type.Literal("start"),
+        Type.Literal("report"),
+        Type.Literal("status"),
+        Type.Literal("stop"),
+      ]),
+      task: Type.Optional(Type.String({ description: "Task to keep advancing until completion" })),
+      maxTurns: Type.Optional(
+        Type.Integer({ minimum: 1, description: "Maximum agent turns before forced exhaustion" }),
+      ),
+      status: Type.Optional(
+        Type.Union([
+          Type.Literal("continue"),
+          Type.Literal("done"),
+          Type.Literal("blocked"),
+        ]),
+      ),
+      summary: Type.Optional(Type.String({ description: "Progress, completion, or blocker summary" })),
+      reason: Type.Optional(Type.String({ description: "Reason for explicitly stopping the loop" })),
     }),
-    async execute(_id, params, _signal, _update, ctx) {
-      if (params.action === "stop") {
-        loop = undefined;
-        return { content: [{ type: "text" as const, text: "Loop stopped." }], details: {} };
-      }
-      if (params.action === "status")
+    async execute(_id, params) {
+      try {
+        if (params.action === "status") {
+          const state = loopController.snapshot();
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: state
+                  ? `Loop ${state.status} (${state.turns}/${state.maxTurns} turns, owner=${state.owner}): ${state.task}`
+                  : "No loop state.",
+              },
+            ],
+            details: state ?? {},
+          };
+        }
+        if (params.action === "start") {
+          if (!params.task?.trim()) throw new Error("task is required for start");
+          const state = loopController.start("loop", params.task, params.maxTurns ?? 8);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Loop started for up to ${state.maxTurns} turns. Work on the task now and report its status before ending this turn.`,
+              },
+            ],
+            details: state,
+          };
+        }
+        if (params.action === "report") {
+          if (!params.status) throw new Error("status is required for report");
+          const state = loopController.report("loop", params.status, params.summary);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text:
+                  params.status === "continue"
+                    ? "Loop progress recorded; a follow-up will be sent after agent_end."
+                    : `Loop ${state.status}.`,
+              },
+            ],
+            details: state,
+          };
+        }
+        const state = loopController.stop("loop", params.reason);
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: loop?.active ? `Loop active (${loop.remaining} remaining)` : "No active loop.",
-            },
-          ],
-          details: loop ?? {},
+          content: [{ type: "text" as const, text: "Loop stopped." }],
+          details: state,
         };
-      if (!params.message?.trim())
+      } catch (error) {
         return {
-          content: [{ type: "text" as const, text: "message is required" }],
-          details: {},
+          content: [{ type: "text" as const, text: String(error) }],
+          details: loopController.snapshot() ?? {},
           isError: true,
         };
-      loop = {
-        message: params.message.trim(),
-        remaining: params.iterations ?? 1,
-        intervalMs: params.intervalMs ?? 0,
-        active: true,
-      };
-      if (ctx.isIdle()) pi.sendUserMessage(loop.message, { deliverAs: "followUp" });
-      return {
-        content: [{ type: "text" as const, text: `Loop started (${loop.remaining} iterations).` }],
-        details: loop,
-      };
+      }
     },
   });
+
+  pi.on("session_start", async (_event, ctx) => {
+    loopController.configure((state) => {
+      if (state) pi.appendEntry(LOOP_STATE_ENTRY, state);
+    });
+    restore(ctx);
+  });
+
   pi.on("agent_end", async () => {
-    if (!loop?.active) return;
-    loop.remaining -= 1;
-    if (loop.remaining <= 0) {
-      loop = undefined;
-      return;
+    const result = loopController.onAgentEnd();
+    if (result.followUp) pi.sendUserMessage(result.followUp, { deliverAs: "followUp" });
+    if (result.exhausted) {
+      const state = loopController.snapshot();
+      pi.sendMessage(
+        {
+          customType: "loop-status",
+          content: `[loop] exhausted after ${state?.maxTurns ?? "?"} turns`,
+          display: true,
+          details: state ?? {},
+        },
+        { triggerTurn: false, deliverAs: "nextTurn" },
+      );
     }
-    if (loop.intervalMs > 0) await new Promise((resolve) => setTimeout(resolve, loop!.intervalMs));
-    if (loop?.active) pi.sendUserMessage(loop.message, { deliverAs: "followUp" });
   });
 }
