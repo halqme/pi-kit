@@ -106,7 +106,12 @@ export function analyzeLines(lines: Iterable<string>): SessionMetrics {
   let thinkingLevel = "unknown";
   for (const line of lines) {
     if (!line.trim()) continue;
-    const entry = JSON.parse(line) as any;
+    let entry: any;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
     if (entry.type === "session") {
       result.sessions++;
       result.sessionId = entry.id;

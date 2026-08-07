@@ -1,11 +1,11 @@
 # session-metrics
 
-DuckDBに記録されたPiのメトリクスを集計するCLIです。デフォルトでは人間向けのサマリーを表示します。JSONLの同期はsession-metrics拡張が継続的に行います。表示にはBun組み込みの `Bun.markdown.ansi()` を使い、Markdownテーブルを端末向けの枠線・色付き表示へ変換します。
+PiセッションのJSONLログを直接集計するCLIです。外部のインデックスや常駐プロセスは使いません。既定では人間向けのサマリーを表示し、表示にはBun組み込みの `Bun.markdown.ansi()` を使います。
 
 ```sh
 session-metrics
 session-metrics --json
-session-metrics --daily --since 2026-04-01 --limit 20
+session-metrics ~/.pi/agent/sessions --daily --since 2026-04-01 --limit 20
 session-metrics --weekly
 session-metrics --projects
 session-metrics --models
@@ -13,25 +13,8 @@ session-metrics --skills
 session-metrics --tools
 ```
 
-`--json` は既存の `MetricsReport` をJSONとして出力します。スクリプトから利用する場合はこの形式を使用してください。レポートはDuckDBのみを参照します。JSONLの取り込みを手動で行う場合だけ `ingest [path]` を使用します。
+`--json` は `MetricsReport` をJSONとして出力します。引数にJSONLファイルまたはディレクトリを指定でき、省略時は `~/.pi/agent/sessions` を再帰的に読み取ります。壊れたJSONL行は集計時に無視します。
 
-## DuckDBストレージ
+本文やツール引数全体はレポートに出力せず、役割、モデル、トークン数、コスト、ツール名などのメタデータだけを集計します。
 
-DuckDB CLIが必要です。インストール済みの実行ファイルを使い、既定では `~/.pi/agent/session-metrics.duckdb` に保存します。別の場所は `--db PATH` または `DUCKDB_PATH` で指定できます。
-
-```sh
-session-metrics ingest
-session-metrics stats
-session-metrics query "select model, sum(total_tokens) from assistant_usage group by model"
-```
-
-`ingest` はJSONLファイルの更新時刻、サイズ、SHA-256を `indexed_files` に記録します。変更されていないファイルは再解析せず、変更されたファイルはそのファイル由来の行を置き換えます。利用可能なテーブルは次のとおりです。
-
-- `sessions`, `messages`, `turns`, `assistant_usage`
-- `tool_calls`, `tool_results`, `skill_events`, `indexed_files`
-
-`tool_calls`には引数サイズとtool call ID、`tool_results`にはエラー種別、入出力サイズ、実行時間、結果ハッシュ、短いプレビューを保存します。本文や引数全体は保存しません。既存DBには不足カラムを自動追加します。
-
-本文やツール引数全体は保存せず、役割、モデル、トークン数、コスト、ツール名などのメタデータと、結果の短いプレビューだけを保存します。壊れたJSONL行はスキップします。SQLエラーやDuckDB未導入時はエラーを表示して非ゼロ終了します。
-
-Pi拡張の `session_metrics` ツールでは `cache-usage-summary` を指定すると、モデルごとの未キャッシュ入力、キャッシュ読み取り量、キャッシュヒット率、キャッシュ再請求額を確認できます。`cache-anomalies` は、直前ターンから10分以内なのにキャッシュ読み取りが0で、入力が1,000トークン以上あるターンを抽出します。これは実際の使用量から算出する診断値であり、次回リクエストのヒットを保証する予測ではありません。
+Pi拡張の `session_metrics` ツールでは `cache-usage-summary` を指定すると、未キャッシュ入力、キャッシュ読み取り量、キャッシュヒット率、キャッシュ再請求額を確認できます。`cache-anomalies` は、直前ターンから10分以内なのにキャッシュ読み取りが0で、入力が1,000トークン以上あるターンを対象にする診断です。
