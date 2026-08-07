@@ -63,7 +63,7 @@ test("high-confidence locate returns source with a direct replace next action", 
   assert.deepEqual(located.next[0].continuation, located.data.candidates[0].continuation);
 });
 
-test("card continuations cannot be replaced until their source is inspected", async () => {
+test("card continuations remain directly replaceable when source is not needed", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-roundtrip-"));
   const path = join(dir, "sample.ts");
   await writeFile(
@@ -76,31 +76,17 @@ test("card continuations cannot be replaced until their source is inspected", as
     await call(tool, dir, { action: "locate", scope: "sample.ts", terms: ["parse"] }),
   );
   assert.equal(located.data.mode, "cards");
-  const continuation = located.data.candidates[0].continuation;
 
-  const rejected = response(
-    await call(tool, dir, {
-      action: "replace",
-      continuation,
-      replacement: "function first() { return 1; }",
-    }),
-  );
-  assert.equal(rejected.ok, false);
-  assert.equal(rejected.error.code, "source_not_inspected");
-  assert.match(await readFile(path, "utf8"), /return parse/);
-
-  const inspected = response(
-    await call(tool, dir, { action: "inspect", continuation, detail: "source" }),
-  );
   const replaced = response(
     await call(tool, dir, {
       action: "replace",
-      continuation: inspected.next[0].continuation,
+      continuation: located.data.candidates[0].continuation,
       replacement: "function first() { return 1; }",
     }),
   );
+
   assert.equal(replaced.ok, true);
-  assert.match(await readFile(path, "utf8"), /return 1/);
+  assert.match(await readFile(path, "utf8"), /function first\(\) \{ return 1; \}/);
 });
 
 test("inspect_many batches same-file source reads and feeds replace_many", async () => {
