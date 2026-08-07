@@ -60,6 +60,10 @@ test("runner owns loop continuation for an approved plan", async () => {
     undefined,
     ctx,
   );
+  const remainingFollowUp = loopController.onAgentEnd();
+  assert.doesNotMatch(remainingFollowUp.followUp ?? "", /1\. change code/);
+  assert.match(remainingFollowUp.followUp ?? "", /2\. run checks/);
+
   const completed = await tool.execute(
     "4",
     { action: "progress", steps: [2], summary: "checks passed" },
