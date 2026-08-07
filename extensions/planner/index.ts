@@ -1,6 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { emptyPlan, savePlanState, type PlanState } from "@halqme/plan-state";
+import { emptyPlan, restorePlanState, savePlanState, type PlanState } from "@halqme/plan-state";
 export default function plannerExtension(pi: ExtensionAPI): void {
   let state: PlanState = emptyPlan("planner");
   pi.registerTool({
@@ -12,7 +12,8 @@ export default function plannerExtension(pi: ExtensionAPI): void {
       architecture: Type.Optional(Type.String()),
       steps: Type.Optional(Type.Array(Type.String({ minLength: 4 }))),
     }),
-    async execute(_id, params) {
+    async execute(_id, params, _signal, _update, ctx) {
+      state = restorePlanState(ctx.sessionManager.getEntries()) ?? state;
       if (params.action === "create") {
         if (!params.architecture?.trim() || !params.steps?.length)
           return {

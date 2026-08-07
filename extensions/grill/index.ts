@@ -1,6 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { emptyPlan, savePlanState, type PlanState } from "@halqme/plan-state";
+import { emptyPlan, restorePlanState, savePlanState, type PlanState } from "@halqme/plan-state";
 
 export default function grillExtension(pi: ExtensionAPI): void {
   let state: PlanState = emptyPlan("grill");
@@ -14,7 +14,8 @@ export default function grillExtension(pi: ExtensionAPI): void {
       goal: Type.Optional(Type.String()),
       architecture: Type.Optional(Type.String()),
     }),
-    async execute(_id, params) {
+    async execute(_id, params, _signal, _update, ctx) {
+      state = restorePlanState(ctx.sessionManager.getEntries()) ?? state;
       if (params.action === "start") {
         state = emptyPlan("grill", params.goal);
         state.status = "grilling";
