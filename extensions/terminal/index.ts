@@ -8,6 +8,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 const exec = promisify(execFile);
 const SESSION_ENTRY = "terminal:session";
 const CLOSED_ENTRY = "terminal:closed";
+const RUNTIME_ENTRY = "terminal:runtime";
 type Terminal = { name: string; session: string; cwd: string };
 type Health = {
   status: "running" | "suspect" | "dead";
@@ -25,10 +26,18 @@ type Call = {
   statusFile: string;
   state: "pending" | "notifying";
 };
+type Watch = {
+  id: string;
+  name: string;
+  pattern: string;
+  once: boolean;
+  last: string;
+};
+type RuntimeSnapshot = { calls: Call[]; watches: Watch[] };
 const terminals = new Map<string, Terminal>();
 const health = new Map<string, Health>();
 const calls = new Map<string, Call>();
-const watches = new Map<string, { name: string; pattern: string; once: boolean; last: string }>();
+const watches = new Map<string, Watch>();
 
 export type TerminalRuntime = {
   tmux(args: string[]): Promise<string>;
@@ -77,25 +86,85 @@ function result(value: unknown) {
   };
 }
 
+function runtimeSnapshot(): RuntimeSnapshot {
+  return {
+    calls: [...calls.values()].map((call) => ({ ...call })),
+    watches: [...watches.values()].map((watch) => ({ ...watch })),
+  };
+}
+
+function persistRuntime(pi: ExtensionAPI): void {
+  pi.appendEntry(RUNTIME_ENTRY, runtimeSnapshot());
+}
+
+function isCall(value: unknown): value is Call {
+  if (!value || typeof value !== "object") return false;
+  const call = value as Record<string, unknown>;
+  return (
+    typeof call.id === "string" &&
+    typeof call.name === "string" &&
+    typeof call.start === "string" &&
+    typeof call.end === "string" &&
+    typeof call.command === "string" &&
+    typeof call.createdAt === "number" &&
+    typeof call.timeoutMs === "number" &&
+    typeof call.statusFile === "string" &&
+    (call.state === "pending" || call.state === "notifying")
+  );
+}
+
+function isWatch(value: unknown): value is Watch {
+  if (!value || typeof value !== "object") return false;
+  const watch = value as Record<string, unknown>;
+  return (
+    typeof watch.id === "string" &&
+    typeof watch.name === "string" &&
+    typeof watch.pattern === "string" &&
+    typeof watch.once === "boolean" &&
+    typeof watch.last === "string"
+  );
+}
+
 function restore(ctx: ExtensionContext): void {
   terminals.clear();
   health.clear();
+  calls.clear();
+  watches.clear();
+  let latestRuntime: RuntimeSnapshot | undefined;
   for (const entry of ctx.sessionManager.getEntries()) {
     if (!entry || typeof entry !== "object") continue;
     const value = entry as { type?: unknown; customType?: unknown; data?: unknown };
     if (value.type !== "custom" || !value.data || typeof value.data !== "object") continue;
     const data = value.data as Record<string, unknown>;
-    if (typeof data.name !== "string") continue;
-    if (value.customType === CLOSED_ENTRY) terminals.delete(data.name);
+    if (value.customType === CLOSED_ENTRY && typeof data.name === "string") {
+      terminals.delete(data.name);
+      health.delete(data.name);
+      continue;
+    }
     if (
       value.customType === SESSION_ENTRY &&
+      typeof data.name === "string" &&
       typeof data.session === "string" &&
       typeof data.cwd === "string"
     ) {
       terminals.set(data.name, { name: data.name, session: data.session, cwd: data.cwd });
       health.set(data.name, { status: "running", consecutiveFailures: 0, failureNotified: false });
+      continue;
+    }
+    if (value.customType === RUNTIME_ENTRY) {
+      const raw = value.data as { calls?: unknown; watches?: unknown };
+      if (Array.isArray(raw.calls) && Array.isArray(raw.watches)) {
+        latestRuntime = {
+          calls: raw.calls.filter(isCall).map((call) => ({ ...call })),
+          watches: raw.watches.filter(isWatch).map((watch) => ({ ...watch })),
+        };
+      }
     }
   }
+  for (const call of latestRuntime?.calls ?? [])
+    if (terminals.has(call.name) && call.state === "pending") calls.set(call.id, call);
+  for (const watch of latestRuntime?.watches ?? [])
+    if (terminals.has(watch.name)) watches.set(watch.id, watch);
 }
 
 export default function terminalExtension(pi: ExtensionAPI): void {
@@ -106,6 +175,7 @@ export default function terminalExtension(pi: ExtensionAPI): void {
   const poll = async (): Promise<void> => {
     if (polling || !activeContext) return;
     polling = true;
+    let runtimeChanged = false;
     try {
       for (const terminal of terminals.values()) {
         const state = health.get(terminal.name) ?? {
@@ -128,6 +198,7 @@ export default function terminalExtension(pi: ExtensionAPI): void {
           for (const [id, call] of calls)
             if (call.name === terminal.name) {
               calls.delete(id);
+              runtimeChanged = true;
               await unlink(call.statusFile).catch(() => {});
               pi.sendMessage(
                 {
@@ -147,6 +218,7 @@ export default function terminalExtension(pi: ExtensionAPI): void {
           for (const [id, watch] of watches)
             if (watch.name === terminal.name) {
               watches.delete(id);
+              runtimeChanged = true;
               pi.sendMessage(
                 {
                   customType: "terminal-watch",
@@ -178,6 +250,7 @@ export default function terminalExtension(pi: ExtensionAPI): void {
             { triggerTurn: true, deliverAs: activeContext.isIdle() ? "nextTurn" : "followUp" },
           );
           calls.delete(id);
+          runtimeChanged = true;
           continue;
         }
         const terminal = terminals.get(call.name);
@@ -226,6 +299,7 @@ export default function terminalExtension(pi: ExtensionAPI): void {
             { triggerTurn: true, deliverAs: activeContext.isIdle() ? "nextTurn" : "followUp" },
           );
           calls.delete(id);
+          runtimeChanged = true;
         } catch {
           // Keep the call pending while the tmux session is temporarily unavailable.
         }
@@ -246,8 +320,10 @@ export default function terminalExtension(pi: ExtensionAPI): void {
           const appended = appendedWatchOutput(watch.last, output);
           if (appended === undefined) {
             watch.last = output;
+            runtimeChanged = true;
             continue;
           }
+          if (!appended) continue;
           watch.last = output;
           if (appended.includes(watch.pattern)) {
             pi.sendMessage(
@@ -260,11 +336,13 @@ export default function terminalExtension(pi: ExtensionAPI): void {
               { triggerTurn: true, deliverAs: activeContext.isIdle() ? "nextTurn" : "followUp" },
             );
             if (watch.once) watches.delete(id);
+            runtimeChanged = true;
           }
         } catch {
           // Keep watches alive across transient terminal failures.
         }
       }
+      if (runtimeChanged) persistRuntime(pi);
     } finally {
       polling = false;
     }
@@ -273,12 +351,12 @@ export default function terminalExtension(pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     activeContext = ctx;
-    calls.clear();
-    watches.clear();
     restore(ctx);
+    await poll();
     timer ??= setInterval(() => void poll(), 2_000);
   });
   pi.on("session_shutdown", async () => {
+    persistRuntime(pi);
     if (timer) clearInterval(timer);
     timer = undefined;
     pollForTests = undefined;
@@ -288,7 +366,12 @@ export default function terminalExtension(pi: ExtensionAPI): void {
     name: "terminal",
     label: "Terminal",
     description:
-      "Manage persistent tmux terminals for Agents. Use terminal for interactive or long-lived TTY workflows; use background_process for one-shot commands or work requiring exact logs and process cancellation. send sends literal text, call reports completion asynchronously but timeoutMs only stops tracking and does not interrupt the command, and call allows only one pending call per terminal. list reports running/dead status and pending call/watch counts. Terminal registrations survive Pi reloads, but pending calls and watches belong to the Pi session and are not restored.",
+      "Manage persistent interactive tmux terminals. Use terminal when a process needs a TTY, later stdin or control keys, live state inspection, or output-pattern watches; use background_process for detached non-interactive processes whose stdout/stderr and process cancellation matter more than TTY interaction. Terminal registrations, pending calls, and watches are restored across Pi session reloads. call completion is asynchronous; timeoutMs stops tracking but does not interrupt the underlying command, and only one call may be pending per terminal.",
+    promptGuidelines: [
+      "Use background_process instead of terminal for non-interactive detached commands that do not need later stdin or TTY state.",
+      "Use watch for actionable readiness, failure, or completion patterns instead of polling terminal.read repeatedly.",
+      "Treat a watch match or call completion as process evidence only; verify semantic task completion separately.",
+    ],
     parameters: Type.Object({
       action: Type.Union([
         Type.Literal("create"),
@@ -379,8 +462,10 @@ export default function terminalExtension(pi: ExtensionAPI): void {
         }
         if (params.action === "cancel_watch") {
           if (!params.watchId) throw new Error("watchId is required");
+          const cancelled = watches.delete(params.watchId);
+          if (cancelled) persistRuntime(pi);
           return result({
-            status: watches.delete(params.watchId) ? "cancelled" : "not_found",
+            status: cancelled ? "cancelled" : "not_found",
             watchId: params.watchId,
           });
         }
@@ -425,7 +510,7 @@ export default function terminalExtension(pi: ExtensionAPI): void {
           const end = `__PI_CALL_${id}_END__`;
           const statusFile = `/tmp/pi-terminal-call-${id}.status`;
           const timeoutMs = params.timeoutMs ?? 300_000;
-          calls.set(id, {
+          const call: Call = {
             id,
             name: terminal.name,
             start,
@@ -435,7 +520,8 @@ export default function terminalExtension(pi: ExtensionAPI): void {
             timeoutMs,
             statusFile,
             state: "pending",
-          });
+          };
+          calls.set(id, call);
           const wrapped = `rm -f '${statusFile}'; printf '${start}\\n'; ${params.command}; status=$?; printf '${end}%s\\n' "$status"; printf '%s\\n' "$status" > '${statusFile}'`;
           try {
             await tmux(["send-keys", "-t", terminal.session, "-l", wrapped]);
@@ -444,17 +530,20 @@ export default function terminalExtension(pi: ExtensionAPI): void {
             calls.delete(id);
             throw error;
           }
+          persistRuntime(pi);
           return result({ status: "accepted", callId: id, name: terminal.name });
         }
         if (params.action === "watch") {
           if (!params.pattern?.trim()) throw new Error("pattern is required");
           const watchId = randomUUID();
           watches.set(watchId, {
+            id: watchId,
             name: terminal.name,
             pattern: params.pattern,
             once: params.once ?? true,
             last: await tmux(["capture-pane", "-p", "-J", "-t", terminal.session, "-S", "-"]),
           });
+          persistRuntime(pi);
           return result({
             status: "watching",
             watchId,
@@ -504,6 +593,7 @@ export default function terminalExtension(pi: ExtensionAPI): void {
               );
             }
           pi.appendEntry(CLOSED_ENTRY, { name: terminal.name });
+          persistRuntime(pi);
           return result({ status: "accepted", name: terminal.name });
         }
         throw new Error("Unsupported terminal action");
