@@ -62,6 +62,16 @@
         "typescript": "catalog:",
       },
     },
+    "extensions/inception": {
+      "name": "@halqme/inception",
+      "dependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "extensions/loop": {
       "name": "@halqme/loop",
       "dependencies": {
@@ -274,6 +284,8 @@
     "@halqme/background-process": ["@halqme/background-process@workspace:extensions/background-process"],
 
     "@halqme/grill": ["@halqme/grill@workspace:extensions/grill"],
+
+    "@halqme/inception": ["@halqme/inception@workspace:extensions/inception"],
 
     "@halqme/loop": ["@halqme/loop@workspace:extensions/loop"],
 
