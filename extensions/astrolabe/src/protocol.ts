@@ -1,7 +1,13 @@
 import type { LanguageId } from "./language-profile.ts";
 import type { SyntaxSearchKind } from "./syntax-search.ts";
 
-export type SyntaxAction = "inspect" | "locate" | "search" | "replace" | "replace_many";
+export type SyntaxAction =
+  | "inspect"
+  | "inspect_many"
+  | "locate"
+  | "search"
+  | "replace"
+  | "replace_many";
 export type InspectDetail = "outline" | "source";
 export type ContinuationCapability = "inspect" | "source" | "replace";
 
@@ -17,6 +23,11 @@ export interface InspectRequest {
   language?: LanguageId;
   detail?: InspectDetail;
   depth?: number;
+}
+
+export interface InspectManyRequest {
+  action: "inspect_many";
+  targets: Array<{ continuation: Continuation }>;
 }
 
 export interface LocateRequest {
@@ -52,6 +63,7 @@ export interface ReplaceManyRequest {
 
 export type SyntaxRequest =
   | InspectRequest
+  | InspectManyRequest
   | LocateRequest
   | SearchRequest
   | ReplaceRequest
