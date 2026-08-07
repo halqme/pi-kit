@@ -119,7 +119,7 @@ export async function syntaxSearchDetailed(
       : requireAdapterForPath(path);
     const file = await parseFile(path, adapter);
     for (const match of collectMatches(file, params, adapter)) {
-      const handle = handles.issue(file, match.node, "outline");
+      const handle = handles.issue(file, match.node, "source");
       matches.push({
         handle,
         path,
