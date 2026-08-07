@@ -27,10 +27,9 @@ interface SyntaxResponse {
       flow: { calls: string[]; branches: number; returns: number; throws: number; awaits: number };
       score: number;
     }>;
-    sources?: Array<{ continuation: { token: string }; source: string }>;
   };
   handles?: Array<{ continuation: { token: string }; capabilities: string[] }>;
-  next?: Array<Record<string, any>>;
+  next?: Array<Record<string, unknown>>;
   error?: { code: string };
 }
 
@@ -126,7 +125,6 @@ test("locate returns a ranked source-inspected candidate usable for direct repla
   const candidate = response.data?.candidates?.[0];
   assert.equal(candidate?.name, "parse");
   assert.match(candidate?.source ?? "", /return input\.trim/);
-  assert.equal(response.next?.[0]?.action, "replace");
 
   const replaced = await call(tool, dir, {
     action: "replace",
@@ -223,7 +221,7 @@ test("directory search returns continuations usable for direct replacement", asy
   assert.match(await readFile(path, "utf8"), /return 2/);
 });
 
-test("replace_many atomically replaces multiple source-inspected continuations in one file", async () => {
+test("replace_many atomically replaces multiple continuations in one file", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
   const path = join(dir, "sample.ts");
   await writeFile(path, "function first() { return 1; }\nfunction second() { return 2; }\n");
@@ -235,19 +233,11 @@ test("replace_many atomically replaces multiple source-inspected continuations i
   });
   const next = responseOf(outlined).next ?? [];
   assert.equal(next.length, 2);
-  const inspected = responseOf(
-    await call(tool, dir, {
-      action: "inspect_many",
-      targets: next.map((action) => ({ continuation: action.continuation })),
-    }),
-  );
-  assert.equal(inspected.data?.sources?.length, 2);
 
-  const template = inspected.next?.[0]?.targets as Array<{ continuation: { token: string } }>;
   const replaced = await call(tool, dir, {
     action: "replace_many",
-    targets: template.map((target, index) => ({
-      continuation: target.continuation,
+    targets: next.map((action, index) => ({
+      continuation: (action as { continuation: { token: string } }).continuation,
       replacement: `function ${index === 0 ? "first" : "second"}() { return ${index + 3}; }`,
     })),
   });
@@ -257,7 +247,7 @@ test("replace_many atomically replaces multiple source-inspected continuations i
   assert.match(output, /function second\(\) \{ return 4; \}/);
 });
 
-test("replace_many rejects a stale source-inspected target without writing", async () => {
+test("replace_many rejects a stale target without writing", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
   const path = join(dir, "sample.ts");
   await writeFile(path, "function first() { return 1; }\nfunction second() { return 2; }\n");
@@ -268,19 +258,12 @@ test("replace_many rejects a stale source-inspected target without writing", asy
     detail: "outline",
   });
   const next = responseOf(outlined).next ?? [];
-  const inspected = responseOf(
-    await call(tool, dir, {
-      action: "inspect_many",
-      targets: next.map((action) => ({ continuation: action.continuation })),
-    }),
-  );
-  const template = inspected.next?.[0]?.targets as Array<{ continuation: { token: string } }>;
   await writeFile(path, "function first() { return 99; }\nfunction second() { return 2; }\n");
 
   const replaced = await call(tool, dir, {
     action: "replace_many",
-    targets: template.map((target) => ({
-      continuation: target.continuation,
+    targets: next.map((action) => ({
+      continuation: (action as { continuation: { token: string } }).continuation,
       replacement: "function changed() { return 0; }",
     })),
   });
@@ -301,22 +284,15 @@ test("replace_many rejects a replacement that introduces syntax errors", async (
     detail: "outline",
   });
   const next = responseOf(outlined).next ?? [];
-  const inspected = responseOf(
-    await call(tool, dir, {
-      action: "inspect_many",
-      targets: next.map((action) => ({ continuation: action.continuation })),
-    }),
-  );
-  const template = inspected.next?.[0]?.targets as Array<{ continuation: { token: string } }>;
   const replaced = await call(tool, dir, {
     action: "replace_many",
     targets: [
       {
-        continuation: template[0]?.continuation,
+        continuation: (next[0] as { continuation: { token: string } }).continuation,
         replacement: "function broken() {",
       },
       {
-        continuation: template[1]?.continuation,
+        continuation: (next[1] as { continuation: { token: string } }).continuation,
         replacement: "function alsoBroken() {",
       },
     ],
