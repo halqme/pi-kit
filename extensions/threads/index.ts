@@ -16,7 +16,12 @@ export default function (pi: ExtensionAPI): void {
     name: "threads",
     label: "Threads",
     description:
-      "Create, list, and communicate with persistent Pi sessions. list returns only sessions spawned by this extension, including their parent session.",
+      "Create, list, and communicate with persistent child Pi conversations. Each thread has separate Pi session/context state and its own message queue, but by default uses the parent cwd directly; threads do not provide filesystem or Git worktree isolation. list returns only sessions spawned by this extension, including their parent session. Choose shared files, disjoint work, worktrees, or sequential coordination according to the task.",
+    promptGuidelines: [
+      "Use threads when independent subproblems benefit from separate persistent Pi conversations rather than merely separate shell processes.",
+      "Remember that separate conversation state does not imply filesystem isolation; coordinate potentially overlapping writes explicitly.",
+      "Do not create threads merely because one task is long-running.",
+    ],
     parameters: Type.Object({
       action: Type.Union([
         Type.Literal("create"),
