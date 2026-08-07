@@ -136,6 +136,7 @@ export default function runnerExtension(pi: ExtensionAPI): void {
               cleanSummary || "All approved TODO steps completed.",
             );
           } else {
+            loopController.updateTask("runner", taskFor(state));
             const completedText = params.steps?.length
               ? `Completed step(s): ${params.steps.join(", ")}.`
               : undefined;
