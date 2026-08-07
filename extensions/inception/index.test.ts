@@ -21,13 +21,21 @@ test("agent-start prompt keeps core bias and adds request-specific guidance", ()
   assert.match(prompt, /causal mechanism/);
 });
 
-test("tool classification distinguishes structural edits and verification", () => {
+test("tool classification distinguishes edits, checks, and async launches", () => {
   assert.equal(classifyTool("astrolabe", { action: "replace", replacement: "x" }), "mutation");
   assert.equal(classifyTool("astrolabe", { action: "locate", scope: "." }), "inspection");
   assert.equal(classifyTool("bash", { command: "bun run test" }), "verification");
   assert.equal(
-    classifyTool("background_process", { action: "start", command: "bun run typecheck" }),
+    classifyTool("bash", { command: "bun run --cwd extensions/inception check" }),
     "verification",
+  );
+  assert.equal(
+    classifyTool("background_process", { action: "start", command: "bun run typecheck" }),
+    "other",
+  );
+  assert.equal(
+    classifyTool("terminal", { action: "call", command: "bun run test" }),
+    "other",
   );
 });
 
@@ -43,6 +51,17 @@ test("turn-boundary prompt reacts to mutations and failures", () => {
   assert.match(prompt, /failed/);
   assert.match(prompt, /Project state changed/);
   assert.doesNotMatch(prompt, /Checks passed/);
+});
+
+test("turn-boundary prompt treats synchronous checks as evidence after mutation", () => {
+  const observation = createTurnObservation();
+  observeToolResult(observation, { toolName: "edit", input: {}, isError: false });
+  observeToolResult(observation, {
+    toolName: "bash",
+    input: { command: "bun run --cwd extensions/inception check" },
+    isError: false,
+  });
+  assert.match(buildTurnBoundaryPrompt(observation) ?? "", /Checks passed/);
 });
 
 test("extension injects baseline in system prompt and one transient reminder after mutation", async () => {
