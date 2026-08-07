@@ -51,6 +51,7 @@ test("public tool rejects concurrent calls and rolls back failed create", async 
   setTerminalRuntimeForTests(runtime);
   let registered: any;
   const events = new Map<string, (event: unknown, ctx: any) => unknown>();
+  const entries: any[] = [];
   const pi: any = {
     registerTool(tool: any) {
       registered = tool;
@@ -58,13 +59,15 @@ test("public tool rejects concurrent calls and rolls back failed create", async 
     on(name: string, handler: any) {
       events.set(name, handler);
     },
-    appendEntry() {},
+    appendEntry(type: string, data: unknown) {
+      entries.push({ type: "custom", customType: type, data });
+    },
     sendMessage(message: unknown) {
       sent.push(message);
     },
   };
   extension(pi);
-  const ctx = { cwd: "/tmp", isIdle: () => true, sessionManager: { getEntries: () => [] } };
+  const ctx = { cwd: "/tmp", isIdle: () => true, sessionManager: { getEntries: () => entries } };
   await events.get("session_start")?.({}, ctx);
   const created = await registered.execute(
     "1",
@@ -103,5 +106,82 @@ test("public tool rejects concurrent calls and rolls back failed create", async 
   );
   assert.equal(failed.isError, true);
   assert.equal(killed.length, 1);
+  await events.get("session_shutdown")?.({}, ctx);
+  globalThis.setInterval = originalSetInterval;
+});
+
+test("pending calls and watches restore across session reload", async () => {
+  const originalSetInterval = globalThis.setInterval;
+  (globalThis as any).setInterval = () => ({}) as any;
+  const entries: any[] = [];
+  const runtime = {
+    async tmux(args: string[]) {
+      if (args[0] === "capture-pane") return "baseline\n";
+      if (args[0] === "has-session" || args[0] === "new-session" || args[0] === "send-keys")
+        return "";
+      return "";
+    },
+    now: () => 100,
+    readFile: async () => {
+      throw new Error("not finished");
+    },
+    unlink: async () => {},
+  };
+  setTerminalRuntimeForTests(runtime);
+
+  let tool: any;
+  const firstEvents = new Map<string, any>();
+  const firstPi: any = {
+    registerTool(value: any) {
+      tool = value;
+    },
+    on(name: string, handler: any) {
+      firstEvents.set(name, handler);
+    },
+    appendEntry(type: string, data: unknown) {
+      entries.push({ type: "custom", customType: type, data });
+    },
+    sendMessage() {},
+  };
+  extension(firstPi);
+  const ctx = { cwd: "/tmp", isIdle: () => true, sessionManager: { getEntries: () => entries } };
+  await firstEvents.get("session_start")({}, ctx);
+  await tool.execute("1", { action: "create", name: "x", command: "sh" }, undefined, undefined, ctx);
+  await tool.execute(
+    "2",
+    { action: "call", name: "x", command: "sleep 10", timeoutMs: 10_000 },
+    undefined,
+    undefined,
+    ctx,
+  );
+  await tool.execute(
+    "3",
+    { action: "watch", name: "x", pattern: "READY" },
+    undefined,
+    undefined,
+    ctx,
+  );
+  await firstEvents.get("session_shutdown")({}, ctx);
+
+  let restoredTool: any;
+  const secondEvents = new Map<string, any>();
+  const secondPi: any = {
+    registerTool(value: any) {
+      restoredTool = value;
+    },
+    on(name: string, handler: any) {
+      secondEvents.set(name, handler);
+    },
+    appendEntry(type: string, data: unknown) {
+      entries.push({ type: "custom", customType: type, data });
+    },
+    sendMessage() {},
+  };
+  extension(secondPi);
+  await secondEvents.get("session_start")({}, ctx);
+  const listed = await restoredTool.execute("4", { action: "list" }, undefined, undefined, ctx);
+  assert.equal(listed.details[0].pendingCalls, 1);
+  assert.equal(listed.details[0].watches, 1);
+  await secondEvents.get("session_shutdown")({}, ctx);
   globalThis.setInterval = originalSetInterval;
 });
