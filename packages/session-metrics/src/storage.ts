@@ -178,7 +178,8 @@ function eventRows(path: string, text: string): { sessionId: string | undefined;
               inputBytes,
               ...(callTimestamp !== undefined ? { timestamp: callTimestamp } : {}),
             });
-            const actionName = typeof block.arguments?.action === "string" ? block.arguments.action : undefined;
+            const actionName =
+              typeof block.arguments?.action === "string" ? block.arguments.action : undefined;
             if (actionName)
               sql.push(
                 `INSERT INTO tool_actions VALUES (${quote(`${eventId}:action:${index}`)}, ${quote(path)}, ${quote(sessionId)}, ${quote(toolCallId)}, ${quote(block.name ?? "unknown")}, ${quote(actionName)}, ${quote(JSON.stringify(block.arguments ?? {}))}, ${timestamp(entry.timestamp)});`,
@@ -272,11 +273,19 @@ export async function ingestSessions(
     ];
     await run(
       database,
-      ["BEGIN;", ...tables.map((table) => `DELETE FROM ${table} WHERE source_path = ${quote(path)};`), `DELETE FROM indexed_files WHERE path = ${quote(path)};`, "COMMIT;"].join("\n"),
+      [
+        "BEGIN;",
+        ...tables.map((table) => `DELETE FROM ${table} WHERE source_path = ${quote(path)};`),
+        `DELETE FROM indexed_files WHERE path = ${quote(path)};`,
+        "COMMIT;",
+      ].join("\n"),
     );
     const chunkSize = 500;
     for (let index = 0; index < parsed.sql.length; index += chunkSize) {
-      await run(database, ["BEGIN;", ...parsed.sql.slice(index, index + chunkSize), "COMMIT;"].join("\n"));
+      await run(
+        database,
+        ["BEGIN;", ...parsed.sql.slice(index, index + chunkSize), "COMMIT;"].join("\n"),
+      );
     }
     await run(
       database,

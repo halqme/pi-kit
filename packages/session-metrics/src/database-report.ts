@@ -47,23 +47,56 @@ function addUsage(target: SessionMetrics, row: Row): void {
     cost: Number(row.cost ?? 0),
     cacheCost: Number(row.cache_rebill_cost ?? 0),
   };
-  for (const key of Object.keys(values) as Array<keyof typeof values>) target.tokens[key] += values[key];
+  for (const key of Object.keys(values) as Array<keyof typeof values>)
+    target.tokens[key] += values[key];
   const model = row.model ?? "unknown";
-  const entry = (target.models[model] ??= { messages: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 0, cost: 0, cacheCost: 0 } });
+  const entry = (target.models[model] ??= {
+    messages: 0,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: 0,
+      total: 0,
+      cost: 0,
+      cacheCost: 0,
+    },
+  });
   entry.messages++;
-  for (const key of Object.keys(values) as Array<keyof typeof values>) entry.usage[key] += values[key];
+  for (const key of Object.keys(values) as Array<keyof typeof values>)
+    entry.usage[key] += values[key];
 }
 
-export async function buildDatabaseReport(database?: string, since?: string, limit?: number): Promise<MetricsReport> {
+export async function buildDatabaseReport(
+  database?: string,
+  since?: string,
+  limit?: number,
+): Promise<MetricsReport> {
   const filter = since ? ` AND CAST(created_at AS DATE) >= '${since}'` : "";
   const [sessions, messages, turns, usage, calls, results, skills] = await Promise.all([
     rows("SELECT source_path, session_id, cwd, started_at FROM sessions", database),
-    rows(`SELECT source_path, session_id, role, model, created_at FROM messages WHERE 1 = 1${filter}`, database),
+    rows(
+      `SELECT source_path, session_id, role, model, created_at FROM messages WHERE 1 = 1${filter}`,
+      database,
+    ),
     rows(`SELECT source_path, session_id, created_at FROM turns WHERE 1 = 1${filter}`, database),
-    rows(`SELECT source_path, session_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, total_tokens, cost, cache_rebill_cost FROM assistant_usage WHERE 1 = 1${filter}`, database),
-    rows(`SELECT source_path, session_id, tool_name, created_at FROM tool_calls WHERE 1 = 1${filter}`, database),
-    rows(`SELECT source_path, session_id, tool_name, is_error, reported_tokens, estimated_tokens, created_at FROM tool_results WHERE 1 = 1${filter}`, database),
-    rows(`SELECT source_path, session_id, skill_name, event_kind, created_at FROM skill_events WHERE 1 = 1${filter}`, database),
+    rows(
+      `SELECT source_path, session_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, total_tokens, cost, cache_rebill_cost FROM assistant_usage WHERE 1 = 1${filter}`,
+      database,
+    ),
+    rows(
+      `SELECT source_path, session_id, tool_name, created_at FROM tool_calls WHERE 1 = 1${filter}`,
+      database,
+    ),
+    rows(
+      `SELECT source_path, session_id, tool_name, is_error, reported_tokens, estimated_tokens, created_at FROM tool_results WHERE 1 = 1${filter}`,
+      database,
+    ),
+    rows(
+      `SELECT source_path, session_id, skill_name, event_kind, created_at FROM skill_events WHERE 1 = 1${filter}`,
+      database,
+    ),
   ]);
   const bySession = new Map<string, SessionMetrics>();
   for (const row of sessions) {
@@ -98,19 +131,79 @@ export async function buildDatabaseReport(database?: string, since?: string, lim
   for (const row of calls) {
     const metric = get(row);
     metric.toolCalls++;
-    metric.toolCallsByName[row.tool_name ?? "unknown"] = (metric.toolCallsByName[row.tool_name ?? "unknown"] ?? 0) + 1;
-    const tool = (metric.toolUsage[row.tool_name ?? "unknown"] ??= { available: true, calls: 0, estimatedResultTokens: 0, reportedTokens: 0, errors: 0 });
+    metric.toolCallsByName[row.tool_name ?? "unknown"] =
+      (metric.toolCallsByName[row.tool_name ?? "unknown"] ?? 0) + 1;
+    const tool = (metric.toolUsage[row.tool_name ?? "unknown"] ??= {
+      available: true,
+      calls: 0,
+      estimatedResultTokens: 0,
+      reportedTokens: 0,
+      errors: 0,
+    });
     tool.calls++;
   }
   for (const row of usage) {
     const metric = get(row);
     const model = row.model ?? "unknown";
-    const effort = (metric.thinkingLevels.unknown ??= { messages: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 0, cost: 0, cacheCost: 0 } });
+    const effort = (metric.thinkingLevels.unknown ??= {
+      messages: 0,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        reasoning: 0,
+        total: 0,
+        cost: 0,
+        cacheCost: 0,
+      },
+    });
     effort.messages++;
-    const modelEffort = (metric.modelEfforts[`${model}\0unknown`] ??= { model, effort: "unknown", messages: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 0, cost: 0, cacheCost: 0 } });
+    const modelEffort = (metric.modelEfforts[`${model}\0unknown`] ??= {
+      model,
+      effort: "unknown",
+      messages: 0,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        reasoning: 0,
+        total: 0,
+        cost: 0,
+        cacheCost: 0,
+      },
+    });
     modelEffort.messages++;
-    for (const key of ["input", "output", "cacheRead", "cacheWrite", "reasoning", "total", "cost", "cacheCost"] as const) {
-      effort.usage[key] += metric.tokens[key] - (metric.tokens[key] - Number(row[({ input: "input_tokens", output: "output_tokens", cacheRead: "cache_read_tokens", cacheWrite: "cache_write_tokens", reasoning: "reasoning_tokens", total: "total_tokens", cost: "cost", cacheCost: "cache_rebill_cost" } as const)[key]] ?? 0));
+    for (const key of [
+      "input",
+      "output",
+      "cacheRead",
+      "cacheWrite",
+      "reasoning",
+      "total",
+      "cost",
+      "cacheCost",
+    ] as const) {
+      effort.usage[key] +=
+        metric.tokens[key] -
+        (metric.tokens[key] -
+          Number(
+            row[
+              (
+                {
+                  input: "input_tokens",
+                  output: "output_tokens",
+                  cacheRead: "cache_read_tokens",
+                  cacheWrite: "cache_write_tokens",
+                  reasoning: "reasoning_tokens",
+                  total: "total_tokens",
+                  cost: "cost",
+                  cacheCost: "cache_rebill_cost",
+                } as const
+              )[key]
+            ] ?? 0,
+          ));
       modelEffort.usage[key] = effort.usage[key];
     }
   }
@@ -118,7 +211,13 @@ export async function buildDatabaseReport(database?: string, since?: string, lim
     const metric = get(row);
     metric.toolResults++;
     if (row.is_error) metric.errors++;
-    const tool = (metric.toolUsage[row.tool_name ?? "unknown"] ??= { available: true, calls: 0, estimatedResultTokens: 0, reportedTokens: 0, errors: 0 });
+    const tool = (metric.toolUsage[row.tool_name ?? "unknown"] ??= {
+      available: true,
+      calls: 0,
+      estimatedResultTokens: 0,
+      reportedTokens: 0,
+      errors: 0,
+    });
     tool.estimatedResultTokens += Number(row.estimated_tokens ?? 0);
     tool.reportedTokens += Number(row.reported_tokens ?? 0);
     if (row.is_error) tool.errors++;
@@ -127,12 +226,20 @@ export async function buildDatabaseReport(database?: string, since?: string, lim
     const metric = get(row);
     const name = row.skill_name ?? "unknown";
     if (!/^[a-z0-9-]+$/i.test(name)) continue;
-    const skill = (metric.skills[name] ??= { reads: 0, explicit: 0, existsGlobally: true, existsInProject: true });
+    const skill = (metric.skills[name] ??= {
+      reads: 0,
+      explicit: 0,
+      existsGlobally: true,
+      existsInProject: true,
+    });
     if (row.event_kind === "read") skill.reads++;
     else skill.explicit++;
   }
   const report = createReport();
-  const selected = [...bySession.values()].sort((a, b) => (b.timestamp ?? "").localeCompare(a.timestamp ?? ""));
-  for (const metric of limit === undefined ? selected : selected.slice(0, limit)) addToReport(report, metric);
+  const selected = [...bySession.values()].sort((a, b) =>
+    (b.timestamp ?? "").localeCompare(a.timestamp ?? ""),
+  );
+  for (const metric of limit === undefined ? selected : selected.slice(0, limit))
+    addToReport(report, metric);
   return report;
 }
