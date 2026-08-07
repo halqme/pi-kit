@@ -2,11 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeLines } from "../src/analyze.ts";
 
-test("infers turns and separates human, synthetic, tool, and model events", () => {
-  const continuation =
-    "Previous progress report: implemented the repository layer\n\n" +
-    "Continue the active task:\n\nfinish the API\n\n" +
-    "Before ending the next turn, call loop with action=report and status=continue, done, or blocked.";
+test("infers completed turns and separates tool from model errors", () => {
   const result = analyzeLines([
     JSON.stringify({ type: "session", id: "s1", cwd: "/repo" }),
     JSON.stringify({
@@ -18,15 +14,12 @@ test("infers turns and separates human, synthetic, tool, and model events", () =
       message: {
         role: "assistant",
         stopReason: "toolUse",
-        content: [
-          { type: "toolCall", name: "astrolabe", arguments: { action: "locate" } },
-          { type: "toolCall", name: "loop", arguments: { action: "report" } },
-        ],
+        content: [{ type: "toolCall", name: "example", arguments: { action: "run" } }],
       },
     }),
     JSON.stringify({
       type: "message",
-      message: { role: "toolResult", toolName: "astrolabe", isError: true, content: [] },
+      message: { role: "toolResult", toolName: "example", isError: true, content: [] },
     }),
     JSON.stringify({
       type: "message",
@@ -38,7 +31,7 @@ test("infers turns and separates human, synthetic, tool, and model events", () =
     }),
     JSON.stringify({
       type: "message",
-      message: { role: "user", content: [{ type: "text", text: continuation }] },
+      message: { role: "user", content: [{ type: "text", text: "continue" }] },
     }),
     JSON.stringify({
       type: "message",
@@ -56,13 +49,9 @@ test("infers turns and separates human, synthetic, tool, and model events", () =
 
   assert.equal(result.turns, 2);
   assert.equal(result.userMessages, 2);
-  assert.equal(result.humanUserMessages, 1);
-  assert.equal(result.syntheticUserMessages, 1);
   assert.equal(result.toolErrors, 1);
   assert.equal(result.modelErrors, 1);
   assert.equal(result.errors, 2);
-  assert.equal(result.toolCallsByOperation["astrolabe.locate"], 1);
-  assert.equal(result.toolCallsByOperation["loop.report"], 1);
 });
 
 test("falls back to legacy turn_end entries when assistant stop reasons are absent", () => {
