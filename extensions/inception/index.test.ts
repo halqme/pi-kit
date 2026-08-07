@@ -26,10 +26,7 @@ test("tool classification distinguishes edits, checks, and async launches", () =
     classifyTool("background_process", { action: "start", command: "bun run typecheck" }),
     "other",
   );
-  assert.equal(
-    classifyTool("terminal", { action: "call", command: "bun run test" }),
-    "other",
-  );
+  assert.equal(classifyTool("terminal", { action: "call", command: "bun run test" }), "other");
 });
 
 test("turn-boundary prompt reacts to mutations and failures", () => {

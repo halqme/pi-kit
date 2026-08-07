@@ -120,11 +120,7 @@ class LoopController {
     return this.snapshot()!;
   }
 
-  report(
-    owner: LoopOwner,
-    status: "continue" | "done" | "blocked",
-    summary?: string,
-  ): LoopState {
+  report(owner: LoopOwner, status: "continue" | "done" | "blocked", summary?: string): LoopState {
     const state = this.requireOwner(owner);
     const cleanSummary = summary?.trim();
     if (status === "continue") {
@@ -187,7 +183,9 @@ class LoopController {
     const state = this.state;
     if (!state || state.status !== "active") throw new Error("No active loop");
     if (state.owner !== owner)
-      throw new Error(`Active loop is owned by ${state.owner}; use that owner to report or stop it`);
+      throw new Error(
+        `Active loop is owned by ${state.owner}; use that owner to report or stop it`,
+      );
     return state;
   }
 

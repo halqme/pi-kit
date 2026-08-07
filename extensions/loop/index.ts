@@ -39,14 +39,14 @@ export default function loopExtension(pi: ExtensionAPI): void {
         Type.Integer({ minimum: 1, description: "Maximum agent turns before forced exhaustion" }),
       ),
       status: Type.Optional(
-        Type.Union([
-          Type.Literal("continue"),
-          Type.Literal("done"),
-          Type.Literal("blocked"),
-        ]),
+        Type.Union([Type.Literal("continue"), Type.Literal("done"), Type.Literal("blocked")]),
       ),
-      summary: Type.Optional(Type.String({ description: "Progress, completion, or blocker summary" })),
-      reason: Type.Optional(Type.String({ description: "Reason for explicitly stopping the loop" })),
+      summary: Type.Optional(
+        Type.String({ description: "Progress, completion, or blocker summary" }),
+      ),
+      reason: Type.Optional(
+        Type.String({ description: "Reason for explicitly stopping the loop" }),
+      ),
     }),
     async execute(_id, params) {
       try {

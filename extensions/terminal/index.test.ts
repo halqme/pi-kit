@@ -146,7 +146,13 @@ test("pending calls and watches restore across session reload", async () => {
   extension(firstPi);
   const ctx = { cwd: "/tmp", isIdle: () => true, sessionManager: { getEntries: () => entries } };
   await firstEvents.get("session_start")({}, ctx);
-  await tool.execute("1", { action: "create", name: "x", command: "sh" }, undefined, undefined, ctx);
+  await tool.execute(
+    "1",
+    { action: "create", name: "x", command: "sh" },
+    undefined,
+    undefined,
+    ctx,
+  );
   await tool.execute(
     "2",
     { action: "call", name: "x", command: "sleep 10", timeoutMs: 10_000 },
