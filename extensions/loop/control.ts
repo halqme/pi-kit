@@ -106,6 +106,14 @@ class LoopController {
     return this.snapshot()!;
   }
 
+  updateTask(owner: LoopOwner, task: string): LoopState {
+    const state = this.requireOwner(owner);
+    if (!task.trim()) throw new Error("task is required");
+    state.task = task.trim();
+    this.save();
+    return this.snapshot()!;
+  }
+
   report(
     owner: LoopOwner,
     status: "continue" | "done" | "blocked",
