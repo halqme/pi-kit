@@ -29,7 +29,7 @@ const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDesc
 
 const GUIDANCE = [
   `For existing ${supportedLanguageDescription} source, use astrolabe before read or edit. Do not use read/edit for a supported existing source file unless astrolabe reports unsupported, generated, or configuration content.`,
-  "For an edit intent or known symbol, use locate first. If locate returns mode=source, use that source and continuation directly with replace; do not inspect the same candidate again. If it returns mode=cards, inspect the selected card before replacing. When several same-file cards must be edited, inspect them together with inspect_many and then use replace_many. Use search or outline inspection only when locate cannot identify the target.",
+  "For an edit intent or known symbol, use locate first. If locate returns mode=source, use that source and continuation directly with replace; do not inspect the same candidate again. If it returns mode=cards, inspect only when the card does not provide enough context for the intended replacement. When several same-file cards need source context, inspect them together with inspect_many before replace_many. Use search or outline inspection only when locate cannot identify the target.",
   "Use read or normal edits for unsupported languages, generated/configuration files, new files, or when astrolabe explicitly reports that the target is not applicable.",
 ];
 
@@ -67,7 +67,7 @@ const actionSchema = Type.Union([
   Type.Object({
     action: Type.Literal("replace"),
     continuation: Type.Object({
-      token: Type.String({ description: "Continuation whose source has been returned by Astrolabe" }),
+      token: Type.String({ description: "Continuation returned by Astrolabe" }),
     }),
     replacement: Type.String(),
   }),
@@ -381,31 +381,6 @@ async function dispatch(
         "Pass every target continuation unchanged.",
       );
     }
-    for (const candidate of request.targets) {
-      if (!isContinuation(candidate.continuation)) {
-        return failure(
-          "replace_many",
-          "invalid_continuation",
-          "Pass every target continuation unchanged.",
-        );
-      }
-      const handle = handles.resolveContinuation(candidate.continuation.token);
-      if (!handle) {
-        return failure(
-          "replace_many",
-          "invalid_continuation",
-          "The continuation has expired; inspect source again.",
-        );
-      }
-      if (handle.inspectionStage !== "source") {
-        return failure(
-          "replace_many",
-          "source_not_inspected",
-          "Inspect every selected source before replacing it.",
-          [{ action: "inspect", continuation: candidate.continuation, detail: "source" }],
-        );
-      }
-    }
     const target = handles.resolveContinuation(firstTarget.continuation.token);
     if (!target) {
       return failure(
@@ -451,21 +426,12 @@ async function dispatch(
     return failure("replace", "invalid_continuation", "Pass the source continuation unchanged.");
   }
   const target = handles.resolveContinuation(request.continuation.token);
-  if (!target) {
+  if (!target)
     return failure(
       "replace",
       "invalid_continuation",
       "The continuation has expired; inspect source again.",
     );
-  }
-  if (target.inspectionStage !== "source") {
-    return failure(
-      "replace",
-      "source_not_inspected",
-      "Inspect the selected source before replacing it.",
-      [{ action: "inspect", continuation: request.continuation, detail: "source" }],
-    );
-  }
   return withFileMutationQueue(resolve(cwd, target.path), async () => {
     const result = await editContinuationDetailed(request, cwd, handles);
     if (!result.message.startsWith("edited ")) {
