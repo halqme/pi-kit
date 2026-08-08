@@ -106,7 +106,7 @@ function collectWorkspaceEdits(edit: LspWorkspaceEdit): Map<string, LspTextEdit[
     }
     addEdits(byUri, change.textDocument.uri, change.edits);
   }
-  if (byUri.size === 0) {
+  if (byUri.size === 0 || [...byUri.values()].every((edits) => edits.length === 0)) {
     throw new WorkspaceMutationError("rename_no_edits", "The language server returned an empty WorkspaceEdit.");
   }
   return byUri;
