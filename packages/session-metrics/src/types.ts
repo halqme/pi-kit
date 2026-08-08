@@ -24,6 +24,7 @@ export interface SkillMetrics {
   explicit: number;
 }
 
+/** Current-Pi discoverability compared with the selected historical usage. */
 export type ResourceStatus = "available" | "missing" | "unused";
 
 export interface ResourceSource {
