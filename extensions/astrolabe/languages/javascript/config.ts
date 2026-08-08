@@ -8,6 +8,7 @@ export const adapter: LanguageAdapter = {
     packageName: "tree-sitter-javascript",
     wasmFile: "tree-sitter-javascript.wasm",
   },
+  lsp: { servers: [{ command: "typescript-language-server", args: ["--stdio"] }] },
   outlineQuery,
   labelsQuery,
   searchQueries,
