@@ -25,4 +25,6 @@ Protocol + Trace + Observation
 
 A supervisor may be deterministic code or an async semantic reviewer backed by another model. Both use the same interface and return a decision; the package does not own workflow state, retries, persistence, tools, or model calls.
 
+`trace` is deliberately supplied by the caller rather than maintained by this package. A Pi extension can pass session entries, a narrower execution history, or another domain-specific trace without coupling supervision to one persistence model.
+
 Use explicit state machines for runtime facts such as process liveness, resource ownership, and loop exhaustion. Use protocol supervision when the next action depends on the agent's interpretation of the task and its execution trace.
