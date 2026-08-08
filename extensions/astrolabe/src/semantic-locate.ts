@@ -66,9 +66,14 @@ function mergeMatches(
     }
 
     // Independent evidence sources corroborating the same concrete syntax node
-    // increase confidence instead of merely replacing one another's score.
-    existing.score += match.score;
-    existing.reasons = [...new Set([...existing.reasons, ...match.reasons])];
+    // increase confidence. Repeated copies of the same evidence do not.
+    const existingReasons = new Set(existing.reasons);
+    const novelReasons = match.reasons.filter((reason) => !existingReasons.has(reason));
+    if (novelReasons.length > 0) {
+      const evidenceFraction = match.reasons.length === 0 ? 0 : novelReasons.length / match.reasons.length;
+      existing.score += Math.round(match.score * evidenceFraction);
+      existing.reasons = [...existing.reasons, ...novelReasons];
+    }
     handles.delete(match.handle.id);
   }
   return [...merged.values()].sort(
