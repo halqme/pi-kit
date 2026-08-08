@@ -8,6 +8,12 @@ export const adapter: LanguageAdapter = {
     packageName: "tree-sitter-python",
     wasmFile: "tree-sitter-python.wasm",
   },
+  lsp: {
+    servers: [
+      { command: "basedpyright-langserver", args: ["--stdio"] },
+      { command: "pyright-langserver", args: ["--stdio"] },
+    ],
+  },
   outlineQuery,
   labelsQuery,
   searchQueries,
