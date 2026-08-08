@@ -9,12 +9,22 @@ export interface GrammarDescriptor {
   wasmFile: string;
 }
 
+export interface LspServerSpec {
+  command: string;
+  args?: readonly string[];
+}
+
+export interface LspProfile {
+  servers: readonly LspServerSpec[];
+}
+
 export type SyntaxSearchKind = "function" | "call" | "import";
 
 export interface LanguageAdapter {
   id: string;
   extensions: readonly string[];
   grammar: GrammarDescriptor;
+  lsp?: LspProfile;
   outlineQuery: string;
   labelsQuery: string;
   searchQueries: Record<SyntaxSearchKind, string>;
