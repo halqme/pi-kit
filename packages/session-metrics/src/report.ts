@@ -260,6 +260,24 @@ function emptySkill(): SkillMetrics {
   return { reads: 0, explicit: 0 };
 }
 
+const ACTIVITY_CHART_LEVELS = [
+  "  ",
+  "▏ ",
+  "▎ ",
+  "▍ ",
+  "▌ ",
+  "▋ ",
+  "▊ ",
+  "▉ ",
+  "█ ",
+  "█▏",
+  "█▎",
+  "█▍",
+  "█▌",
+  "█▋",
+  "█▊",
+];
+
 function activityChart(entries: Array<[string, MetricSummary]>): string {
   if (entries.length === 0) return "Recent activity (tokens, 30 days)\n(no activity)";
   const byDate = new Map(entries);
@@ -276,8 +294,10 @@ function activityChart(entries: Array<[string, MetricSummary]>): string {
   const weekdays = ["S", "M", "T", "W", "T", "F", "S"];
   const weeks = Math.ceil(points.length / 7);
   const cell = (value: number): string => {
-    if (maximum <= 0 || value <= 0) return BAR_LEVELS[0]!;
-    return BAR_LEVELS[Math.max(1, Math.round((value / maximum) * (BAR_LEVELS.length - 1)))]!;
+    if (maximum <= 0 || value <= 0) return ACTIVITY_CHART_LEVELS[0]!;
+    return ACTIVITY_CHART_LEVELS[
+      Math.max(1, Math.round((value / maximum) * (ACTIVITY_CHART_LEVELS.length - 1)))
+    ]!;
   };
   return [
     "Recent activity (tokens, 30 days)",
@@ -285,7 +305,7 @@ function activityChart(entries: Array<[string, MetricSummary]>): string {
       (weekday, weekdayIndex) =>
         `${weekday} ${Array.from({ length: weeks }, (_, weekIndex) => {
           const point = points[weekIndex * 7 + weekdayIndex];
-          return point ? cell(point[1].tokens.total) : BAR_LEVELS[0]!;
+          return point ? cell(point[1].tokens.total) : ACTIVITY_CHART_LEVELS[0]!;
         }).join("")}`,
     ),
   ].join("\n");
