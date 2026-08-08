@@ -14,7 +14,7 @@ import type {
   ResourceStatus,
 } from "./types.ts";
 
-interface ResourceInventory {
+export interface PiResourceInventory {
   tools: Record<string, ResourceSource>;
   skills: Record<string, ResourceSource>;
   diagnostics: string[];
@@ -52,7 +52,7 @@ function diagnosticText(value: unknown): string {
 export async function discoverPiResources(
   cwd: string,
   agentDir = getAgentDir(),
-): Promise<ResourceInventory> {
+): Promise<PiResourceInventory> {
   const resolvedCwd = resolve(cwd);
   const loader = new DefaultResourceLoader({ cwd: resolvedCwd, agentDir });
   await loader.reload();
@@ -86,17 +86,13 @@ function status(available: boolean, used: boolean): ResourceStatus {
   return available ? "unused" : "missing";
 }
 
-/**
- * Enrich a historical report with the current Pi resources for one cwd.
- * Historical counts are never filtered or rewritten by current availability.
- */
-export async function addCurrentResources(
+/** Compare deterministic history with one explicitly supplied current resource inventory. */
+export function addResourceInventory(
   report: MetricsReport,
   cwd: string,
-  agentDir?: string,
-): Promise<MetricsReport> {
+  inventory: PiResourceInventory,
+): MetricsReport {
   const resolvedCwd = resolve(cwd);
-  const inventory = await discoverPiResources(resolvedCwd, agentDir);
   const history = report.projects[cwd] ?? report.projects[resolvedCwd] ?? createMetrics();
   const resources: ResourceMetrics = {
     scope: resolvedCwd,
@@ -128,4 +124,17 @@ export async function addCurrentResources(
 
   report.resources = resources;
   return report;
+}
+
+/**
+ * Enrich a historical report with the current Pi resources for one cwd.
+ * Historical counts are never filtered or rewritten by current availability.
+ */
+export async function addCurrentResources(
+  report: MetricsReport,
+  cwd: string,
+  agentDir?: string,
+): Promise<MetricsReport> {
+  const inventory = await discoverPiResources(cwd, agentDir);
+  return addResourceInventory(report, cwd, inventory);
 }
