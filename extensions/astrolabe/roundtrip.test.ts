@@ -30,13 +30,9 @@ function setup(): CapturedTool {
 }
 
 async function call(tool: CapturedTool, cwd: string, request: Record<string, unknown>) {
-  return (await tool.execute(
-    "roundtrip-test",
-    request,
-    undefined,
-    undefined,
-    { cwd } as ExtensionContext,
-  )) as ToolResult;
+  return (await tool.execute("roundtrip-test", request, undefined, undefined, {
+    cwd,
+  } as ExtensionContext)) as ToolResult;
 }
 
 function response(result: ToolResult): any {

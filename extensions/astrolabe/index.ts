@@ -44,10 +44,10 @@ const actionSchema = Type.Union([
   }),
   Type.Object({
     action: Type.Literal("inspect_many"),
-    targets: Type.Array(
-      Type.Object({ continuation: Type.Object({ token: Type.String() }) }),
-      { minItems: 1, maxItems: 10 },
-    ),
+    targets: Type.Array(Type.Object({ continuation: Type.Object({ token: Type.String() }) }), {
+      minItems: 1,
+      maxItems: 10,
+    }),
   }),
   Type.Object({
     action: Type.Literal("locate"),
@@ -227,7 +227,11 @@ async function dispatch(
 
   if (request.action === "inspect_many") {
     if (request.targets.length === 0) {
-      return failure("inspect_many", "inspect_many_requires_target", "Provide at least one target.");
+      return failure(
+        "inspect_many",
+        "inspect_many_requires_target",
+        "Provide at least one target.",
+      );
     }
     const resolved = request.targets.map((target) => ({
       continuation: target.continuation,

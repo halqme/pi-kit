@@ -35,7 +35,12 @@ test("infers completed turns and separates tool from model errors", () => {
     }),
     JSON.stringify({
       type: "message",
-      message: { role: "assistant", stopReason: "error", errorMessage: "connection timeout", content: [] },
+      message: {
+        role: "assistant",
+        stopReason: "error",
+        errorMessage: "connection timeout",
+        content: [],
+      },
     }),
     JSON.stringify({
       type: "message",
@@ -49,6 +54,7 @@ test("infers completed turns and separates tool from model errors", () => {
 
   assert.equal(result.turns, 2);
   assert.equal(result.userMessages, 2);
+  assert.equal(result.toolActions.example?.run?.calls, 1);
   assert.equal(result.toolErrors, 1);
   assert.equal(result.modelErrors, 1);
   assert.equal(result.errors, 2);
