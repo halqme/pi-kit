@@ -70,7 +70,7 @@ function string(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function number(value: unknown): number {
+function numeric(value: unknown): number {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
@@ -96,14 +96,14 @@ export function normalizeUsage(value: unknown): UsageTotals {
   const usage = record(value);
   const cost = record(usage?.cost);
   return {
-    input: number(usage?.input),
-    output: number(usage?.output),
-    cacheRead: number(usage?.cacheRead),
-    cacheWrite: number(usage?.cacheWrite),
-    reasoning: number(usage?.reasoning),
-    total: number(usage?.totalTokens ?? usage?.total),
-    cost: number(cost?.total ?? usage?.cost),
-    cacheCost: number(cost?.cacheRead ?? usage?.cacheCost),
+    input: numeric(usage?.input),
+    output: numeric(usage?.output),
+    cacheRead: numeric(usage?.cacheRead),
+    cacheWrite: numeric(usage?.cacheWrite),
+    reasoning: numeric(usage?.reasoning),
+    total: numeric(usage?.totalTokens ?? usage?.total),
+    cost: numeric(cost?.total ?? usage?.cost),
+    cacheCost: numeric(cost?.cacheRead ?? usage?.cacheCost),
   };
 }
 
@@ -122,26 +122,36 @@ function messageEvents(entry: RecordValue, message: RecordValue): SessionEvent[]
   const role = string(message.role);
   const eventTimestamp = timestamp(entry, message);
   if (role === "user") {
-    return [{ kind: "user_message", ...(eventTimestamp ? { timestamp: eventTimestamp } : {}), content: message.content }];
+    return [
+      {
+        kind: "user_message",
+        ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
+        content: message.content,
+      },
+    ];
   }
   if (role === "assistant") {
+    const model = string(message.model);
+    const stopReason = string(message.stopReason);
+    const errorMessage = string(message.errorMessage);
     const events: SessionEvent[] = [
       {
         kind: "assistant_message",
         ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
-        ...(string(message.model) ? { model: string(message.model) } : {}),
-        ...(string(message.stopReason) ? { stopReason: string(message.stopReason) } : {}),
-        ...(string(message.errorMessage) ? { errorMessage: string(message.errorMessage) } : {}),
+        ...(model ? { model } : {}),
+        ...(stopReason ? { stopReason } : {}),
+        ...(errorMessage ? { errorMessage } : {}),
         usage: normalizeUsage(message.usage),
       },
     ];
     for (const block of Array.isArray(message.content) ? message.content : []) {
       const item = record(block);
       if (item?.type !== "toolCall" || typeof item.name !== "string") continue;
+      const toolCallId = string(item.id ?? item.toolCallId);
       events.push({
         kind: "tool_call",
         ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
-        ...(string(item.id ?? item.toolCallId) ? { toolCallId: string(item.id ?? item.toolCallId) } : {}),
+        ...(toolCallId ? { toolCallId } : {}),
         toolName: item.name,
         input: item.arguments ?? item.input,
       });
@@ -149,16 +159,18 @@ function messageEvents(entry: RecordValue, message: RecordValue): SessionEvent[]
     return events;
   }
   if (role === "toolResult") {
+    const toolCallId = string(message.toolCallId);
+    const toolName = string(message.toolName);
     return [
       {
         kind: "tool_result",
         ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
-        ...(string(message.toolCallId) ? { toolCallId: string(message.toolCallId) } : {}),
-        ...(string(message.toolName) ? { toolName: string(message.toolName) } : {}),
+        ...(toolCallId ? { toolCallId } : {}),
+        ...(toolName ? { toolName } : {}),
         content: message.content,
         ...(message.details !== undefined ? { details: message.details } : {}),
         isError: message.isError === true,
-        reportedTokens: number(record(message.usage)?.totalTokens),
+        reportedTokens: numeric(record(message.usage)?.totalTokens),
       },
     ];
   }
@@ -185,11 +197,13 @@ export function eventsFromLine(line: string): SessionEvent[] {
   const type = string(entry.type) ?? "unknown";
   const eventTimestamp = timestamp(entry);
   if (type === "session") {
+    const id = string(entry.id);
+    const cwd = string(entry.cwd);
     return [
       {
         kind: "session",
-        ...(string(entry.id) ? { id: string(entry.id) } : {}),
-        ...(string(entry.cwd) ? { cwd: string(entry.cwd) } : {}),
+        ...(id ? { id } : {}),
+        ...(cwd ? { cwd } : {}),
         ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
       },
     ];
