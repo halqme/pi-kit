@@ -25,6 +25,12 @@ export interface PlanState {
   stopReason?: string;
 }
 
+export type RunnerEvent =
+  | { type: "start" }
+  | { type: "progress"; steps?: number[] }
+  | { type: "stop"; reason: string }
+  | { type: "exhaust"; reason: string };
+
 export const PLAN_STATE_ENTRY = "plan-state";
 
 export function emptyPlan(stage: PlanStage = "grill", goal?: string): PlanState {
@@ -98,6 +104,31 @@ export function recordProgress(state: PlanState, numbers: number[]): number {
   if (state.steps.length > 0 && state.steps.every((step) => step.completed))
     state.status = "completed";
   return changed;
+}
+
+export function transitionRunner(current: PlanState, event: RunnerEvent): PlanState {
+  const state = validatePlanState(current);
+
+  if (event.type === "start") {
+    if (state.status !== "approved")
+      throw new Error(`Runner cannot start from plan status ${state.status}`);
+    state.status = "running";
+    state.stage = "runner";
+    delete state.stopReason;
+    return state;
+  }
+
+  if (state.status !== "running")
+    throw new Error(`Runner cannot ${event.type} from plan status ${state.status}`);
+
+  if (event.type === "progress") {
+    if (event.steps?.length) recordProgress(state, event.steps);
+    return state;
+  }
+
+  state.status = "stopped";
+  state.stopReason = event.reason.trim() || (event.type === "exhaust" ? "Runner exhausted" : "Stopped");
+  return state;
 }
 
 export function savePlanState(
