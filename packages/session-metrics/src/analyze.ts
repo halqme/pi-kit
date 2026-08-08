@@ -143,11 +143,10 @@ function createAccumulator() {
       const tool = (result.toolUsage[event.toolName] ??= createToolMetrics());
       tool.calls++;
       if (event.toolCallId) {
+        const startedAt = timestampMs(event.timestamp);
         pendingTools.set(event.toolCallId, {
           toolName: event.toolName,
-          ...(timestampMs(event.timestamp) !== undefined
-            ? { timestampMs: timestampMs(event.timestamp) }
-            : {}),
+          ...(startedAt !== undefined ? { timestampMs: startedAt } : {}),
         });
       }
       return;
