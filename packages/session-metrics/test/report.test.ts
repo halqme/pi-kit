@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { addToReport, analyzeLines, createReport } from "../src/analyze.ts";
 import { formatTokens, renderSummary } from "../src/report.ts";
+import { addResourceInventory } from "../src/resources.ts";
 
-test("renders deterministic generic summary and token cache details", () => {
+test("renders deterministic summary with cache skills and tools", () => {
   const report = createReport();
   addToReport(
     report,
@@ -15,6 +16,13 @@ test("renders deterministic generic summary and token cache details", () => {
         timestamp: "2026-04-12T00:00:00Z",
       }),
       JSON.stringify({ type: "turn_end" }),
+      JSON.stringify({
+        type: "message",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "/skill:verify-work" }],
+        },
+      }),
       JSON.stringify({
         type: "message",
         message: {
@@ -37,17 +45,18 @@ test("renders deterministic generic summary and token cache details", () => {
   assert.match(output, /90\.0%/);
   assert.match(output, /Top model \/ effort/);
   assert.match(output, /\$14\.8548/);
+  assert.match(output, /Top skills/);
+  assert.match(output, /verify-work/);
   assert.match(output, /Top tools/);
-  assert.doesNotMatch(output, /Top skills/);
   assert.equal(formatTokens(820_000), "820K");
 });
 
-test("renders tool latency from paired call and result timestamps", () => {
+test("renders tool latency and current resource status", () => {
   const report = createReport();
   addToReport(
     report,
     analyzeLines([
-      JSON.stringify({ type: "session", id: "s1", timestamp: "2026-04-12T00:00:00Z" }),
+      JSON.stringify({ type: "session", id: "s1", cwd: "/repo", timestamp: "2026-04-12T00:00:00Z" }),
       JSON.stringify({
         type: "message",
         timestamp: "2026-04-12T00:00:01.000Z",
@@ -68,9 +77,68 @@ test("renders tool latency from paired call and result timestamps", () => {
       }),
     ]),
   );
+  addResourceInventory(report, "/repo", {
+    tools: { read: { source: "builtin" }, unused_tool: { source: "extension" } },
+    skills: {},
+    diagnostics: [],
+  });
   const output = renderSummary(report, { view: "tools" });
   assert.match(output, /read/);
+  assert.match(output, /available/);
+  assert.match(output, /unused_tool/);
+  assert.match(output, /unused/);
   assert.match(output, /250ms/);
+});
+
+test("renders tool action facets", () => {
+  const report = createReport();
+  addToReport(
+    report,
+    analyzeLines([
+      JSON.stringify({ type: "session", id: "s1", timestamp: "2026-04-12T00:00:00Z" }),
+      JSON.stringify({
+        type: "message",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-1",
+              name: "astrolabe",
+              arguments: { action: "inspect_many" },
+            },
+          ],
+        },
+      }),
+    ]),
+  );
+  const output = renderSummary(report, { view: "tool-actions" });
+  assert.match(output, /astrolabe/);
+  assert.match(output, /inspect_many/);
+});
+
+test("renders skill status including missing and unused skills", () => {
+  const report = createReport();
+  addToReport(
+    report,
+    analyzeLines([
+      JSON.stringify({ type: "session", id: "s1", cwd: "/repo" }),
+      JSON.stringify({
+        type: "message",
+        message: { role: "user", content: [{ type: "text", text: "/skill:removed-skill" }] },
+      }),
+    ]),
+  );
+  addResourceInventory(report, "/repo", {
+    tools: {},
+    skills: { "new-skill": { source: "local" } },
+    diagnostics: [],
+  });
+  const output = renderSummary(report, { view: "skills" });
+  assert.match(output, /removed-skill/);
+  assert.match(output, /missing/);
+  assert.match(output, /new-skill/);
+  assert.match(output, /unused/);
 });
 
 test("supports period views, since, and limit", () => {
