@@ -22,6 +22,7 @@ export const adapter: LanguageAdapter = {
     packageName: grammarPackage,
     wasmFile: "tree-sitter-typescript.wasm",
   },
+  lsp: { servers: [{ command: "typescript-language-server", args: ["--stdio"] }] },
   outlineQuery,
   labelsQuery,
   searchQueries,
