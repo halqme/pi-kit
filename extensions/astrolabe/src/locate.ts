@@ -1,7 +1,7 @@
 import type { Node } from "web-tree-sitter";
 import { requireAdapterForPath, type LanguageAdapter } from "./language-profile.ts";
 import { HandleStore, type NodeHandle } from "./node-handles.ts";
-import { parseFile, sourceOf } from "./parser.ts";
+import { parseFile, sourceOf, type ParsedFile } from "./parser.ts";
 import { sourceFilesInScope } from "./path.ts";
 
 export interface LocateParams {
@@ -31,12 +31,12 @@ export interface LocateMatch {
   source: string;
 }
 
-function declarationName(file: Awaited<ReturnType<typeof parseFile>>, node: Node): string {
+function declarationName(file: ParsedFile, node: Node): string {
   return sourceOf(file, node.childForFieldName("name") ?? node).split(/\s|\(/, 1)[0] ?? node.type;
 }
 
 function qualifiedName(
-  file: Awaited<ReturnType<typeof parseFile>>,
+  file: ParsedFile,
   node: Node,
   name: string,
   adapter: LanguageAdapter,
@@ -53,7 +53,7 @@ function qualifiedName(
   return parts.join(".");
 }
 
-function signature(file: Awaited<ReturnType<typeof parseFile>>, node: Node): string {
+function signature(file: ParsedFile, node: Node): string {
   const body = node.childForFieldName("body");
   return sourceOf(file, node)
     .slice(0, body ? body.startIndex - node.startIndex : undefined)
@@ -63,7 +63,7 @@ function signature(file: Awaited<ReturnType<typeof parseFile>>, node: Node): str
 }
 
 function parentName(
-  file: Awaited<ReturnType<typeof parseFile>>,
+  file: ParsedFile,
   node: Node,
   adapter: LanguageAdapter,
 ): string | undefined {
@@ -84,7 +84,7 @@ function containsCall(node: Node): boolean {
   return false;
 }
 
-function flow(file: Awaited<ReturnType<typeof parseFile>>, node: Node): LocateFlow {
+function flow(file: ParsedFile, node: Node): LocateFlow {
   const calls = new Set<string>();
   let awaits = 0;
   let branches = 0;
@@ -136,6 +136,43 @@ function scoreCandidate(
   return { score, reasons };
 }
 
+export function locateMatchForDeclaration(
+  file: ParsedFile,
+  node: Node,
+  adapter: LanguageAdapter,
+  handles: HandleStore,
+  score: number,
+  reasons: string[],
+): LocateMatch {
+  const name = declarationName(file, node);
+  const parent = parentName(file, node, adapter);
+  return {
+    handle: handles.issue(file, node, "structure"),
+    path: file.path,
+    name,
+    ...(parent ? { parent } : {}),
+    signature: signature(file, node),
+    flow: flow(file, node),
+    score,
+    reasons,
+    source: sourceOf(file, node),
+  };
+}
+
+export function declarationAtIndex(
+  file: ParsedFile,
+  adapter: LanguageAdapter,
+  index: number,
+): Node | undefined {
+  if (!Number.isInteger(index) || index < 0 || index > file.source.length) return undefined;
+  let current: Node | null = file.tree.rootNode.descendantForIndex(index, index);
+  while (current) {
+    if (adapter.declarationNodeTypes.has(current.type)) return current;
+    current = current.parent;
+  }
+  return undefined;
+}
+
 export async function locateDetailed(
   params: LocateParams,
   cwd: string,
@@ -168,18 +205,7 @@ export async function locateDetailed(
           terms,
         );
         if (score > 0) {
-          const parent = parentName(file, node, adapter);
-          matches.push({
-            handle: handles.issue(file, node, "structure"),
-            path,
-            name,
-            ...(parent ? { parent } : {}),
-            signature: signature(file, node),
-            flow: flow(file, node),
-            score,
-            reasons,
-            source: candidateSource,
-          });
+          matches.push(locateMatchForDeclaration(file, node, adapter, handles, score, reasons));
         }
       }
       for (const child of node.namedChildren) if (child) visit(child);
