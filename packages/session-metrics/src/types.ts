@@ -28,6 +28,7 @@ export type ResourceStatus = "available" | "missing" | "unused";
 
 export interface ResourceSource {
   path?: string;
+  source?: string;
   origin?: string;
   scope?: string;
 }
