@@ -95,8 +95,6 @@ export function recordProgress(state: PlanState, numbers: number[]): number {
       step.completed = true;
       changed += 1;
     }
-  if (state.steps.length > 0 && state.steps.every((step) => step.completed))
-    state.status = "completed";
   return changed;
 }
 

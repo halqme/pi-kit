@@ -8,7 +8,7 @@ import {
   validatePlanState,
 } from "../src/index.ts";
 
-test("validates and records idempotent progress", () => {
+test("records idempotent progress without deciding protocol completion", () => {
   const state = validatePlanState({
     ...emptyPlan("runner"),
     status: "running",
@@ -23,7 +23,8 @@ test("validates and records idempotent progress", () => {
     [2],
   );
   assert.equal(recordProgress(state, [2]), 1);
-  assert.equal(state.status, "completed");
+  assert.equal(remainingSteps(state).length, 0);
+  assert.equal(state.status, "running");
 });
 
 test("restores only the latest session entry", () => {

@@ -8,10 +8,24 @@ import {
   savePlanState,
   type PlanState,
 } from "@halqme/plan-state";
+import { supervise, type SupervisionDecision } from "@halqme/protocol-supervision";
 import { loopController } from "../loop/control.ts";
+import {
+  runnerSupervisors,
+  type RunnerProposal,
+  type RunnerProtocolContext,
+} from "./protocol.ts";
 
 function taskFor(state: PlanState): string {
   const remaining = remainingSteps(state);
+  if (!remaining.length)
+    return [
+      "All approved TODO steps are reported complete.",
+      "Apply complete-task to evaluate the requested outcome against the actual workspace and available evidence.",
+      "Do not infer completion from the empty TODO list alone.",
+      "Call runner.finish with a concise evidence summary only when completion is supported; otherwise continue working or call runner.stop if blocked.",
+    ].join("\n");
+
   return [
     "Execute the approved TODO plan to completion.",
     "",
@@ -19,6 +33,22 @@ function taskFor(state: PlanState): string {
     "",
     "Use runner.progress before ending each turn, with any newly completed steps and/or a concise progress summary. Use runner.stop if the plan is blocked or invalidated.",
   ].join("\n");
+}
+
+function rejectedProposal(decision: Exclude<SupervisionDecision, { type: "allow" }>, state: PlanState) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text:
+          decision.type === "block"
+            ? `Runner proposal blocked: ${decision.reason}`
+            : decision.context,
+      },
+    ],
+    details: state,
+    ...(decision.type === "block" ? { isError: true } : {}),
+  };
 }
 
 export default function runnerExtension(pi: ExtensionAPI): void {
@@ -39,10 +69,12 @@ export default function runnerExtension(pi: ExtensionAPI): void {
     name: "runner",
     label: "Runner",
     description:
-      "Execute an approved TODO plan through the shared loop continuation controller. start claims the loop for the plan but does not create a new turn; begin work immediately in the current turn. Before ending each running turn, call progress with completed steps and/or a concise summary. progress keeps the loop active while steps remain and completes it when the plan is finished. stop ends both the plan and its loop. If maxTurns is exhausted, the running plan is stopped automatically.",
+      "Execute an approved TODO plan as a supervised protocol. The agent interprets the plan and session trace; runner supervisors evaluate start, progress, finish, and stop proposals and may allow, block, or inject corrective context. Runtime loop ownership and exhaustion remain hard lifecycle state. Completing TODO steps records evidence but does not itself declare the task complete.",
     promptGuidelines: [
       "After runner.start, execute the first remaining step in the current turn instead of waiting for a follow-up.",
       "Before every agent_end while runner is active, call runner.progress even when no whole step completed; use summary to report partial progress.",
+      "Treat completed TODO steps as execution evidence, not as a completion verdict. After every step is reported complete, apply complete-task and call runner.finish with concise evidence only when the requested outcome is supported.",
+      "If supervision injects additional context, use it to re-evaluate the next action instead of treating the proposal as accepted.",
       "Use runner.stop when the approved plan becomes invalid, blocked, or requires a material decision outside its acceptance boundary.",
       "Do not call loop.report or loop.stop for a runner-owned loop; runner owns its continuation state.",
     ],
@@ -50,11 +82,15 @@ export default function runnerExtension(pi: ExtensionAPI): void {
       action: Type.Union([
         Type.Literal("start"),
         Type.Literal("progress"),
+        Type.Literal("finish"),
         Type.Literal("stop"),
         Type.Literal("status"),
       ]),
       steps: Type.Optional(Type.Array(Type.Integer({ minimum: 1 }))),
       summary: Type.Optional(Type.String({ description: "Progress made during the current turn" })),
+      evidence: Type.Optional(
+        Type.String({ description: "Concise evidence that the requested outcome is satisfied" }),
+      ),
       reason: Type.Optional(Type.String()),
       maxTurns: Type.Optional(
         Type.Integer({ minimum: 1, description: "Maximum runner turns before loop exhaustion" }),
@@ -62,29 +98,53 @@ export default function runnerExtension(pi: ExtensionAPI): void {
     }),
     async execute(_id, params, _signal, _update, ctx) {
       state = restorePlanState(ctx.sessionManager.getEntries()) ?? state;
+
+      if (params.action === "status") {
+        const loop = loopController.snapshot();
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Runner status: ${state.status}${loop?.owner === "runner" ? `; loop=${loop.status} (${loop.turns}/${loop.maxTurns})` : ""}`,
+            },
+          ],
+          details: state,
+        };
+      }
+
+      let proposal: RunnerProposal;
       if (params.action === "start") {
-        if (state.status !== "approved")
-          return {
-            content: [{ type: "text" as const, text: "No approved plan is ready." }],
-            details: state,
-            isError: true,
-          };
-        const activeLoop = loopController.snapshot();
-        if (activeLoop?.status === "active")
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `Cannot start runner while a loop is active and owned by ${activeLoop.owner}.`,
-              },
-            ],
-            details: state,
-            isError: true,
-          };
+        proposal = { type: "start", maxTurns: params.maxTurns ?? 16 };
+      } else if (params.action === "progress") {
+        proposal = {
+          type: "progress",
+          ...(params.steps?.length ? { steps: params.steps } : {}),
+          ...(params.summary?.trim() ? { summary: params.summary.trim() } : {}),
+        };
+      } else if (params.action === "finish") {
+        proposal = {
+          type: "finish",
+          ...(params.evidence?.trim() ? { evidence: params.evidence.trim() } : {}),
+        };
+      } else {
+        proposal = { type: "stop", reason: params.reason?.trim() || "Stopped by user" };
+      }
+
+      const protocolContext: RunnerProtocolContext = {
+        proposal,
+        observation: { plan: state, loop: loopController.snapshot() },
+        trace: ctx.sessionManager.getEntries(),
+      };
+      const supervision = await supervise(protocolContext, runnerSupervisors);
+      if (supervision.decision.type !== "allow")
+        return rejectedProposal(supervision.decision, state);
+
+      if (proposal.type === "start") {
         try {
-          loopController.start("runner", taskFor(state), params.maxTurns ?? 16);
+          loopController.start("runner", taskFor(state), proposal.maxTurns);
           state.status = "running";
           state.stage = "runner";
+          delete state.stopReason;
           savePlanState(pi, state);
         } catch (error) {
           return {
@@ -103,27 +163,10 @@ export default function runnerExtension(pi: ExtensionAPI): void {
           details: state,
         };
       }
-      if (params.action === "progress") {
-        if (state.status !== "running")
-          return {
-            content: [{ type: "text" as const, text: "Runner is not executing." }],
-            details: state,
-            isError: true,
-          };
-        const cleanSummary = params.summary?.trim();
-        if (!params.steps?.length && !cleanSummary)
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: "progress requires completed steps and/or a summary of partial progress",
-              },
-            ],
-            details: state,
-            isError: true,
-          };
+
+      if (proposal.type === "progress") {
         try {
-          if (params.steps?.length) recordProgress(state, params.steps);
+          if (proposal.steps?.length) recordProgress(state, [...proposal.steps]);
         } catch (error) {
           state.status = "stopped";
           state.stopReason = String(error);
@@ -139,25 +182,19 @@ export default function runnerExtension(pi: ExtensionAPI): void {
             isError: true,
           };
         }
+
         savePlanState(pi, state);
+        const verificationPending = remainingSteps(state).length === 0;
         try {
-          if (state.status === "completed") {
-            loopController.report(
-              "runner",
-              "done",
-              cleanSummary || "All approved TODO steps completed.",
-            );
-          } else {
-            loopController.updateTask("runner", taskFor(state));
-            const completedText = params.steps?.length
-              ? `Completed step(s): ${params.steps.join(", ")}.`
-              : undefined;
-            loopController.report(
-              "runner",
-              "continue",
-              [completedText, cleanSummary].filter(Boolean).join(" ") || undefined,
-            );
-          }
+          loopController.updateTask("runner", taskFor(state));
+          const completedText = proposal.steps?.length
+            ? `Completed step(s): ${proposal.steps.join(", ")}.`
+            : undefined;
+          loopController.report(
+            "runner",
+            "continue",
+            [completedText, proposal.summary].filter(Boolean).join(" ") || undefined,
+          );
         } catch (error) {
           state.status = "stopped";
           state.stopReason = `Runner loop unavailable: ${String(error)}`;
@@ -168,41 +205,57 @@ export default function runnerExtension(pi: ExtensionAPI): void {
             isError: true,
           };
         }
+
         return {
           content: [
             {
               type: "text" as const,
-              text: state.status === "completed" ? "Plan completed." : "Progress recorded.",
+              text: verificationPending
+                ? "All TODO steps are reported complete. Apply complete-task, then call runner.finish with concise evidence only when the requested outcome is supported."
+                : "Progress recorded.",
             },
           ],
           details: state,
         };
       }
-      if (params.action === "stop") {
-        state.status = "stopped";
-        state.stopReason = params.reason?.trim() || "Stopped by user";
+
+      if (proposal.type === "finish") {
+        state.status = "completed";
+        delete state.stopReason;
         savePlanState(pi, state);
-        const loop = loopController.snapshot();
-        if (loop?.status === "active" && loop.owner === "runner") {
-          try {
-            loopController.stop("runner", state.stopReason);
-          } catch {
-            // Plan state remains authoritative for the explicit stop.
-          }
+        try {
+          loopController.report("runner", "done", proposal.evidence);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Plan completed, but runner loop finalization failed: ${String(error)}`,
+              },
+            ],
+            details: state,
+            isError: true,
+          };
         }
         return {
-          content: [{ type: "text" as const, text: `Runner stopped: ${state.stopReason}` }],
+          content: [{ type: "text" as const, text: "Plan completed after supervised finish." }],
           details: state,
         };
       }
+
+      state.status = "stopped";
+      state.stopReason = proposal.reason;
+      savePlanState(pi, state);
       const loop = loopController.snapshot();
+      if (loop?.status === "active" && loop.owner === "runner") {
+        try {
+          loopController.stop("runner", state.stopReason);
+        } catch {
+          // Plan state records the explicit stop even if loop state was already lost.
+        }
+      }
       return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Runner status: ${state.status}${loop?.owner === "runner" ? `; loop=${loop.status} (${loop.turns}/${loop.maxTurns})` : ""}`,
-          },
-        ],
+        content: [{ type: "text" as const, text: `Runner stopped: ${state.stopReason}` }],
         details: state,
       };
     },
