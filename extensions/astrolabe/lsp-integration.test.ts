@@ -25,7 +25,43 @@ function fakeLsp(options: {
   };
 }
 
-test("locate can use LSP workspace symbols as a semantic ranking source", async () => {
+test("locate fuses LSP evidence even when Tree-sitter already has a clear target", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-lsp-"));
+  const path = join(dir, "sample.ts");
+  await writeFile(path, "function answer() { return 1; }\n");
+  let semanticCalls = 0;
+  const lsp = fakeLsp({
+    symbols: async (adapter, cwd, query) => {
+      semanticCalls++;
+      assert.equal(adapter.id, "typescript");
+      assert.equal(cwd, dir);
+      assert.equal(query, "answer");
+      return [
+        {
+          name: "answer",
+          uri: pathToFileURL(path).href,
+          range: { start: { line: 0, character: 9 }, end: { line: 0, character: 15 } },
+        },
+      ];
+    },
+  });
+
+  const matches = await locateResolvedDetailed(
+    { scope: "sample.ts", symbols: ["answer"] },
+    dir,
+    new HandleStore(),
+    lsp,
+  );
+
+  assert.equal(semanticCalls, 1);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0]?.name, "answer");
+  assert.equal(matches[0]?.score, 260);
+  assert.ok(matches[0]?.reasons.includes("tree-sitter:symbol:answer:qualified"));
+  assert.ok(matches[0]?.reasons.includes("lsp:workspaceSymbol:answer"));
+});
+
+test("locate can still resolve a candidate supplied only by LSP", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-lsp-"));
   const path = join(dir, "sample.ts");
   await writeFile(path, "function actualName() { return 1; }\n");
@@ -75,11 +111,20 @@ test("rename keeps node selection but commits the LSP WorkspaceEdit through Astr
   const workspaceEdit: LspWorkspaceEdit = {
     changes: {
       [pathToFileURL(declarationPath).href]: [
-        { range: { start: { line: 0, character: 16 }, end: { line: 0, character: 23 } }, newText: "newName" },
+        {
+          range: { start: { line: 0, character: 16 }, end: { line: 0, character: 23 } },
+          newText: "newName",
+        },
       ],
       [pathToFileURL(usePath).href]: [
-        { range: { start: { line: 0, character: 9 }, end: { line: 0, character: 16 } }, newText: "newName" },
-        { range: { start: { line: 1, character: 0 }, end: { line: 1, character: 7 } }, newText: "newName" },
+        {
+          range: { start: { line: 0, character: 9 }, end: { line: 0, character: 16 } },
+          newText: "newName",
+        },
+        {
+          range: { start: { line: 1, character: 0 }, end: { line: 1, character: 7 } },
+          newText: "newName",
+        },
       ],
     },
   };
