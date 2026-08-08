@@ -10,11 +10,7 @@ import {
 } from "@halqme/plan-state";
 import { supervise, type SupervisionDecision } from "@halqme/protocol-supervision";
 import { loopController } from "../loop/control.ts";
-import {
-  runnerSupervisors,
-  type RunnerProposal,
-  type RunnerProtocolContext,
-} from "./protocol.ts";
+import { runnerSupervisors, type RunnerProposal, type RunnerProtocolContext } from "./protocol.ts";
 
 function taskFor(state: PlanState): string {
   const remaining = remainingSteps(state);
@@ -35,7 +31,10 @@ function taskFor(state: PlanState): string {
   ].join("\n");
 }
 
-function rejectedProposal(decision: Exclude<SupervisionDecision, { type: "allow" }>, state: PlanState) {
+function rejectedProposal(
+  decision: Exclude<SupervisionDecision, { type: "allow" }>,
+  state: PlanState,
+) {
   return {
     content: [
       {

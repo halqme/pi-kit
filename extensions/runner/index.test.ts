@@ -129,13 +129,7 @@ test("runner supervision injects completion requirements instead of forcing a tr
     undefined,
     h.ctx,
   );
-  const noEvidence = await h.tool.execute(
-    "4",
-    { action: "finish" },
-    undefined,
-    undefined,
-    h.ctx,
-  );
+  const noEvidence = await h.tool.execute("4", { action: "finish" }, undefined, undefined, h.ctx);
   assert.equal(noEvidence.details.status, "running");
   assert.equal(noEvidence.isError, undefined);
   assert.match(noEvidence.content[0].text, /empty checklist is not a completion verdict/);

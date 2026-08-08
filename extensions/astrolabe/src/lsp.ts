@@ -240,7 +240,10 @@ class LspClient {
 
   async rename(path: string, position: LspPosition, newName: string): Promise<LspWorkspaceEdit> {
     if (this.capabilities?.renameProvider === false) {
-      throw new LspError("rename_unavailable", `${this.languageId} language server does not support rename.`);
+      throw new LspError(
+        "rename_unavailable",
+        `${this.languageId} language server does not support rename.`,
+      );
     }
     await this.syncDocument(path);
     const textDocument = { uri: pathToFileURL(path).href };
@@ -252,7 +255,10 @@ class LspClient {
         8_000,
       );
       if (prepared === null) {
-        throw new LspError("rename_unavailable", "The language server rejected rename at this symbol.");
+        throw new LspError(
+          "rename_unavailable",
+          "The language server rejected rename at this symbol.",
+        );
       }
     }
     const edit = await this.request(
@@ -333,7 +339,9 @@ class LspClient {
       try {
         message = JSON.parse(body) as JsonRpcMessage;
       } catch {
-        this.failPending(new LspError("lsp_protocol_error", "Language server returned invalid JSON."));
+        this.failPending(
+          new LspError("lsp_protocol_error", "Language server returned invalid JSON."),
+        );
         continue;
       }
       this.onMessage(message);
@@ -366,13 +374,17 @@ class LspClient {
     const id = message.id as number | string;
     let result: unknown = null;
     if (message.method === "workspace/configuration") {
-      const items = isRecord(message.params) && Array.isArray(message.params.items) ? message.params.items : [];
+      const items =
+        isRecord(message.params) && Array.isArray(message.params.items) ? message.params.items : [];
       result = items.map(() => null);
     } else if (message.method === "workspace/workspaceFolders") {
       const rootUri = pathToFileURL(this.cwd).href;
       result = [{ uri: rootUri, name: basename(this.cwd) }];
     } else if (message.method === "workspace/applyEdit") {
-      result = { applied: false, failureReason: "Astrolabe only applies explicitly returned WorkspaceEdit values." };
+      result = {
+        applied: false,
+        failureReason: "Astrolabe only applies explicitly returned WorkspaceEdit values.",
+      };
     } else if (
       message.method !== "client/registerCapability" &&
       message.method !== "client/unregisterCapability" &&
@@ -441,7 +453,11 @@ export class LspManager implements LspService {
     return pending;
   }
 
-  async workspaceSymbols(adapter: LanguageAdapter, cwd: string, query: string): Promise<LspSymbol[]> {
+  async workspaceSymbols(
+    adapter: LanguageAdapter,
+    cwd: string,
+    query: string,
+  ): Promise<LspSymbol[]> {
     try {
       const client = await this.client(adapter, cwd);
       return await client.workspaceSymbols(query);
@@ -466,9 +482,7 @@ export class LspManager implements LspService {
     this.sessions.clear();
     const clients = await Promise.allSettled(sessions);
     await Promise.allSettled(
-      clients.flatMap((result) =>
-        result.status === "fulfilled" ? [result.value.dispose()] : [],
-      ),
+      clients.flatMap((result) => (result.status === "fulfilled" ? [result.value.dispose()] : [])),
     );
   }
 }

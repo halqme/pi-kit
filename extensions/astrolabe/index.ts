@@ -398,15 +398,15 @@ async function dispatch(
 
   if (request.action === "rename") {
     if (!isContinuation(request.continuation)) {
-      return failure("rename", "invalid_continuation", "Pass the declaration continuation unchanged.");
+      return failure(
+        "rename",
+        "invalid_continuation",
+        "Pass the declaration continuation unchanged.",
+      );
     }
     const result = await renameContinuationDetailed(request, cwd, handles, lsp);
     if (!result.message.startsWith("renamed ")) {
-      return failure(
-        "rename",
-        result.message.split(":")[0] ?? "rename_failed",
-        result.message,
-      );
+      return failure("rename", result.message.split(":")[0] ?? "rename_failed", result.message);
     }
     return {
       ok: true,

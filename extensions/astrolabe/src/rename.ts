@@ -4,7 +4,11 @@ import { LspError, type LspService } from "./lsp.ts";
 import { HandleStore, resolveHandleResult } from "./node-handles.ts";
 import { parseFile } from "./parser.ts";
 import type { RenameRequest } from "./protocol.ts";
-import { applyWorkspaceEdit, WorkspaceMutationError, type WorkspaceMutationDetails } from "./workspace-edit.ts";
+import {
+  applyWorkspaceEdit,
+  WorkspaceMutationError,
+  type WorkspaceMutationDetails,
+} from "./workspace-edit.ts";
 
 export interface RenameResult {
   message: string;

@@ -5,7 +5,14 @@ import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { adapterForPath, type LanguageAdapter } from "./language-profile.ts";
 import type { LspRange, LspTextEdit, LspWorkspaceEdit } from "./lsp.ts";
 import { HandleStore } from "./node-handles.ts";
-import { cacheFile, createTreeEdit, isStringBoundary, parseFile, parseSource, type ParsedFile } from "./parser.ts";
+import {
+  cacheFile,
+  createTreeEdit,
+  isStringBoundary,
+  parseFile,
+  parseSource,
+  type ParsedFile,
+} from "./parser.ts";
 import { resolveExistingPath } from "./path.ts";
 import { describeSyntaxIssues, findNewSyntaxIssuesForEdits } from "./syntax-validation.ts";
 
@@ -72,7 +79,11 @@ function isTextDocumentEdit(value: unknown): value is VersionedTextDocumentEdit 
   );
 }
 
-function addEdits(target: Map<string, LspTextEdit[]>, uri: string, edits: readonly LspTextEdit[]): void {
+function addEdits(
+  target: Map<string, LspTextEdit[]>,
+  uri: string,
+  edits: readonly LspTextEdit[],
+): void {
   const existing = target.get(uri) ?? [];
   existing.push(...edits);
   target.set(uri, existing);
@@ -83,14 +94,20 @@ function collectWorkspaceEdits(edit: LspWorkspaceEdit): Map<string, LspTextEdit[
   if (edit.changes) {
     for (const [uri, edits] of Object.entries(edit.changes)) {
       if (!Array.isArray(edits) || !edits.every(isTextEdit)) {
-        throw new WorkspaceMutationError("invalid_workspace_edit", `Invalid text edits for ${uri}.`);
+        throw new WorkspaceMutationError(
+          "invalid_workspace_edit",
+          `Invalid text edits for ${uri}.`,
+        );
       }
       addEdits(byUri, uri, edits);
     }
   }
   for (const change of edit.documentChanges ?? []) {
     if (!isRecord(change)) {
-      throw new WorkspaceMutationError("invalid_workspace_edit", "WorkspaceEdit contains an invalid document change.");
+      throw new WorkspaceMutationError(
+        "invalid_workspace_edit",
+        "WorkspaceEdit contains an invalid document change.",
+      );
     }
     if (typeof change.kind === "string") {
       throw new WorkspaceMutationError(
@@ -107,18 +124,27 @@ function collectWorkspaceEdits(edit: LspWorkspaceEdit): Map<string, LspTextEdit[
     addEdits(byUri, change.textDocument.uri, change.edits);
   }
   if (byUri.size === 0 || [...byUri.values()].every((edits) => edits.length === 0)) {
-    throw new WorkspaceMutationError("rename_no_edits", "The language server returned an empty WorkspaceEdit.");
+    throw new WorkspaceMutationError(
+      "rename_no_edits",
+      "The language server returned an empty WorkspaceEdit.",
+    );
   }
   return byUri;
 }
 
-function positionToStringIndex(source: string, position: { line: number; character: number }): number {
+function positionToStringIndex(
+  source: string,
+  position: { line: number; character: number },
+): number {
   let line = 0;
   let start = 0;
   while (line < position.line) {
     const newline = source.indexOf("\n", start);
     if (newline < 0) {
-      throw new WorkspaceMutationError("invalid_workspace_edit", "WorkspaceEdit line is outside the file.");
+      throw new WorkspaceMutationError(
+        "invalid_workspace_edit",
+        "WorkspaceEdit line is outside the file.",
+      );
     }
     start = newline + 1;
     line++;
@@ -142,10 +168,15 @@ function convertEdits(source: string, edits: readonly LspTextEdit[]): ConvertedE
     startIndex: positionToStringIndex(source, edit.range.start),
     endIndex: positionToStringIndex(source, edit.range.end),
   }));
-  converted.sort((left, right) => left.startIndex - right.startIndex || left.endIndex - right.endIndex);
+  converted.sort(
+    (left, right) => left.startIndex - right.startIndex || left.endIndex - right.endIndex,
+  );
   for (const edit of converted) {
     if (edit.endIndex < edit.startIndex) {
-      throw new WorkspaceMutationError("invalid_workspace_edit", "WorkspaceEdit has a reversed range.");
+      throw new WorkspaceMutationError(
+        "invalid_workspace_edit",
+        "WorkspaceEdit has a reversed range.",
+      );
     }
   }
   for (let index = 1; index < converted.length; index++) {
@@ -204,7 +235,10 @@ async function prepareFile(path: string, edits: readonly LspTextEdit[]): Promise
   };
 }
 
-async function withMutationQueues<T>(paths: readonly string[], operation: () => Promise<T>): Promise<T> {
+async function withMutationQueues<T>(
+  paths: readonly string[],
+  operation: () => Promise<T>,
+): Promise<T> {
   const ordered = [...new Set(paths)].sort();
   const acquire = (index: number): Promise<T> => {
     const path = ordered[index];
@@ -296,7 +330,9 @@ export async function applyWorkspaceEdit(
   return withMutationQueues([...byPath.keys()], async () => {
     const prepared: PreparedFile[] = [];
     try {
-      for (const [path, edits] of [...byPath].sort(([left], [right]) => left.localeCompare(right))) {
+      for (const [path, edits] of [...byPath].sort(([left], [right]) =>
+        left.localeCompare(right),
+      )) {
         prepared.push(await prepareFile(path, edits));
       }
       for (const file of prepared) {

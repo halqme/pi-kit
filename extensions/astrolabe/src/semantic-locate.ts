@@ -10,7 +10,12 @@ import {
 import type { LspService, LspSymbol } from "./lsp.ts";
 import { HandleStore } from "./node-handles.ts";
 import { isStringBoundary, parseFile } from "./parser.ts";
-import { pathIsWithin, resolveExistingPath, resolveExistingScope, sourceFilesInScope } from "./path.ts";
+import {
+  pathIsWithin,
+  resolveExistingPath,
+  resolveExistingScope,
+  sourceFilesInScope,
+} from "./path.ts";
 
 function positionToStringIndex(
   source: string,
@@ -70,7 +75,8 @@ function mergeMatches(
     const existingReasons = new Set(existing.reasons);
     const novelReasons = match.reasons.filter((reason) => !existingReasons.has(reason));
     if (novelReasons.length > 0) {
-      const evidenceFraction = match.reasons.length === 0 ? 0 : novelReasons.length / match.reasons.length;
+      const evidenceFraction =
+        match.reasons.length === 0 ? 0 : novelReasons.length / match.reasons.length;
       existing.score += Math.round(match.score * evidenceFraction);
       existing.reasons = [...existing.reasons, ...novelReasons];
     }
@@ -85,7 +91,9 @@ function mergeMatches(
 }
 
 async function adaptersToQuery(params: LocateParams, cwd: string): Promise<LanguageAdapter[]> {
-  const paths = await sourceFilesInScope(cwd, params.scope, (path) => Boolean(adapterForPath(path)));
+  const paths = await sourceFilesInScope(cwd, params.scope, (path) =>
+    Boolean(adapterForPath(path)),
+  );
   const ids = new Set<string>();
   for (const path of paths) {
     const adapter = adapterForPath(path);

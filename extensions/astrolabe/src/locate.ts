@@ -62,11 +62,7 @@ function signature(file: ParsedFile, node: Node): string {
     .trim();
 }
 
-function parentName(
-  file: ParsedFile,
-  node: Node,
-  adapter: LanguageAdapter,
-): string | undefined {
+function parentName(file: ParsedFile, node: Node, adapter: LanguageAdapter): string | undefined {
   let current = node.parent;
   while (current) {
     if (adapter.declarationNodeTypes.has(current.type)) return declarationName(file, current);
