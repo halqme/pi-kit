@@ -6,12 +6,7 @@ import {
   getAgentDir,
   type SourceInfo,
 } from "@earendil-works/pi-coding-agent";
-import type {
-  MetricsReport,
-  ResourceMetrics,
-  ResourceSource,
-  ResourceStatus,
-} from "./types.ts";
+import type { MetricsReport, ResourceMetrics, ResourceSource, ResourceStatus } from "./types.ts";
 
 export interface PiResourceInventory {
   tools: Record<string, ResourceSource>;

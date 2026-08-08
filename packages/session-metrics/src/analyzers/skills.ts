@@ -9,7 +9,9 @@ function record(value: unknown): Record<string, unknown> | undefined {
 
 export function explicitSkillNames(content: unknown): string[] {
   const text = textContent(content);
-  return [...text.matchAll(/(?:^|\s)\/skill:([a-z0-9-]+)/gi)].map((match) => match[1]!.toLowerCase());
+  return [...text.matchAll(/(?:^|\s)\/skill:([a-z0-9-]+)/gi)].map((match) =>
+    match[1]!.toLowerCase(),
+  );
 }
 
 export function skillReadPath(toolName: string, input: unknown): string | undefined {

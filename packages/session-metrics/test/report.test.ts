@@ -56,13 +56,21 @@ test("renders tool latency and current resource status", () => {
   addToReport(
     report,
     analyzeLines([
-      JSON.stringify({ type: "session", id: "s1", cwd: "/repo", timestamp: "2026-04-12T00:00:00Z" }),
+      JSON.stringify({
+        type: "session",
+        id: "s1",
+        cwd: "/repo",
+        timestamp: "2026-04-12T00:00:00Z",
+      }),
       JSON.stringify({
         type: "message",
         timestamp: "2026-04-12T00:00:01.000Z",
         message: {
           role: "assistant",
-          content: [{ type: "toolCall", id: "call-1", name: "read", arguments: {} }],
+          content: [
+            { type: "toolCall", id: "call-1", name: "read", arguments: {} },
+            { type: "toolCall", id: "call-2", name: "old_tool", arguments: {} },
+          ],
         },
       }),
       JSON.stringify({
@@ -88,6 +96,8 @@ test("renders tool latency and current resource status", () => {
   assert.match(output, /unused_tool/);
   assert.match(output, /unused/);
   assert.match(output, /250ms/);
+  assert.doesNotMatch(output, /old_tool/);
+  assert.doesNotMatch(renderSummary(report), /old_tool/);
 });
 
 test("renders tool action facets", () => {
@@ -117,7 +127,7 @@ test("renders tool action facets", () => {
   assert.match(output, /inspect_many/);
 });
 
-test("renders skill status including missing and unused skills", () => {
+test("omits missing skills while rendering unused skills", () => {
   const report = createReport();
   addToReport(
     report,
@@ -135,10 +145,11 @@ test("renders skill status including missing and unused skills", () => {
     diagnostics: [],
   });
   const output = renderSummary(report, { view: "skills" });
-  assert.match(output, /removed-skill/);
-  assert.match(output, /missing/);
+  assert.doesNotMatch(output, /removed-skill/);
+  assert.doesNotMatch(output, /missing/);
   assert.match(output, /new-skill/);
   assert.match(output, /unused/);
+  assert.doesNotMatch(renderSummary(report), /removed-skill/);
 });
 
 test("supports period views, since, and limit", () => {

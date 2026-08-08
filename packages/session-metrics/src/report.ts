@@ -219,22 +219,27 @@ function modelRows(metrics: MetricSummary, limit?: number) {
   );
 }
 
-function toolRows(metrics: MetricSummary, limit?: number) {
+function toolRows(report: MetricsReport, metrics: MetricSummary, limit?: number) {
   return rows(
-    Object.entries(metrics.toolUsage).sort(
-      ([leftName, left], [rightName, right]) =>
-        right.calls - left.calls || leftName.localeCompare(rightName),
-    ),
+    Object.entries(metrics.toolUsage)
+      .filter(([name]) => report.resources?.tools[name]?.status !== "missing")
+      .sort(
+        ([leftName, left], [rightName, right]) =>
+          right.calls - left.calls || leftName.localeCompare(rightName),
+      ),
     limit,
   );
 }
 
-function skillRows(metrics: MetricSummary, limit?: number) {
+function skillRows(report: MetricsReport, metrics: MetricSummary, limit?: number) {
   return rows(
-    Object.entries(metrics.skills).sort(
-      ([leftName, left], [rightName, right]) =>
-        right.reads + right.explicit - left.reads - left.explicit || leftName.localeCompare(rightName),
-    ),
+    Object.entries(metrics.skills)
+      .filter(([name]) => report.resources?.skills[name]?.status !== "missing")
+      .sort(
+        ([leftName, left], [rightName, right]) =>
+          right.reads + right.explicit - left.reads - left.explicit ||
+          leftName.localeCompare(rightName),
+      ),
     limit,
   );
 }
@@ -305,12 +310,17 @@ function renderModelTable(metrics: MetricSummary, limit?: number): string {
 }
 
 function renderToolTable(report: MetricsReport, metrics: MetricSummary, limit?: number): string {
-  const names = new Set([...Object.keys(metrics.toolUsage), ...Object.keys(report.resources?.tools ?? {})]);
+  const names = new Set([
+    ...Object.keys(metrics.toolUsage),
+    ...Object.keys(report.resources?.tools ?? {}),
+  ]);
   const entries = rows(
     [...names]
+      .filter((name) => report.resources?.tools[name]?.status !== "missing")
       .map((name) => [name, metrics.toolUsage[name] ?? emptyTool()] as const)
-      .sort(([leftName, left], [rightName, right]) =>
-        right.calls - left.calls || leftName.localeCompare(rightName),
+      .sort(
+        ([leftName, left], [rightName, right]) =>
+          right.calls - left.calls || leftName.localeCompare(rightName),
       ),
     limit,
   );
@@ -343,12 +353,18 @@ function renderToolTable(report: MetricsReport, metrics: MetricSummary, limit?: 
 }
 
 function renderSkillTable(report: MetricsReport, metrics: MetricSummary, limit?: number): string {
-  const names = new Set([...Object.keys(metrics.skills), ...Object.keys(report.resources?.skills ?? {})]);
+  const names = new Set([
+    ...Object.keys(metrics.skills),
+    ...Object.keys(report.resources?.skills ?? {}),
+  ]);
   const entries = rows(
     [...names]
+      .filter((name) => report.resources?.skills[name]?.status !== "missing")
       .map((name) => [name, metrics.skills[name] ?? emptySkill()] as const)
-      .sort(([leftName, left], [rightName, right]) =>
-        right.reads + right.explicit - left.reads - left.explicit || leftName.localeCompare(rightName),
+      .sort(
+        ([leftName, left], [rightName, right]) =>
+          right.reads + right.explicit - left.reads - left.explicit ||
+          leftName.localeCompare(rightName),
       ),
     limit,
   );
@@ -371,7 +387,9 @@ function renderSkillTable(report: MetricsReport, metrics: MetricSummary, limit?:
 function renderToolActionTable(metrics: MetricSummary, limit?: number): string {
   const entries = rows(
     Object.entries(metrics.toolActions)
-      .flatMap(([tool, actions]) => Object.entries(actions).map(([action, usage]) => ({ tool, action, usage })))
+      .flatMap(([tool, actions]) =>
+        Object.entries(actions).map(([action, usage]) => ({ tool, action, usage })),
+      )
       .sort(
         (left, right) =>
           right.usage.calls - left.usage.calls ||
@@ -451,8 +469,8 @@ function summarySections(report: MetricsReport, options: ReportOptions): ReportS
   const limit = limitValue(options.limit);
   const { metrics, activeDays } = summaryFor(report, since);
   const models = modelRows(metrics, limit);
-  const tools = toolRows(metrics, limit);
-  const skills = skillRows(metrics, limit);
+  const tools = toolRows(report, metrics, limit);
+  const skills = skillRows(report, metrics, limit);
   const maxModelTokens = Math.max(...models.map(([, value]) => value.usage.total), 0);
   const maxToolCalls = Math.max(...tools.map(([, value]) => value.calls), 0);
   const maxSkillUses = Math.max(...skills.map(([, value]) => value.reads + value.explicit), 0);

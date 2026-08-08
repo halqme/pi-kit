@@ -197,7 +197,9 @@ function createAccumulator() {
       const toolName = event.toolName ?? pending?.toolName ?? "unknown";
       const endedAt = timestampMs(event.timestamp);
       const durationMs =
-        pending?.timestampMs !== undefined && endedAt !== undefined && endedAt >= pending.timestampMs
+        pending?.timestampMs !== undefined &&
+        endedAt !== undefined &&
+        endedAt >= pending.timestampMs
           ? endedAt - pending.timestampMs
           : undefined;
       addToolResult((result.toolUsage[toolName] ??= createToolMetrics()), event, durationMs);

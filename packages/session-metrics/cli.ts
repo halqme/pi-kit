@@ -22,9 +22,15 @@ function parseArgs(args: string[]): CliOptions {
     if (arg === "--help") throw new Error(usage());
     if (arg === "--json") options.json = true;
     else if (
-      ["--daily", "--weekly", "--projects", "--models", "--skills", "--tools", "--tool-actions"].includes(
-        arg,
-      )
+      [
+        "--daily",
+        "--weekly",
+        "--projects",
+        "--models",
+        "--skills",
+        "--tools",
+        "--tool-actions",
+      ].includes(arg)
     )
       options.view = arg.slice(2) as ReportView;
     else if (arg === "--since") {
@@ -44,7 +50,12 @@ function parseArgs(args: string[]): CliOptions {
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const options = parseArgs(args);
   const report = await buildReport(options.target, options.since);
-  if (options.json || options.view === "skills" || options.view === "tools") {
+  if (
+    options.json ||
+    options.view === undefined ||
+    options.view === "skills" ||
+    options.view === "tools"
+  ) {
     await addCurrentResources(report, process.cwd());
   }
   if (options.json) {
