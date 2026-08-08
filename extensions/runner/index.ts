@@ -2,10 +2,10 @@ import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   emptyPlan,
-  recordProgress,
   remainingSteps,
   restorePlanState,
   savePlanState,
+  transitionRunner,
   type PlanState,
 } from "@halqme/plan-state";
 import { loopController } from "../loop/control.ts";
@@ -26,8 +26,10 @@ export default function runnerExtension(pi: ExtensionAPI): void {
 
   loopController.setExhaustedHandler("runner", (loop) => {
     if (state.status !== "running") return;
-    state.status = "stopped";
-    state.stopReason = loop.stopReason ?? `Runner loop exhausted after ${loop.maxTurns} turns`;
+    state = transitionRunner(state, {
+      type: "exhaust",
+      reason: loop.stopReason ?? `Runner loop exhausted after ${loop.maxTurns} turns`,
+    });
     savePlanState(pi, state);
   });
 
@@ -39,7 +41,7 @@ export default function runnerExtension(pi: ExtensionAPI): void {
     name: "runner",
     label: "Runner",
     description:
-      "Execute an approved TODO plan through the shared loop continuation controller. start claims the loop for the plan but does not create a new turn; begin work immediately in the current turn. Before ending each running turn, call progress with completed steps and/or a concise summary. progress keeps the loop active while steps remain and completes it when the plan is finished. stop ends both the plan and its loop. If maxTurns is exhausted, the running plan is stopped automatically.",
+      "Execute an approved TODO plan through an explicit plan-state machine and the shared loop continuation controller. start transitions an approved plan to running and claims the loop without creating a new turn. progress records work and transitions to completed only when every approved step is complete. stop transitions a running plan to stopped. Loop exhaustion is an external fuse and also transitions the running plan to stopped.",
     promptGuidelines: [
       "After runner.start, execute the first remaining step in the current turn instead of waiting for a follow-up.",
       "Before every agent_end while runner is active, call runner.progress even when no whole step completed; use summary to report partial progress.",
@@ -63,12 +65,16 @@ export default function runnerExtension(pi: ExtensionAPI): void {
     async execute(_id, params, _signal, _update, ctx) {
       state = restorePlanState(ctx.sessionManager.getEntries()) ?? state;
       if (params.action === "start") {
-        if (state.status !== "approved")
+        let nextState: PlanState;
+        try {
+          nextState = transitionRunner(state, { type: "start" });
+        } catch (error) {
           return {
-            content: [{ type: "text" as const, text: "No approved plan is ready." }],
+            content: [{ type: "text" as const, text: String(error) }],
             details: state,
             isError: true,
           };
+        }
         const activeLoop = loopController.snapshot();
         if (activeLoop?.status === "active")
           return {
@@ -82,9 +88,8 @@ export default function runnerExtension(pi: ExtensionAPI): void {
             isError: true,
           };
         try {
-          loopController.start("runner", taskFor(state), params.maxTurns ?? 16);
-          state.status = "running";
-          state.stage = "runner";
+          loopController.start("runner", taskFor(nextState), params.maxTurns ?? 16);
+          state = nextState;
           savePlanState(pi, state);
         } catch (error) {
           return {
@@ -123,10 +128,9 @@ export default function runnerExtension(pi: ExtensionAPI): void {
             isError: true,
           };
         try {
-          if (params.steps?.length) recordProgress(state, params.steps);
+          state = transitionRunner(state, { type: "progress", steps: params.steps });
         } catch (error) {
-          state.status = "stopped";
-          state.stopReason = String(error);
+          state = transitionRunner(state, { type: "stop", reason: String(error) });
           savePlanState(pi, state);
           try {
             loopController.report("runner", "blocked", state.stopReason);
@@ -159,11 +163,23 @@ export default function runnerExtension(pi: ExtensionAPI): void {
             );
           }
         } catch (error) {
-          state.status = "stopped";
-          state.stopReason = `Runner loop unavailable: ${String(error)}`;
-          savePlanState(pi, state);
+          if (state.status === "running") {
+            state = transitionRunner(state, {
+              type: "stop",
+              reason: `Runner loop unavailable: ${String(error)}`,
+            });
+            savePlanState(pi, state);
+          }
           return {
-            content: [{ type: "text" as const, text: state.stopReason }],
+            content: [
+              {
+                type: "text" as const,
+                text:
+                  state.status === "completed"
+                    ? `Plan completed, but runner loop finalization failed: ${String(error)}`
+                    : state.stopReason!,
+              },
+            ],
             details: state,
             isError: true,
           };
@@ -179,8 +195,18 @@ export default function runnerExtension(pi: ExtensionAPI): void {
         };
       }
       if (params.action === "stop") {
-        state.status = "stopped";
-        state.stopReason = params.reason?.trim() || "Stopped by user";
+        try {
+          state = transitionRunner(state, {
+            type: "stop",
+            reason: params.reason?.trim() || "Stopped by user",
+          });
+        } catch (error) {
+          return {
+            content: [{ type: "text" as const, text: String(error) }],
+            details: state,
+            isError: true,
+          };
+        }
         savePlanState(pi, state);
         const loop = loopController.snapshot();
         if (loop?.status === "active" && loop.owner === "runner") {
