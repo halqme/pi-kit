@@ -13,6 +13,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test"
   },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "catalog:"
+  },
   "devDependencies": {
     "@types/bun": "catalog:",
     "typescript": "catalog:"
