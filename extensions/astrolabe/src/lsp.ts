@@ -170,6 +170,14 @@ class LspClient {
       child.once("error", onError);
     });
 
+    const onTransportError = (error: Error): void => {
+      this.failPending(
+        new LspError("lsp_transport_error", `${commandDescription(this.server)}: ${error.message}`),
+      );
+    };
+    child.on("error", onTransportError);
+    child.stdin.on("error", onTransportError);
+    child.stdout.on("error", onTransportError);
     child.stdout.on("data", (chunk: Buffer) => this.onData(chunk));
     child.stderr.on("data", (chunk: Buffer) => {
       this.stderrTail = `${this.stderrTail}${chunk.toString("utf8")}`.slice(-4_096);
@@ -422,24 +430,20 @@ export interface LspService {
 }
 
 export class LspManager implements LspService {
-  private readonly sessions = new Map<string, Promise<LspClient | undefined>>();
+  private readonly sessions = new Map<string, Promise<LspClient>>();
 
-  private client(adapter: LanguageAdapter, cwd: string): Promise<LspClient | undefined> {
+  private client(adapter: LanguageAdapter, cwd: string): Promise<LspClient> {
     const key = `${cwd}\0${adapter.id}`;
     const active = this.sessions.get(key);
     if (active) return active;
-    const pending = LspClient.connect(cwd, adapter).catch((error) => {
-      if (error instanceof LspError && error.code === "lsp_unavailable") return undefined;
-      return undefined;
-    });
+    const pending = LspClient.connect(cwd, adapter);
     this.sessions.set(key, pending);
     return pending;
   }
 
   async workspaceSymbols(adapter: LanguageAdapter, cwd: string, query: string): Promise<LspSymbol[]> {
-    const client = await this.client(adapter, cwd);
-    if (!client) return [];
     try {
+      const client = await this.client(adapter, cwd);
       return await client.workspaceSymbols(query);
     } catch {
       return [];
@@ -454,12 +458,6 @@ export class LspManager implements LspService {
     newName: string,
   ): Promise<LspWorkspaceEdit> {
     const client = await this.client(adapter, cwd);
-    if (!client) {
-      throw new LspError(
-        "lsp_unavailable",
-        `No configured ${adapter.id} language server is available. Install one of: ${(adapter.lsp?.servers ?? []).map(commandDescription).join(", ")}.`,
-      );
-    }
     return client.rename(path, position, newName);
   }
 
@@ -469,7 +467,7 @@ export class LspManager implements LspService {
     const clients = await Promise.allSettled(sessions);
     await Promise.allSettled(
       clients.flatMap((result) =>
-        result.status === "fulfilled" && result.value ? [result.value.dispose()] : [],
+        result.status === "fulfilled" ? [result.value.dispose()] : [],
       ),
     );
   }
