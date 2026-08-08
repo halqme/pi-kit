@@ -1,14 +1,18 @@
 # Session Metrics extension
 
-エージェントがPiセッションのJSONLログからツール改善の材料を取得するための`session_metrics`ツールを登録します。ログを直接読み取り、外部インデックスは作成しません。
+Pi session JSONLの汎用統計をagentから読むための`session_metrics` toolを登録する薄いwrapperです。
 
-対応する分析:
+このextensionはactive sessionをinstrumentしません。session hook、filesystem watcher、live-event用の別JSONLは持たず、`session_metrics`が呼ばれた時だけ `@halqme/pi-session-metrics` で既存session fileを読み取ります。
 
-- `tool-errors`: ツール別のエラー件数
-- `tool-token-outliers`: 結果トークン数の大きいツール
-- `tool-latency-outliers`: 呼び出し数の多いツール
-- `token-usage-summary`: 入力・出力・キャッシュ・推論・合計トークン数とコスト
-- `tool-usage-summary`: ツール別の呼び出し数、エラー、結果トークン
-- `turn-token-usage`: 日別のトークン使用量
+利用できるview:
 
-定型の分析だけを実行し、セッション本文やツール引数全体は返しません。
+- `summary`: session / turn / token / cache / errorと主要model・tool
+- `daily`: 日別集計
+- `weekly`: 週別集計
+- `projects`: cwd別集計
+- `models`: model + thinking level別集計
+- `tools`: tool別calls / errors / result tokens / latency
+
+`since`、`limit`、`sessionsPath`を指定できます。`json: true`ではgenericな`MetricsReport`全体を返します。
+
+Astrolabe action、Loop継続、skill usageなどのtool固有解釈はこのextensionにもpackage coreにも置きません。必要な分析はsession-metricsが公開する`SessionEvent` streamをconsumer側で解釈します。
