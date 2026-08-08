@@ -88,7 +88,7 @@ test("runner treats TODO progress as evidence and requires an explicit finish pr
   assert.match(reported.content[0].text, /runner\.finish/);
   const verificationFollowUp = loopController.onAgentEnd();
   assert.match(verificationFollowUp.followUp ?? "", /runner\.finish/);
-  assert.match(verificationFollowUp.followUp ?? "", /Verify the requested outcome/);
+  assert.match(verificationFollowUp.followUp ?? "", /complete-task/);
 
   const completed = await h.tool.execute(
     "5",
