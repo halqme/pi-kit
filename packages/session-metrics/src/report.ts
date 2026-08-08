@@ -3,10 +3,19 @@ import {
   mergeMetrics,
   type MetricSummary,
   type MetricsReport,
+  type SkillMetrics,
   type ToolMetrics,
 } from "./analyze.ts";
 
-export type ReportView = "summary" | "daily" | "weekly" | "projects" | "models" | "tools";
+export type ReportView =
+  | "summary"
+  | "daily"
+  | "weekly"
+  | "projects"
+  | "models"
+  | "skills"
+  | "tools"
+  | "tool-actions";
 
 export interface ReportOptions {
   view?: ReportView | undefined;
@@ -220,6 +229,32 @@ function toolRows(metrics: MetricSummary, limit?: number) {
   );
 }
 
+function skillRows(metrics: MetricSummary, limit?: number) {
+  return rows(
+    Object.entries(metrics.skills).sort(
+      ([leftName, left], [rightName, right]) =>
+        right.reads + right.explicit - left.reads - left.explicit || leftName.localeCompare(rightName),
+    ),
+    limit,
+  );
+}
+
+function emptyTool(): ToolMetrics {
+  return {
+    calls: 0,
+    estimatedResultTokens: 0,
+    reportedTokens: 0,
+    errors: 0,
+    completedCalls: 0,
+    totalDurationMs: 0,
+    maxDurationMs: 0,
+  };
+}
+
+function emptySkill(): SkillMetrics {
+  return { reads: 0, explicit: 0 };
+}
+
 function activityChart(entries: Array<[string, MetricSummary]>): string {
   if (entries.length === 0) return "Recent activity (tokens, 30 days)\n(no activity)";
   const byDate = new Map(entries);
@@ -269,13 +304,23 @@ function renderModelTable(metrics: MetricSummary, limit?: number): string {
   ].join("\n");
 }
 
-function renderToolTable(metrics: MetricSummary, limit?: number): string {
-  const entries = toolRows(metrics, limit);
+function renderToolTable(report: MetricsReport, metrics: MetricSummary, limit?: number): string {
+  const names = new Set([...Object.keys(metrics.toolUsage), ...Object.keys(report.resources?.tools ?? {})]);
+  const entries = rows(
+    [...names]
+      .map((name) => [name, metrics.toolUsage[name] ?? emptyTool()] as const)
+      .sort(([leftName, left], [rightName, right]) =>
+        right.calls - left.calls || leftName.localeCompare(rightName),
+      ),
+    limit,
+  );
   return [
     title("Top tools"),
+    ...(report.resources ? [`Current inventory scope: ${report.resources.scope}`, ""] : []),
     ...markdownTable(
       [
         "Tool",
+        "Status",
         "Calls",
         "Errors",
         "Estimated result",
@@ -283,14 +328,70 @@ function renderToolTable(metrics: MetricSummary, limit?: number): string {
         "Avg latency",
         "Max latency",
       ],
-      entries.map(([tool, value]: [string, ToolMetrics]) => [
+      entries.map(([tool, value]) => [
         tool,
+        report.resources?.tools[tool]?.status ?? "—",
         number(value.calls),
         number(value.errors),
         formatTokens(value.estimatedResultTokens),
         formatTokens(value.reportedTokens),
         duration(value.completedCalls > 0 ? value.totalDurationMs / value.completedCalls : 0),
         duration(value.maxDurationMs),
+      ]),
+    ),
+  ].join("\n");
+}
+
+function renderSkillTable(report: MetricsReport, metrics: MetricSummary, limit?: number): string {
+  const names = new Set([...Object.keys(metrics.skills), ...Object.keys(report.resources?.skills ?? {})]);
+  const entries = rows(
+    [...names]
+      .map((name) => [name, metrics.skills[name] ?? emptySkill()] as const)
+      .sort(([leftName, left], [rightName, right]) =>
+        right.reads + right.explicit - left.reads - left.explicit || leftName.localeCompare(rightName),
+      ),
+    limit,
+  );
+  return [
+    title("Top skills"),
+    ...(report.resources ? [`Current inventory scope: ${report.resources.scope}`, ""] : []),
+    ...markdownTable(
+      ["Skill", "Status", "Reads", "Explicit", "Total"],
+      entries.map(([skill, value]) => [
+        skill,
+        report.resources?.skills[skill]?.status ?? "—",
+        number(value.reads),
+        number(value.explicit),
+        number(value.reads + value.explicit),
+      ]),
+    ),
+  ].join("\n");
+}
+
+function renderToolActionTable(metrics: MetricSummary, limit?: number): string {
+  const entries = rows(
+    Object.entries(metrics.toolActions)
+      .flatMap(([tool, actions]) => Object.entries(actions).map(([action, usage]) => ({ tool, action, usage })))
+      .sort(
+        (left, right) =>
+          right.usage.calls - left.usage.calls ||
+          left.tool.localeCompare(right.tool) ||
+          left.action.localeCompare(right.action),
+      ),
+    limit,
+  );
+  return [
+    title("Tool actions"),
+    ...markdownTable(
+      ["Tool", "Action", "Calls", "Errors", "Estimated result", "Avg latency", "Max latency"],
+      entries.map(({ tool, action, usage }) => [
+        tool,
+        action,
+        number(usage.calls),
+        number(usage.errors),
+        formatTokens(usage.estimatedResultTokens),
+        duration(usage.completedCalls > 0 ? usage.totalDurationMs / usage.completedCalls : 0),
+        duration(usage.maxDurationMs),
       ]),
     ),
   ].join("\n");
@@ -351,8 +452,10 @@ function summarySections(report: MetricsReport, options: ReportOptions): ReportS
   const { metrics, activeDays } = summaryFor(report, since);
   const models = modelRows(metrics, limit);
   const tools = toolRows(metrics, limit);
+  const skills = skillRows(metrics, limit);
   const maxModelTokens = Math.max(...models.map(([, value]) => value.usage.total), 0);
   const maxToolCalls = Math.max(...tools.map(([, value]) => value.calls), 0);
+  const maxSkillUses = Math.max(...skills.map(([, value]) => value.reads + value.explicit), 0);
   return [
     {
       title: "Session Metrics",
@@ -370,6 +473,19 @@ function summarySections(report: MetricsReport, options: ReportOptions): ReportS
           number(value.messages),
           formatTokens(value.usage.total),
           money(value.usage.cost),
+        ]),
+      ).join("\n"),
+    },
+    {
+      title: "Top skills",
+      markdown: markdownTable(
+        ["Skill", "Activity", "Reads", "Explicit", "Total"],
+        skills.map(([skill, value]) => [
+          skill,
+          bar(value.reads + value.explicit, maxSkillUses),
+          number(value.reads),
+          number(value.explicit),
+          number(value.reads + value.explicit),
         ]),
       ).join("\n"),
     },
@@ -409,7 +525,9 @@ function renderView(report: MetricsReport, options: ReportOptions): string {
   if (view === "daily" || view === "weekly") return renderPeriod(report, view, since, limit);
   if (view === "projects") return renderProjectTable(report, limit);
   if (view === "models") return renderModelTable(metrics, limit);
-  if (view === "tools") return renderToolTable(metrics, limit);
+  if (view === "skills") return renderSkillTable(report, metrics, limit);
+  if (view === "tools") return renderToolTable(report, metrics, limit);
+  if (view === "tool-actions") return renderToolActionTable(metrics, limit);
   return summarySections(report, options)
     .map(
       (section) =>
