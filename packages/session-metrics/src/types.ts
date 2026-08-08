@@ -19,6 +19,37 @@ export interface ToolMetrics {
   maxDurationMs: number;
 }
 
+export interface SkillMetrics {
+  reads: number;
+  explicit: number;
+}
+
+export type ResourceStatus = "available" | "missing" | "unused";
+
+export interface ResourceSource {
+  path?: string;
+  origin?: string;
+  scope?: string;
+}
+
+export interface ToolResourceMetrics {
+  status: ResourceStatus;
+  calls: number;
+  source?: ResourceSource;
+}
+
+export interface SkillResourceMetrics extends SkillMetrics {
+  status: ResourceStatus;
+  source?: ResourceSource;
+}
+
+export interface ResourceMetrics {
+  scope: string;
+  tools: Record<string, ToolResourceMetrics>;
+  skills: Record<string, SkillResourceMetrics>;
+  diagnostics: string[];
+}
+
 export interface MetricSummary {
   sessions: number;
   messages: number;
@@ -29,6 +60,8 @@ export interface MetricSummary {
   toolCalls: number;
   toolCallsByName: Record<string, number>;
   toolUsage: Record<string, ToolMetrics>;
+  toolActions: Record<string, Record<string, ToolMetrics>>;
+  skills: Record<string, SkillMetrics>;
   models: Record<string, { messages: number; usage: UsageTotals }>;
   thinkingLevels: Record<string, { messages: number; usage: UsageTotals }>;
   modelEfforts: Record<
@@ -53,4 +86,5 @@ export interface MetricsReport extends MetricSummary {
   weekly: Record<string, MetricSummary>;
   monthly: Record<string, MetricSummary>;
   projects: Record<string, MetricSummary>;
+  resources?: ResourceMetrics;
 }
