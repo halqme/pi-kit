@@ -13,6 +13,12 @@
     "format": "oxfmt .",
     "lint": "oxlint ."
   },
+  "dependencies": {
+    "pi-intercom": "^0.9.2"
+  },
+  "bundledDependencies": [
+    "pi-intercom"
+  ],
   "peerDependencies": {
     "oxfmt": "latest",
     "oxlint": "latest"
@@ -28,10 +34,12 @@
   },
   "pi": {
     "extensions": [
-      "./extensions"
+      "./extensions",
+      "./node_modules/pi-intercom/index.ts"
     ],
     "skills": [
-      "./skills"
+      "./skills",
+      "./node_modules/pi-intercom/skills"
     ],
     "prompts": [
       "./prompts"
