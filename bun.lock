@@ -108,6 +108,7 @@
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@halqme/plan-state": "workspace:*",
+        "@halqme/protocol-supervision": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "catalog:",
@@ -174,6 +175,13 @@
     },
     "packages/plan-state": {
       "name": "@halqme/plan-state",
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/protocol-supervision": {
+      "name": "@halqme/protocol-supervision",
       "devDependencies": {
         "@types/node": "catalog:",
         "typescript": "catalog:",
@@ -299,6 +307,8 @@
     "@halqme/plan-state": ["@halqme/plan-state@workspace:packages/plan-state"],
 
     "@halqme/planner": ["@halqme/planner@workspace:extensions/planner"],
+
+    "@halqme/protocol-supervision": ["@halqme/protocol-supervision@workspace:packages/protocol-supervision"],
 
     "@halqme/runner": ["@halqme/runner@workspace:extensions/runner"],
 
