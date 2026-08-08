@@ -18,7 +18,9 @@ export {
 export { sessionFiles } from "./files.ts";
 export {
   addCurrentResources,
+  addResourceInventory,
   discoverPiResources,
+  type PiResourceInventory,
 } from "./resources.ts";
 export {
   formatTokens,
