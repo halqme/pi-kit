@@ -49,4 +49,31 @@ test("keeps historical usage while marking available missing and unused resource
   assert.equal(report.resources?.skills["old-skill"]?.status, "missing");
   assert.equal(report.resources?.skills["used-skill"]?.status, "available");
   assert.equal(report.resources?.skills["current-skill"]?.status, "unused");
+  assert.equal(report.resources?.scope, "/repo");
+});
+
+test("uses selected history while cwd only selects the current inventory scope", () => {
+  const report = createReport();
+  addToReport(
+    report,
+    analyzeLines([
+      JSON.stringify({ type: "session", id: "elsewhere", cwd: "/other" }),
+      JSON.stringify({
+        type: "message",
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "call", name: "shared_tool", arguments: {} }],
+        },
+      }),
+    ]),
+  );
+
+  addResourceInventory(report, "/repo", {
+    tools: { shared_tool: { source: "extension" } },
+    skills: {},
+    diagnostics: [],
+  });
+
+  assert.equal(report.resources?.tools.shared_tool?.calls, 1);
+  assert.equal(report.resources?.tools.shared_tool?.status, "available");
 });
