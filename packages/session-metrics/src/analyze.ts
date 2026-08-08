@@ -1,67 +1,40 @@
-import { readFile } from "node:fs/promises";
+import {
+  emptyUsage,
+  eventsFromLines,
+  readSessionEvents,
+  textContent,
+  type SessionEvent,
+} from "./events.ts";
+import type {
+  MetricsReport,
+  MetricSummary,
+  SessionMetrics,
+  ToolMetrics,
+  UsageTotals,
+} from "./types.ts";
 
-export { addSkillAvailability } from "./skills.ts";
+export type {
+  MetricsReport,
+  MetricSummary,
+  SessionMetrics,
+  ToolMetrics,
+  UsageTotals,
+} from "./types.ts";
 
-export interface UsageTotals {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  reasoning: number;
-  total: number;
-  cost: number;
-  cacheCost: number;
+function createToolMetrics(): ToolMetrics {
+  return {
+    calls: 0,
+    estimatedResultTokens: 0,
+    reportedTokens: 0,
+    errors: 0,
+    completedCalls: 0,
+    totalDurationMs: 0,
+    maxDurationMs: 0,
+  };
 }
 
-export interface SkillMetrics {
-  reads: number;
-  explicit: number;
-  existsGlobally?: boolean;
-  existsInProject?: boolean;
-}
-
-export interface ToolMetrics {
-  available?: boolean;
-  calls: number;
-  estimatedResultTokens: number;
-  reportedTokens: number;
-  errors: number;
-}
-
-export interface MetricSummary {
-  sessions: number;
-  messages: number;
-  userMessages: number;
-  assistantMessages: number;
-  toolResults: number;
-  turns: number;
-  toolCalls: number;
-  toolCallsByName: Record<string, number>;
-  toolUsage: Record<string, ToolMetrics>;
-  skills: Record<string, SkillMetrics>;
-  models: Record<string, { messages: number; usage: UsageTotals }>;
-  thinkingLevels: Record<string, { messages: number; usage: UsageTotals }>;
-  modelEfforts: Record<
-    string,
-    { model: string; effort: string; messages: number; usage: UsageTotals }
-  >;
-  toolErrors: number;
-  modelErrors: number;
-  errors: number;
-  tokens: UsageTotals;
-}
-
-export interface SessionMetrics extends MetricSummary {
-  sessionId?: string;
-  cwd?: string;
-  timestamp?: string;
-}
-
-export interface MetricsReport extends MetricSummary {
-  daily: Record<string, MetricSummary>;
-  weekly: Record<string, MetricSummary>;
-  monthly: Record<string, MetricSummary>;
-  projects: Record<string, MetricSummary>;
+function addUsage(target: UsageTotals, source: UsageTotals): void {
+  for (const key of Object.keys(target) as (keyof UsageTotals)[]) target[key] += source[key];
 }
 
 export function createMetrics(): SessionMetrics {
@@ -75,23 +48,14 @@ export function createMetrics(): SessionMetrics {
     toolCalls: 0,
     toolCallsByName: {},
     toolUsage: {},
-    skills: {},
     models: {},
     thinkingLevels: {},
     modelEfforts: {},
     toolErrors: 0,
     modelErrors: 0,
     errors: 0,
-    tokens: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      reasoning: 0,
-      total: 0,
-      cost: 0,
-      cacheCost: 0,
-    },
+    invalidLines: 0,
+    tokens: emptyUsage(),
   };
 }
 
@@ -105,176 +69,136 @@ export function createReport(): MetricsReport {
   };
 }
 
-export function analyzeLines(lines: Iterable<string>): SessionMetrics {
+function timestampMs(value?: string): number | undefined {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function createAccumulator() {
   const result = createMetrics();
   let thinkingLevel = "unknown";
   let explicitTurnEnds = 0;
-  let assistantTurnEnds = 0;
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    let entry: any;
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue;
+  let inferredTurnEnds = 0;
+  const pendingTools = new Map<string, { toolName: string; timestampMs?: number }>();
+
+  const push = (event: SessionEvent): void => {
+    if (event.kind === "invalid_line") {
+      result.invalidLines++;
+      return;
     }
-    if (entry.type === "session") {
+    if (event.kind === "session") {
       result.sessions++;
-      result.sessionId = entry.id;
-      result.cwd = entry.cwd;
-      result.timestamp = entry.timestamp;
-      continue;
+      if (event.id) result.sessionId = event.id;
+      if (event.cwd) result.cwd = event.cwd;
+      if (event.timestamp) result.timestamp = event.timestamp;
+      return;
     }
-    if (entry.type === "thinking_level_change") {
-      thinkingLevel = String(entry.thinkingLevel ?? "unknown");
-      continue;
+    if (event.kind === "thinking_level") {
+      thinkingLevel = event.level;
+      return;
     }
-    if (entry.type === "turn_end") {
+    if (event.kind === "turn_end") {
       explicitTurnEnds++;
-      continue;
+      return;
     }
-    if (entry.type !== "message") continue;
-    const message = entry.message;
-    result.messages++;
-    if (message?.role === "user") result.userMessages++;
-    if (message?.role === "toolResult") result.toolResults++;
-    if (message?.role === "user") {
-      const text = (message.content ?? [])
-        .filter((block: any) => block.type === "text")
-        .map((block: any) => block.text)
-        .join("\n");
-      for (const match of text.matchAll(/(?:^|\s)\/skill:([a-z0-9-]+)/gi)) {
-        const skill = (result.skills[match[1]] ??= { reads: 0, explicit: 0 });
-        skill.explicit++;
-      }
+    if (event.kind === "user_message") {
+      result.messages++;
+      result.userMessages++;
+      return;
     }
-    if (message?.role === "assistant") {
+    if (event.kind === "assistant_message") {
+      result.messages++;
       result.assistantMessages++;
-      if (message.stopReason === "stop") assistantTurnEnds++;
-      if (message.stopReason === "error") {
+      if (event.stopReason === "stop") inferredTurnEnds++;
+      if (event.stopReason === "error") {
         result.modelErrors++;
         result.errors++;
       }
-      const usage = message.usage;
-      const model = message.model ?? "unknown";
-      const modelUsage = (result.models[model] ??= {
-        messages: 0,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          reasoning: 0,
-          total: 0,
-          cost: 0,
-          cacheCost: 0,
-        },
-      });
+      const model = event.model ?? "unknown";
+      const modelUsage = (result.models[model] ??= { messages: 0, usage: emptyUsage() });
       modelUsage.messages++;
+      addUsage(modelUsage.usage, event.usage);
       const effortUsage = (result.thinkingLevels[thinkingLevel] ??= {
         messages: 0,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          reasoning: 0,
-          total: 0,
-          cost: 0,
-          cacheCost: 0,
-        },
+        usage: emptyUsage(),
       });
       effortUsage.messages++;
+      addUsage(effortUsage.usage, event.usage);
       const modelEffortKey = `${model}\0${thinkingLevel}`;
       const modelEffort = (result.modelEfforts[modelEffortKey] ??= {
         model,
         effort: thinkingLevel,
         messages: 0,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          reasoning: 0,
-          total: 0,
-          cost: 0,
-          cacheCost: 0,
-        },
+        usage: emptyUsage(),
       });
       modelEffort.messages++;
-      if (usage)
-        for (const key of [
-          "input",
-          "output",
-          "cacheRead",
-          "cacheWrite",
-          "reasoning",
-          "totalTokens",
-        ] as const) {
-          const target = key === "totalTokens" ? "total" : key;
-          const value = Number(usage[key] ?? 0);
-          result.tokens[target] += value;
-          modelUsage.usage[target] += value;
-          effortUsage.usage[target] += value;
-          modelEffort.usage[target] += value;
-        }
-      const cost = Number(usage?.cost?.total ?? 0);
-      const cacheCost = Number(usage?.cost?.cacheRead ?? 0);
-      result.tokens.cost += cost;
-      result.tokens.cacheCost += cacheCost;
-      modelUsage.usage.cost += cost;
-      modelUsage.usage.cacheCost += cacheCost;
-      effortUsage.usage.cost += cost;
-      effortUsage.usage.cacheCost += cacheCost;
-      modelEffort.usage.cost += cost;
-      modelEffort.usage.cacheCost += cacheCost;
-      for (const block of message.content ?? [])
-        if (block.type === "toolCall") {
-          result.toolCalls++;
-          const tool = (result.toolUsage[block.name] ??= {
-            calls: 0,
-            estimatedResultTokens: 0,
-            reportedTokens: 0,
-            errors: 0,
-          });
-          tool.calls++;
-          result.toolCallsByName[block.name] = (result.toolCallsByName[block.name] ?? 0) + 1;
-          const args = block.arguments ?? {};
-          if (block.name !== "read") continue;
-          const path = String(args.path ?? args.file ?? "");
-          const match = path.match(/(?:^|[/\\])skills[/\\]([^/\\]+)[/\\]SKILL\.md$/i);
-          if (match?.[1]) {
-            const skill = (result.skills[match[1]] ??= { reads: 0, explicit: 0 });
-            skill.reads++;
-          }
-        }
+      addUsage(modelEffort.usage, event.usage);
+      addUsage(result.tokens, event.usage);
+      return;
     }
-    if (message?.role === "toolResult") {
-      if (message.isError) {
+    if (event.kind === "tool_call") {
+      result.toolCalls++;
+      result.toolCallsByName[event.toolName] = (result.toolCallsByName[event.toolName] ?? 0) + 1;
+      const tool = (result.toolUsage[event.toolName] ??= createToolMetrics());
+      tool.calls++;
+      if (event.toolCallId) {
+        pendingTools.set(event.toolCallId, {
+          toolName: event.toolName,
+          ...(timestampMs(event.timestamp) !== undefined
+            ? { timestampMs: timestampMs(event.timestamp) }
+            : {}),
+        });
+      }
+      return;
+    }
+    if (event.kind === "tool_result") {
+      result.messages++;
+      result.toolResults++;
+      const pending = event.toolCallId ? pendingTools.get(event.toolCallId) : undefined;
+      const toolName = event.toolName ?? pending?.toolName ?? "unknown";
+      const tool = (result.toolUsage[toolName] ??= createToolMetrics());
+      tool.estimatedResultTokens += Math.ceil(textContent(event.content).length / 4);
+      tool.reportedTokens += event.reportedTokens;
+      if (event.isError) {
+        tool.errors++;
         result.toolErrors++;
         result.errors++;
       }
-      const tool = (result.toolUsage[message.toolName] ??= {
-        calls: 0,
-        estimatedResultTokens: 0,
-        reportedTokens: 0,
-        errors: 0,
-      });
-      const text = (message.content ?? [])
-        .filter((block: any) => block.type === "text")
-        .map((block: any) => block.text)
-        .join("\n");
-      tool.estimatedResultTokens += Math.ceil(text.length / 4);
-      tool.reportedTokens += Number(message.usage?.totalTokens ?? 0);
-      if (message.isError) tool.errors++;
+      const endedAt = timestampMs(event.timestamp);
+      if (pending?.timestampMs !== undefined && endedAt !== undefined && endedAt >= pending.timestampMs) {
+        const duration = endedAt - pending.timestampMs;
+        tool.completedCalls++;
+        tool.totalDurationMs += duration;
+        tool.maxDurationMs = Math.max(tool.maxDurationMs, duration);
+      }
+      if (event.toolCallId) pendingTools.delete(event.toolCallId);
     }
-  }
-  result.turns = assistantTurnEnds > 0 ? assistantTurnEnds : explicitTurnEnds;
-  return result;
+  };
+
+  return {
+    push,
+    finish(): SessionMetrics {
+      result.turns = explicitTurnEnds > 0 ? explicitTurnEnds : inferredTurnEnds;
+      return result;
+    },
+  };
+}
+
+export function analyzeEvents(events: Iterable<SessionEvent>): SessionMetrics {
+  const accumulator = createAccumulator();
+  for (const event of events) accumulator.push(event);
+  return accumulator.finish();
+}
+
+export function analyzeLines(lines: Iterable<string>): SessionMetrics {
+  return analyzeEvents(eventsFromLines(lines));
 }
 
 export async function analyzeFile(path: string): Promise<SessionMetrics> {
-  return analyzeLines((await readFile(path, "utf8")).split("\n"));
+  const accumulator = createAccumulator();
+  for await (const event of readSessionEvents(path)) accumulator.push(event);
+  return accumulator.finish();
 }
 
 function isoWeekKey(timestamp: string): string {
@@ -321,91 +245,39 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.toolErrors += source.toolErrors;
   target.modelErrors += source.modelErrors;
   target.errors += source.errors;
+  target.invalidLines += source.invalidLines;
   for (const [name, count] of Object.entries(source.toolCallsByName))
     target.toolCallsByName[name] = (target.toolCallsByName[name] ?? 0) + count;
   for (const [name, usage] of Object.entries(source.toolUsage)) {
-    const item = (target.toolUsage[name] ??= {
-      available: usage.available ?? false,
-      calls: 0,
-      estimatedResultTokens: 0,
-      reportedTokens: 0,
-      errors: 0,
-    });
-    if (usage.available !== undefined) item.available = usage.available;
+    const item = (target.toolUsage[name] ??= createToolMetrics());
     item.calls += usage.calls;
     item.estimatedResultTokens += usage.estimatedResultTokens;
     item.reportedTokens += usage.reportedTokens;
     item.errors += usage.errors;
-  }
-  for (const [name, skill] of Object.entries(source.skills)) {
-    const item = (target.skills[name] ??= {
-      reads: 0,
-      explicit: 0,
-      existsGlobally: skill.existsGlobally ?? false,
-      existsInProject: skill.existsInProject ?? false,
-    });
-    if (skill.existsGlobally !== undefined) item.existsGlobally = skill.existsGlobally;
-    if (skill.existsInProject !== undefined) item.existsInProject = skill.existsInProject;
-    item.reads += skill.reads;
-    item.explicit += skill.explicit;
+    item.completedCalls += usage.completedCalls;
+    item.totalDurationMs += usage.totalDurationMs;
+    item.maxDurationMs = Math.max(item.maxDurationMs, usage.maxDurationMs);
   }
   for (const [name, model] of Object.entries(source.models)) {
-    const item = (target.models[name] ??= {
-      messages: 0,
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        reasoning: 0,
-        total: 0,
-        cost: 0,
-        cacheCost: 0,
-      },
-    });
+    const item = (target.models[name] ??= { messages: 0, usage: emptyUsage() });
     item.messages += model.messages;
-    for (const key of Object.keys(item.usage) as (keyof UsageTotals)[])
-      item.usage[key] += model.usage[key];
+    addUsage(item.usage, model.usage);
   }
   for (const [name, effort] of Object.entries(source.thinkingLevels)) {
-    const item = (target.thinkingLevels[name] ??= {
-      messages: 0,
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        reasoning: 0,
-        total: 0,
-        cost: 0,
-        cacheCost: 0,
-      },
-    });
+    const item = (target.thinkingLevels[name] ??= { messages: 0, usage: emptyUsage() });
     item.messages += effort.messages;
-    for (const key of Object.keys(item.usage) as (keyof UsageTotals)[])
-      item.usage[key] += effort.usage[key];
+    addUsage(item.usage, effort.usage);
   }
   for (const [key, effort] of Object.entries(source.modelEfforts)) {
     const item = (target.modelEfforts[key] ??= {
       model: effort.model,
       effort: effort.effort,
       messages: 0,
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        reasoning: 0,
-        total: 0,
-        cost: 0,
-        cacheCost: 0,
-      },
+      usage: emptyUsage(),
     });
     item.messages += effort.messages;
-    for (const usageKey of Object.keys(item.usage) as (keyof UsageTotals)[])
-      item.usage[usageKey] += effort.usage[usageKey];
+    addUsage(item.usage, effort.usage);
   }
-  for (const key of Object.keys(target.tokens) as (keyof UsageTotals)[])
-    target.tokens[key] += source.tokens[key];
+  addUsage(target.tokens, source.tokens);
   return target;
 }
