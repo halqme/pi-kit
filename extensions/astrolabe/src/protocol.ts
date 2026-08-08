@@ -7,9 +7,10 @@ export type SyntaxAction =
   | "locate"
   | "search"
   | "replace"
-  | "replace_many";
+  | "replace_many"
+  | "rename";
 export type InspectDetail = "outline" | "source";
-export type ContinuationCapability = "inspect" | "source" | "replace";
+export type ContinuationCapability = "inspect" | "source" | "replace" | "rename";
 
 /** Opaque, session-scoped reference. Pass this object unchanged to the next syntax action. */
 export interface Continuation {
@@ -61,13 +62,20 @@ export interface ReplaceManyRequest {
   }>;
 }
 
+export interface RenameRequest {
+  action: "rename";
+  continuation: Continuation;
+  newName: string;
+}
+
 export type SyntaxRequest =
   | InspectRequest
   | InspectManyRequest
   | LocateRequest
   | SearchRequest
   | ReplaceRequest
-  | ReplaceManyRequest;
+  | ReplaceManyRequest
+  | RenameRequest;
 
 export interface SyntaxHandle {
   continuation: Continuation;
