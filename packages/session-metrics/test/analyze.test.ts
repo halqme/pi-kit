@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { addToReport, analyzeLines, createReport } from "../src/analyze.ts";
 
-test("aggregates usage, tool latency, and errors from generic session events", () => {
+test("aggregates usage, tool latency, actions, and errors from session events", () => {
   const result = analyzeLines([
     JSON.stringify({
       type: "session",
@@ -55,10 +55,56 @@ test("aggregates usage, tool latency, and errors from generic session events", (
   assert.equal(result.toolUsage.example?.completedCalls, 1);
   assert.equal(result.toolUsage.example?.totalDurationMs, 125);
   assert.equal(result.toolUsage.example?.maxDurationMs, 125);
+  assert.equal(result.toolActions.example?.anything?.calls, 1);
+  assert.equal(result.toolActions.example?.anything?.errors, 1);
+  assert.equal(result.toolActions.example?.anything?.totalDurationMs, 125);
   assert.equal(result.models["model-a"]?.messages, 2);
   assert.equal(result.tokens.total, 36);
   assert.equal(result.toolErrors, 1);
   assert.equal(result.errors, 1);
+});
+
+test("tracks explicit and model-loaded skills independently from current inventory", () => {
+  const result = analyzeLines([
+    JSON.stringify({
+      type: "message",
+      message: {
+        role: "user",
+        content: [{ type: "text", text: "Use /skill:verify-work for this." }],
+      },
+    }),
+    JSON.stringify({
+      type: "message",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "skill-read",
+            name: "read",
+            arguments: { path: "/old/location/skills/legacy-name/SKILL.md" },
+          },
+        ],
+      },
+    }),
+    JSON.stringify({
+      type: "message",
+      message: {
+        role: "toolResult",
+        toolCallId: "skill-read",
+        toolName: "read",
+        content: [
+          {
+            type: "text",
+            text: "---\nname: implement-change\ndescription: implementation workflow\n---\nbody",
+          },
+        ],
+      },
+    }),
+  ]);
+
+  assert.deepEqual(result.skills["verify-work"], { reads: 0, explicit: 1 });
+  assert.deepEqual(result.skills["implement-change"], { reads: 1, explicit: 0 });
 });
 
 test("tracks thinking levels as model effort", () => {
