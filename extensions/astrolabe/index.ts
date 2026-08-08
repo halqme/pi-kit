@@ -5,11 +5,13 @@ import { Text } from "@earendil-works/pi-tui";
 import { editContinuationDetailed, editManyContinuationDetailed } from "./src/edit.ts";
 import { inspect } from "./src/inspect.ts";
 import {
+  adapterForIdentity,
   supportedLanguageDescription,
   supportedLanguageIds,
   type LanguageId,
 } from "./src/language-profile.ts";
-import { locateDetailed } from "./src/locate.ts";
+import type { LocateMatch } from "./src/locate.ts";
+import { LspManager } from "./src/lsp.ts";
 import { createMetrics, record } from "./src/metrics.ts";
 import { HandleStore, type NodeHandle } from "./src/node-handles.ts";
 import { shutdownParserCaches, startParserCaches } from "./src/parser.ts";
@@ -18,18 +20,22 @@ import {
   failure,
   isContinuation,
   responseText,
+  type ContinuationCapability,
   type LocateCandidate,
   type SyntaxHandle,
   type SyntaxRequest,
   type SyntaxResponse,
 } from "./src/protocol.ts";
+import { renameContinuationDetailed } from "./src/rename.ts";
+import { locateResolvedDetailed } from "./src/semantic-locate.ts";
 import { syntaxSearchDetailed } from "./src/syntax-search.ts";
 
-const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDescription} source, use locate to identify the target and return either its body or compact structural cards; use read/edit for new, generated, configuration, or unsupported files.`;
+const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDescription} source, use locate to identify the target and return either its body or compact structural cards; use rename for semantic symbol renames when LSP is available; use read/edit for new, generated, configuration, or unsupported files.`;
 
 const GUIDANCE = [
   `For existing ${supportedLanguageDescription} source, use astrolabe before read or edit. Do not use read/edit for a supported existing source file unless astrolabe reports unsupported, generated, or configuration content.`,
-  "For an edit intent or known symbol, use locate first. If locate returns mode=source, use that source and continuation directly with replace; do not inspect the same candidate again. If it returns mode=cards, inspect only when the card does not provide enough context for the intended replacement. When several same-file cards need source context, inspect them together with inspect_many before replace_many. Use search or outline inspection only when locate cannot identify the target.",
+  "For an edit intent or known symbol, use locate first. locate keeps the Tree-sitter fast path for clear targets and consults LSP workspace symbols when structural ranking is ambiguous or empty; if no configured server is available it stays on the structural result. If locate returns mode=source, use that source and continuation directly with replace; do not inspect the same candidate again. If it returns mode=cards, inspect only when the card does not provide enough context for the intended replacement. When several same-file cards need source context, inspect them together with inspect_many before replace_many. Use search or outline inspection only when locate cannot identify the target.",
+  "For a semantic symbol rename, pass the located declaration continuation to rename instead of emulating references with replace_many. The language server proposes the WorkspaceEdit; Astrolabe validates staleness and syntax before committing it.",
   "Use read or normal edits for unsupported languages, generated/configuration files, new files, or when astrolabe explicitly reports that the target is not applicable.",
 ];
 
@@ -81,6 +87,13 @@ const actionSchema = Type.Union([
       { minItems: 1 },
     ),
   }),
+  Type.Object({
+    action: Type.Literal("rename"),
+    continuation: Type.Object({
+      token: Type.String({ description: "Continuation for the declaration to rename" }),
+    }),
+    newName: Type.String({ minLength: 1 }),
+  }),
 ]);
 
 function normalizePath(path: string): string {
@@ -94,7 +107,7 @@ function resultText(result: { content: readonly unknown[] }): string {
 
 const AUTO_SOURCE_LIMIT = 6_000;
 
-function includeSource(matches: Awaited<ReturnType<typeof locateDetailed>>): boolean {
+function includeSource(matches: readonly LocateMatch[]): boolean {
   const first = matches[0];
   const second = matches[1];
   return Boolean(
@@ -108,12 +121,14 @@ function includeSource(matches: Awaited<ReturnType<typeof locateDetailed>>): boo
 function handleResponse(handles: HandleStore, handle: NodeHandle): SyntaxHandle | undefined {
   const token = handles.issueContinuation(handle.id);
   if (!token) return undefined;
+  const capabilities: ContinuationCapability[] = ["inspect", "source", "replace"];
+  if (adapterForIdentity(handle.languageId, handle.grammarId)?.lsp) capabilities.push("rename");
   return {
     continuation: continuation(token),
     path: handle.path,
     type: handle.type,
     range: { start: handle.startPosition, end: handle.endPosition },
-    capabilities: ["inspect", "source", "replace"],
+    capabilities,
   };
 }
 
@@ -135,6 +150,7 @@ async function dispatch(
   request: SyntaxRequest,
   cwd: string,
   handles: HandleStore,
+  lsp: LspManager,
 ): Promise<SyntaxResponse> {
   if (request.action === "locate") {
     if ((request.symbols?.length ?? 0) + (request.terms?.length ?? 0) === 0) {
@@ -145,16 +161,17 @@ async function dispatch(
       );
     }
     const maxCandidates = request.maxCandidates ?? 3;
-    const matches = await locateDetailed(
+    const matches = await locateResolvedDetailed(
       { ...request, scope: normalizePath(request.scope) },
       cwd,
       handles,
+      lsp,
     );
     if (matches.length === 0) {
       return failure(
         "locate",
         "no_candidates",
-        "No structural declarations matched the supplied symbols or terms.",
+        "No declarations matched the available structural or semantic signals.",
       );
     }
     const includeTopSource = includeSource(matches);
@@ -174,6 +191,9 @@ async function dispatch(
                 signature: match.signature,
                 flow: match.flow,
                 range: handle.range,
+                score: match.score,
+                reasons: match.reasons,
+                sourceBytes: Buffer.byteLength(match.source),
                 ...(includeTopSource && index === 0 ? { source: match.source } : {}),
               },
             ]
@@ -376,6 +396,26 @@ async function dispatch(
     };
   }
 
+  if (request.action === "rename") {
+    if (!isContinuation(request.continuation)) {
+      return failure("rename", "invalid_continuation", "Pass the declaration continuation unchanged.");
+    }
+    const result = await renameContinuationDetailed(request, cwd, handles, lsp);
+    if (!result.message.startsWith("renamed ")) {
+      return failure(
+        "rename",
+        result.message.split(":")[0] ?? "rename_failed",
+        result.message,
+      );
+    }
+    return {
+      ok: true,
+      action: "rename",
+      message: "ok",
+      data: result.details ? { ...result.details } : {},
+    };
+  }
+
   if (request.action === "replace_many") {
     const firstTarget = request.targets[0];
     if (!firstTarget || !isContinuation(firstTarget.continuation)) {
@@ -464,7 +504,9 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
   startParserCaches();
   const handles = new HandleStore();
   const metrics = createMetrics();
+  const lsp = new LspManager();
   pi.on("session_shutdown", async () => {
+    await lsp.shutdown();
     handles.clear();
     await shutdownParserCaches();
   });
@@ -478,9 +520,9 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "astrolabe",
     label: "Astrolabe",
-    description: `Use first for existing ${supportedLanguageDescription} source instead of read/edit: locate or inspect syntax, batch selected reads, and safely replace validated nodes. Avoid for new, generated, configuration, or unsupported files.`,
+    description: `Use first for existing ${supportedLanguageDescription} source instead of read/edit: resolve edit targets with structural/LSP signals, inspect syntax, batch selected reads, safely replace validated nodes, and use semantic rename when LSP is available. Avoid for new, generated, configuration, or unsupported files.`,
     promptSnippet:
-      "Prefer for existing supported source; locate, batch inspections when useful, and safely replace validated syntax",
+      "Prefer for existing supported source; resolve targets, batch inspections when useful, safely replace validated syntax, and use semantic rename for symbol renames",
     promptGuidelines: GUIDANCE,
     parameters: actionSchema,
     renderCall(args, theme) {
@@ -516,7 +558,7 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
       const request = params as SyntaxRequest;
       let response: SyntaxResponse;
       try {
-        response = await dispatch(request, ctx.cwd, handles);
+        response = await dispatch(request, ctx.cwd, handles, lsp);
       } catch (error) {
         response = failure(request.action, "syntax_error", String(error));
       }
