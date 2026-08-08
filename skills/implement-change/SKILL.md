@@ -11,6 +11,7 @@ description: Implement, modify, refactor, or remove code, configuration, tests, 
 4. Execute only the selected action, respecting `operate-safely` and any approval boundary. Implement in the project's existing style and preserve behavior, interfaces, validation, error handling, and compatibility unless the request requires otherwise.
    - When an existing source file is written in a language supported by a structural syntax tool such as Astrolabe, use that tool as the primary path for inspection and local edits, regardless of change size. Begin with its structural overview, drill into only the needed nodes, and decompose large changes into a sequence of local edits so intermediate states can be inspected.
    - Reuse still-valid node handles and broader structural results to avoid redundant inspections. After each structural edit, refresh handles or inspect again when the edit may have changed surrounding structure. Use ordinary diff/edit tools for new files, unsupported or non-structural files, generated artifacts, configuration, or cases where structural editing provides no useful leverage.
+   - When adding, modifying, or reviewing source comments, follow [the comment and documentation guidance](references/comments.md). Distinguish implementation comments that bind code to independently verifiable external constraints from documentation comments that describe an API for humans and tooling.
 5. Update tests and documentation when the externally observable behavior, contract, or operating procedure changes.
 6. Run the narrowest relevant checks first, then broader checks proportionate to risk. Inspect full failures, warnings, skipped cases, and truncation; fix causes rather than suppressing signals.
 7. Record actual results, including failures and unexpected output, and update the working hypotheses as supported, weakened, rejected, or unresolved. If uncertainty remains, use the new evidence to select the next check instead of repeating an unchanged action.
@@ -19,26 +20,6 @@ description: Implement, modify, refactor, or remove code, configuration, tests, 
 10. Report the outcome, files or behavior changed, verification results, adversarial checks, skipped checks, unresolved hypotheses, and remaining risk.
 
 Stop and ask before a choice that materially changes product behavior, public interfaces, data, dependencies, or external state and cannot be resolved from project evidence.
-
-## Comments and documentation
-
-Treat implementation comments and documentation comments as different interfaces. Do not apply one rule to both.
-
-### Implementation comments: bind code to external constraints
-
-An implementation comment should primarily preserve information that cannot be recovered from the commented code itself. Use it to bind a local implementation choice to an independently verifiable constraint outside that implementation: a protocol or specification, upstream behavior or bug, compatibility requirement, security or data invariant, product rule, measured operational fact, or similar evidence.
-
-State the constraint and why it forces the local choice rather than narrating what the code does. When practical, identify a stable source or verification path. A future agent in a different session should be able to verify the comment without trusting the previous agent's explanation.
-
-If the relevant fact can instead be enforced mechanically by a type, test, assertion, schema, linter, protocol supervisor, or other executable check, prefer that enforcement and keep a comment only when the external reason still needs to be preserved. Remove or update the comment when its constraint no longer applies.
-
-Avoid comments that merely translate nearby code into natural language. Prefer clearer names, structure, types, or extracted operations when the implementation itself can carry the meaning.
-
-### Documentation comments: describe the API for humans and tools
-
-Documentation comments such as JSDoc, rustdoc, Swift documentation comments, and Haddock are part of the API surface consumed through editor hovers, generated documentation, symbol browsers, and similar tooling. They may describe behavior that is also visible in the implementation because their intended reader often does not read the implementation at all.
-
-Document the observable contract needed to use the symbol correctly: purpose, inputs and outputs, errors, preconditions and postconditions, invariants, lifecycle expectations, and usage where useful. Do not require an external constraint merely to justify documentation. Avoid implementation detail unless it affects correct use of the API.
 
 ## Trigger and contract
 
