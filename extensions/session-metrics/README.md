@@ -17,4 +17,4 @@ Pi session JSONLの統計をagentから読むための`session_metrics` toolを�
 
 `since`、`limit`、`sessionsPath`を指定できます。`json: true`では`MetricsReport`全体とcurrent resource inventoryを返します。
 
-`skills`と`tool-actions`はsession JSONLから再現可能な派生統計です。current resource statusだけは現在のPi環境との照合で、`available`（現在も存在して使用履歴あり）、`missing`（履歴にはあるが現在は発見できない）、`unused`（現在は存在するが対象履歴では未使用）を区別します。このstatusは過去のusageをfilterしません。
+`skills`と`tool-actions`はsession JSONLから再現可能な派生統計です。current resource statusだけは現在のPi環境との照合で、`available`（現在のcwdで発見できて使用履歴あり）、`missing`（履歴にはあるが現在のcwdでは発見できない）、`unused`（現在のcwdで発見できるが対象履歴では未使用）を区別します。`missing`は削除済みだけでなくdisableや別project scopeも含み得ます。このstatusは過去のusageをfilterしません。
