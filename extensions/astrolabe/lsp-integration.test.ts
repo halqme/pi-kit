@@ -61,6 +61,30 @@ test("locate fuses LSP evidence even when Tree-sitter already has a clear target
   assert.ok(matches[0]?.reasons.includes("lsp:workspaceSymbol:answer"));
 });
 
+test("duplicate LSP results do not inflate the same evidence twice", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-lsp-"));
+  const path = join(dir, "sample.ts");
+  await writeFile(path, "function answer() { return 1; }\n");
+  const symbol = {
+    name: "answer",
+    uri: pathToFileURL(path).href,
+    range: { start: { line: 0, character: 9 }, end: { line: 0, character: 15 } },
+  };
+  const matches = await locateResolvedDetailed(
+    { scope: "sample.ts", symbols: ["answer"] },
+    dir,
+    new HandleStore(),
+    fakeLsp({ symbols: async () => [symbol, symbol] }),
+  );
+
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0]?.score, 260);
+  assert.deepEqual(
+    matches[0]?.reasons.filter((reason) => reason === "lsp:workspaceSymbol:answer"),
+    ["lsp:workspaceSymbol:answer"],
+  );
+});
+
 test("locate can still resolve a candidate supplied only by LSP", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-lsp-"));
   const path = join(dir, "sample.ts");
