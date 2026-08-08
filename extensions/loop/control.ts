@@ -167,7 +167,7 @@ class LoopController {
 
     const reportInstruction =
       state.owner === "runner"
-        ? "Before ending the next turn, call runner.progress with completed steps and/or a concise summary, or runner.stop if blocked."
+        ? "Before ending the next turn, call runner.progress with completed steps and/or a concise summary; call runner.finish with evidence only after verifying the requested outcome, or runner.stop if blocked."
         : "Before ending the next turn, call loop with action=report and status=continue, done, or blocked.";
     const reportText = report?.summary
       ? `Previous progress report: ${report.summary}\n\n`
