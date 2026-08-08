@@ -2,7 +2,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { buildReport, renderSummary, type ReportView } from "@halqme/pi-session-metrics";
+import {
+  addCurrentResources,
+  buildReport,
+  renderSummary,
+  type ReportView,
+} from "@halqme/pi-session-metrics";
 
 const SESSIONS_ROOT = join(homedir(), ".pi", "agent", "sessions");
 
@@ -11,7 +16,7 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
     name: "session_metrics",
     label: "Session Metrics",
     description:
-      "Read Pi session JSONL logs and summarize generic usage, cache, model, error, project, and tool metrics without instrumenting the active session.",
+      "Read Pi session JSONL logs and summarize usage, cache, models, skills, tools, tool actions, errors, and current Pi resource status without instrumenting the active session.",
     parameters: Type.Object({
       view: Type.Optional(
         Type.Union([
@@ -20,7 +25,9 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
           Type.Literal("weekly"),
           Type.Literal("projects"),
           Type.Literal("models"),
+          Type.Literal("skills"),
           Type.Literal("tools"),
+          Type.Literal("tool-actions"),
         ]),
       ),
       since: Type.Optional(Type.String({ description: "UTC date filter, YYYY-MM-DD." })),
@@ -28,10 +35,13 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
       sessionsPath: Type.Optional(Type.String({ description: "Session JSONL file or directory." })),
       json: Type.Optional(Type.Boolean({ default: false })),
     }),
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const view = (params.view ?? "summary") as ReportView;
       try {
         const report = await buildReport(params.sessionsPath ?? SESSIONS_ROOT, params.since);
+        if (params.json || view === "skills" || view === "tools") {
+          await addCurrentResources(report, ctx.cwd);
+        }
         const text = params.json
           ? JSON.stringify(report, null, 2)
           : renderSummary(report, {
