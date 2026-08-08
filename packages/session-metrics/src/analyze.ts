@@ -1,3 +1,5 @@
+import { explicitSkillNames, skillNameFromRead, skillReadPath } from "./analyzers/skills.ts";
+import { toolAction } from "./analyzers/tool-actions.ts";
 import {
   emptyUsage,
   eventsFromLines,
@@ -9,6 +11,7 @@ import type {
   MetricsReport,
   MetricSummary,
   SessionMetrics,
+  SkillMetrics,
   ToolMetrics,
   UsageTotals,
 } from "./types.ts";
@@ -17,6 +20,7 @@ export type {
   MetricsReport,
   MetricSummary,
   SessionMetrics,
+  SkillMetrics,
   ToolMetrics,
   UsageTotals,
 } from "./types.ts";
@@ -31,6 +35,10 @@ function createToolMetrics(): ToolMetrics {
     totalDurationMs: 0,
     maxDurationMs: 0,
   };
+}
+
+function createSkillMetrics(): SkillMetrics {
+  return { reads: 0, explicit: 0 };
 }
 
 function addUsage(target: UsageTotals, source: UsageTotals): void {
@@ -48,6 +56,8 @@ export function createMetrics(): SessionMetrics {
     toolCalls: 0,
     toolCallsByName: {},
     toolUsage: {},
+    toolActions: {},
+    skills: {},
     models: {},
     thinkingLevels: {},
     modelEfforts: {},
@@ -75,12 +85,30 @@ function timestampMs(value?: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function addToolResult(
+  tool: ToolMetrics,
+  event: Extract<SessionEvent, { kind: "tool_result" }>,
+  durationMs?: number,
+): void {
+  tool.estimatedResultTokens += Math.ceil(textContent(event.content).length / 4);
+  tool.reportedTokens += event.reportedTokens;
+  if (event.isError) tool.errors++;
+  if (durationMs !== undefined) {
+    tool.completedCalls++;
+    tool.totalDurationMs += durationMs;
+    tool.maxDurationMs = Math.max(tool.maxDurationMs, durationMs);
+  }
+}
+
 function createAccumulator() {
   const result = createMetrics();
   let thinkingLevel = "unknown";
   let explicitTurnEnds = 0;
   let inferredTurnEnds = 0;
-  const pendingTools = new Map<string, { toolName: string; timestampMs?: number }>();
+  const pendingTools = new Map<
+    string,
+    { toolName: string; action?: string; skillPath?: string; timestampMs?: number }
+  >();
 
   const push = (event: SessionEvent): void => {
     if (event.kind === "invalid_line") {
@@ -105,6 +133,9 @@ function createAccumulator() {
     if (event.kind === "user_message") {
       result.messages++;
       result.userMessages++;
+      for (const name of explicitSkillNames(event.content)) {
+        (result.skills[name] ??= createSkillMetrics()).explicit++;
+      }
       return;
     }
     if (event.kind === "assistant_message") {
@@ -142,10 +173,18 @@ function createAccumulator() {
       result.toolCallsByName[event.toolName] = (result.toolCallsByName[event.toolName] ?? 0) + 1;
       const tool = (result.toolUsage[event.toolName] ??= createToolMetrics());
       tool.calls++;
+      const action = toolAction(event.input);
+      if (action) {
+        const actions = (result.toolActions[event.toolName] ??= {});
+        (actions[action] ??= createToolMetrics()).calls++;
+      }
       if (event.toolCallId) {
         const startedAt = timestampMs(event.timestamp);
+        const skillPath = skillReadPath(event.toolName, event.input);
         pendingTools.set(event.toolCallId, {
           toolName: event.toolName,
+          ...(action ? { action } : {}),
+          ...(skillPath ? { skillPath } : {}),
           ...(startedAt !== undefined ? { timestampMs: startedAt } : {}),
         });
       }
@@ -156,24 +195,23 @@ function createAccumulator() {
       result.toolResults++;
       const pending = event.toolCallId ? pendingTools.get(event.toolCallId) : undefined;
       const toolName = event.toolName ?? pending?.toolName ?? "unknown";
-      const tool = (result.toolUsage[toolName] ??= createToolMetrics());
-      tool.estimatedResultTokens += Math.ceil(textContent(event.content).length / 4);
-      tool.reportedTokens += event.reportedTokens;
+      const endedAt = timestampMs(event.timestamp);
+      const durationMs =
+        pending?.timestampMs !== undefined && endedAt !== undefined && endedAt >= pending.timestampMs
+          ? endedAt - pending.timestampMs
+          : undefined;
+      addToolResult((result.toolUsage[toolName] ??= createToolMetrics()), event, durationMs);
+      if (pending?.action) {
+        const action = (result.toolActions[toolName] ??= {})[pending.action];
+        if (action) addToolResult(action, event, durationMs);
+      }
+      if (!event.isError && pending?.skillPath) {
+        const name = skillNameFromRead(pending.skillPath, event.content);
+        (result.skills[name] ??= createSkillMetrics()).reads++;
+      }
       if (event.isError) {
-        tool.errors++;
         result.toolErrors++;
         result.errors++;
-      }
-      const endedAt = timestampMs(event.timestamp);
-      if (
-        pending?.timestampMs !== undefined &&
-        endedAt !== undefined &&
-        endedAt >= pending.timestampMs
-      ) {
-        const duration = endedAt - pending.timestampMs;
-        tool.completedCalls++;
-        tool.totalDurationMs += duration;
-        tool.maxDurationMs = Math.max(tool.maxDurationMs, duration);
       }
       if (event.toolCallId) pendingTools.delete(event.toolCallId);
     }
@@ -237,6 +275,16 @@ export function addToReport(report: MetricsReport, session: SessionMetrics): Met
   return report;
 }
 
+function mergeToolMetrics(target: ToolMetrics, source: ToolMetrics): void {
+  target.calls += source.calls;
+  target.estimatedResultTokens += source.estimatedResultTokens;
+  target.reportedTokens += source.reportedTokens;
+  target.errors += source.errors;
+  target.completedCalls += source.completedCalls;
+  target.totalDurationMs += source.totalDurationMs;
+  target.maxDurationMs = Math.max(target.maxDurationMs, source.maxDurationMs);
+}
+
 export function mergeMetrics(target: MetricSummary, source: MetricSummary): MetricSummary {
   target.sessions += source.sessions;
   target.messages += source.messages;
@@ -251,15 +299,17 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.invalidLines += source.invalidLines;
   for (const [name, count] of Object.entries(source.toolCallsByName))
     target.toolCallsByName[name] = (target.toolCallsByName[name] ?? 0) + count;
-  for (const [name, usage] of Object.entries(source.toolUsage)) {
-    const item = (target.toolUsage[name] ??= createToolMetrics());
-    item.calls += usage.calls;
-    item.estimatedResultTokens += usage.estimatedResultTokens;
-    item.reportedTokens += usage.reportedTokens;
-    item.errors += usage.errors;
-    item.completedCalls += usage.completedCalls;
-    item.totalDurationMs += usage.totalDurationMs;
-    item.maxDurationMs = Math.max(item.maxDurationMs, usage.maxDurationMs);
+  for (const [name, usage] of Object.entries(source.toolUsage))
+    mergeToolMetrics((target.toolUsage[name] ??= createToolMetrics()), usage);
+  for (const [toolName, actions] of Object.entries(source.toolActions)) {
+    const targetActions = (target.toolActions[toolName] ??= {});
+    for (const [actionName, usage] of Object.entries(actions))
+      mergeToolMetrics((targetActions[actionName] ??= createToolMetrics()), usage);
+  }
+  for (const [name, skill] of Object.entries(source.skills)) {
+    const targetSkill = (target.skills[name] ??= createSkillMetrics());
+    targetSkill.reads += skill.reads;
+    targetSkill.explicit += skill.explicit;
   }
   for (const [name, model] of Object.entries(source.models)) {
     const item = (target.models[name] ??= { messages: 0, usage: emptyUsage() });
