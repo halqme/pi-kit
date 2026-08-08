@@ -127,7 +127,8 @@ export function transitionRunner(current: PlanState, event: RunnerEvent): PlanSt
   }
 
   state.status = "stopped";
-  state.stopReason = event.reason.trim() || (event.type === "exhaust" ? "Runner exhausted" : "Stopped");
+  state.stopReason =
+    event.reason.trim() || (event.type === "exhaust" ? "Runner exhausted" : "Stopped");
   return state;
 }
 
