@@ -8,7 +8,7 @@ Astrolabeがコードで強制するのは、continuationの有効性、対象�
 
 `action`で`locate`、`search`、`inspect`、`inspect_many`、`replace`、`replace_many`、`rename`を選びます。
 
-- `locate`は編集意図に含まれる`symbols`または`terms`から宣言ノードを順位付けします。Tree-sitterのランキングで対象が明確なら従来どおりその結果を返し、候補が曖昧または空でLSPが利用できる場合だけ`workspace/symbol`を追加のランキング信号として使います。完全一致symbolで明確に首位かつ本文が6,000 bytes以下なら`mode: "source"`として本文も返し、それ以外は`mode: "cards"`としてシグネチャ、親宣言、flow、範囲、continuationを返します。
+- `locate`は編集意図に含まれる`symbols`または`terms`から宣言ノードを順位付けします。Tree-sitterの構造・本文signalと、利用可能なLSPの`workspace/symbol`を独立したcandidate generatorとして並行して使い、同じconcrete syntax nodeを支持するevidenceは加算してconfidenceを上げます。LSPが利用できなければstructural/textual signalだけで同じ処理を続行します。完全一致symbolで明確に首位かつ本文が6,000 bytes以下なら`mode: "source"`として本文も返し、それ以外は`mode: "cards"`としてシグネチャ、親宣言、flow、範囲、continuationを返します。
 - `search`は構文形状による補助探索です。関数・呼出し・importを検索し、`locate`で対象を特定できない調査に使います。
 - `inspect`は`path`でoutlineを取得するか、continuationで選んだ構文ノードのsourceを取得します。
 - `inspect_many`は同一ファイルの複数continuationを一度にsourceまで取得し、`replace_many`用のテンプレートを返します。
@@ -30,13 +30,19 @@ LSPを追加してもmutation modelは変わりません。通常の編集は次
 
 ```text
 edit intent
-  -> target resolution (Tree-sitter fast path, LSP semantic fallback)
+  -> target resolution
+       |- LSP semantic evidence
+       |- Tree-sitter structural evidence
+       `- textual evidence
+  -> candidate fusion / ranking
   -> concrete syntax node
   -> continuation
   -> replace / replace_many
   -> stale + syntax validation
   -> commit
 ```
+
+LSPとTree-sitterに主従関係はありません。利用可能なresolverは最初からevidenceを出し、同じnodeを複数のsignalが支持した場合はranking上のconfidenceが高くなります。LSPのURI/rangeも最終的にはTree-sitter declarationへanchorされるため、mutation layerはresolver固有の位置表現を扱いません。
 
 renameのように言語側で意味論が定義されている操作だけは、mutation proposalの生成をLSPへ委譲します。
 
@@ -58,7 +64,7 @@ LSPは任意機能です。Astrolabeはlanguage serverを自動インストー�
 - Go: `gopls`
 - Python: `basedpyright-langserver --stdio`、次に`pyright-langserver --stdio`
 
-`locate`ではLSPが利用できなくてもTree-sitterの結果へそのままフォールバックします。`rename`は意味論的なWorkspaceEditが必要なので、サーバーがなければ`lsp_unavailable`を返します。現在はUTF-16 position encodingだけを受け付けます。
+`locate`はLSPが設定されている言語ではTree-sitterとLSPを並行して使います。LSPを起動できない場合はそのsemantic signalだけを欠いた状態でstructural resolutionを継続します。`rename`は意味論的なWorkspaceEditが必要なので、サーバーがなければ`lsp_unavailable`を返します。現在はUTF-16 position encodingだけを受け付けます。
 
 WorkspaceEditは既存のAstrolabe対応ソースへのtext editだけを受理します。`CreateFile`、`RenameFile`、`DeleteFile`などのresource operation、非file URI、非対応ファイルへの編集は拒否します。複数ファイルのrenameは全ファイルを先に検証・stageしてからcommitし、途中失敗時はbest-effort rollbackを行います。ファイルシステム上の複数renameを真にatomicにはできないため、rollback自体が失敗した場合は`workspace_commit_partial`として明示します。
 
