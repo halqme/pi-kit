@@ -50,7 +50,25 @@ function cacheHitPercent(metrics: MetricSummary): number {
   return prompt > 0 ? (100 * metrics.tokens.cacheRead) / prompt : 0;
 }
 
-const BAR_LEVELS = ["  ", "▏ ", "▎ ", "▍ ", "▌ ", "▋ ", "▊ ", "▉ ", "█ ", "█▏", "█▎", "█▍", "█▌", "█▋", "█▊", "█▉", "██"];
+const BAR_LEVELS = [
+  "  ",
+  "▏ ",
+  "▎ ",
+  "▍ ",
+  "▌ ",
+  "▋ ",
+  "▊ ",
+  "▉ ",
+  "█ ",
+  "█▏",
+  "█▎",
+  "█▍",
+  "█▌",
+  "█▋",
+  "█▊",
+  "█▉",
+  "██",
+];
 
 function bar(value: number, maximum: number, width = 10): string {
   if (maximum <= 0 || value <= 0) return BAR_LEVELS[0]!.repeat(width);
@@ -97,34 +115,59 @@ function markdownTable(headers: string[], values: Array<Array<string | number>>)
 function tokenDetails(metrics: MetricSummary): string {
   const promptInput = metrics.tokens.input + metrics.tokens.cacheRead;
   return markdownTable(
-    ["Prompt input", "Cache hit", "Cached", "Uncached", "Output", "Reasoning", "Cache cost"],
-    [[
-      formatTokens(promptInput),
-      `${cacheHitPercent(metrics).toFixed(1)}%`,
-      formatTokens(metrics.tokens.cacheRead),
-      formatTokens(metrics.tokens.input),
-      formatTokens(metrics.tokens.output),
-      formatTokens(metrics.tokens.reasoning),
-      money(metrics.tokens.cacheCost),
-    ]],
+    [
+      "Prompt input",
+      "Cache hit",
+      "Cached",
+      "Uncached",
+      "Cache write",
+      "Output",
+      "Reasoning",
+      "Cache cost",
+    ],
+    [
+      [
+        formatTokens(promptInput),
+        `${cacheHitPercent(metrics).toFixed(1)}%`,
+        formatTokens(metrics.tokens.cacheRead),
+        formatTokens(metrics.tokens.input),
+        formatTokens(metrics.tokens.cacheWrite),
+        formatTokens(metrics.tokens.output),
+        formatTokens(metrics.tokens.reasoning),
+        money(metrics.tokens.cacheCost),
+      ],
+    ],
   ).join("\n");
 }
 
 function metricRows(metrics: MetricSummary, activeDays = 0): string[] {
   return markdownTable(
-    ["Sessions", "Active days", "Turns", "Messages", "Tools", "Tokens", "Cost", "Tool errors", "Model errors", "Invalid JSONL"],
-    [[
-      number(metrics.sessions),
-      number(activeDays),
-      number(metrics.turns),
-      number(metrics.messages),
-      number(metrics.toolCalls),
-      formatTokens(metrics.tokens.total),
-      money(metrics.tokens.cost),
-      number(metrics.toolErrors),
-      number(metrics.modelErrors),
-      number(metrics.invalidLines),
-    ]],
+    [
+      "Sessions",
+      "Active days",
+      "Turns",
+      "Messages",
+      "Tools",
+      "Tokens",
+      "Cost",
+      "Tool errors",
+      "Model errors",
+      "Invalid JSONL",
+    ],
+    [
+      [
+        number(metrics.sessions),
+        number(activeDays),
+        number(metrics.turns),
+        number(metrics.messages),
+        number(metrics.toolCalls),
+        formatTokens(metrics.tokens.total),
+        money(metrics.tokens.cost),
+        number(metrics.toolErrors),
+        number(metrics.modelErrors),
+        number(metrics.invalidLines),
+      ],
+    ],
   );
 }
 
@@ -144,7 +187,10 @@ function periodEntries(report: MetricsReport, view: "daily" | "weekly", since?: 
     .sort(([left], [right]) => right.localeCompare(left));
 }
 
-function summaryFor(report: MetricsReport, since?: string): { metrics: MetricSummary; activeDays: number } {
+function summaryFor(
+  report: MetricsReport,
+  since?: string,
+): { metrics: MetricSummary; activeDays: number } {
   const daily = periodEntries(report, "daily", since);
   return {
     metrics: since
@@ -167,7 +213,8 @@ function modelRows(metrics: MetricSummary, limit?: number) {
 function toolRows(metrics: MetricSummary, limit?: number) {
   return rows(
     Object.entries(metrics.toolUsage).sort(
-      ([leftName, left], [rightName, right]) => right.calls - left.calls || leftName.localeCompare(rightName),
+      ([leftName, left], [rightName, right]) =>
+        right.calls - left.calls || leftName.localeCompare(rightName),
     ),
     limit,
   );
@@ -190,15 +237,18 @@ function activityChart(entries: Array<[string, MetricSummary]>): string {
   const weeks = Math.ceil(points.length / 7);
   const cell = (value: number): string => {
     if (maximum <= 0 || value <= 0) return BAR_LEVELS[0]!;
-    return BAR_LEVELS[Math.max(1, Math.round((value / maximum) * (BAR_LEVELS.length - 1)))]!;
+    return BAR_LEVELS[
+      Math.max(1, Math.round((value / maximum) * (BAR_LEVELS.length - 1)))
+    ]!;
   };
   return [
     "Recent activity (tokens, 30 days)",
-    ...weekdays.map((weekday, weekdayIndex) =>
-      `${weekday} ${Array.from({ length: weeks }, (_, weekIndex) => {
-        const point = points[weekIndex * 7 + weekdayIndex];
-        return point ? cell(point[1].tokens.total) : BAR_LEVELS[0]!;
-      }).join("")}`,
+    ...weekdays.map(
+      (weekday, weekdayIndex) =>
+        `${weekday} ${Array.from({ length: weeks }, (_, weekIndex) => {
+          const point = points[weekIndex * 7 + weekdayIndex];
+          return point ? cell(point[1].tokens.total) : BAR_LEVELS[0]!;
+        }).join("")}`,
     ),
   ].join("\n");
 }
@@ -226,12 +276,21 @@ function renderToolTable(metrics: MetricSummary, limit?: number): string {
   return [
     title("Top tools"),
     ...markdownTable(
-      ["Tool", "Calls", "Errors", "Result tokens", "Avg latency", "Max latency"],
+      [
+        "Tool",
+        "Calls",
+        "Errors",
+        "Estimated result",
+        "Reported result",
+        "Avg latency",
+        "Max latency",
+      ],
       entries.map(([tool, value]: [string, ToolMetrics]) => [
         tool,
         number(value.calls),
         number(value.errors),
-        formatTokens(value.reportedTokens || value.estimatedResultTokens),
+        formatTokens(value.estimatedResultTokens),
+        formatTokens(value.reportedTokens),
         duration(value.completedCalls > 0 ? value.totalDurationMs / value.completedCalls : 0),
         duration(value.maxDurationMs),
       ]),
@@ -319,13 +378,23 @@ function summarySections(report: MetricsReport, options: ReportOptions): ReportS
     {
       title: "Top tools",
       markdown: markdownTable(
-        ["Tool", "Activity", "Calls", "Errors", "Result tokens", "Avg latency", "Max latency"],
+        [
+          "Tool",
+          "Activity",
+          "Calls",
+          "Errors",
+          "Estimated result",
+          "Reported result",
+          "Avg latency",
+          "Max latency",
+        ],
         tools.map(([tool, value]) => [
           tool,
           bar(value.calls, maxToolCalls),
           number(value.calls),
           number(value.errors),
-          formatTokens(value.reportedTokens || value.estimatedResultTokens),
+          formatTokens(value.estimatedResultTokens),
+          formatTokens(value.reportedTokens),
           duration(value.completedCalls > 0 ? value.totalDurationMs / value.completedCalls : 0),
           duration(value.maxDurationMs),
         ]),
@@ -344,15 +413,23 @@ function renderView(report: MetricsReport, options: ReportOptions): string {
   if (view === "models") return renderModelTable(metrics, limit);
   if (view === "tools") return renderToolTable(metrics, limit);
   return summarySections(report, options)
-    .map((section) => `${title(section.title)}\n${section.markdown}${section.text ? `\n\n${section.text}` : ""}`)
+    .map(
+      (section) =>
+        `${title(section.title)}\n${section.markdown}${section.text ? `\n\n${section.text}` : ""}`,
+    )
     .join("\n\n");
 }
 
-export function reportSections(report: MetricsReport, options: ReportOptions = {}): ReportSection[] {
+export function reportSections(
+  report: MetricsReport,
+  options: ReportOptions = {},
+): ReportSection[] {
   if ((options.view ?? "summary") === "summary") return summarySections(report, options);
   const markdown = renderView(report, options);
   const [heading, ...rest] = markdown.split("\n");
-  return [{ title: heading?.replace(/^## /, "") ?? "Session Metrics", markdown: rest.join("\n") }];
+  return [
+    { title: heading?.replace(/^## /, "") ?? "Session Metrics", markdown: rest.join("\n") },
+  ];
 }
 
 export function renderSummary(report: MetricsReport, options: ReportOptions = {}): string {
