@@ -6,7 +6,6 @@ import {
   getAgentDir,
   type SourceInfo,
 } from "@earendil-works/pi-coding-agent";
-import { createMetrics } from "./analyze.ts";
 import type {
   MetricsReport,
   ResourceMetrics,
@@ -86,14 +85,17 @@ function status(available: boolean, used: boolean): ResourceStatus {
   return available ? "unused" : "missing";
 }
 
-/** Compare deterministic history with one explicitly supplied current resource inventory. */
+/**
+ * Compare the selected historical report with one explicitly supplied current resource inventory.
+ * `cwd` defines where the current Pi resource set is resolved; historical counts remain the report's
+ * selected scope (for example all sessions, or all sessions after `since`).
+ */
 export function addResourceInventory(
   report: MetricsReport,
   cwd: string,
   inventory: PiResourceInventory,
 ): MetricsReport {
   const resolvedCwd = resolve(cwd);
-  const history = report.projects[cwd] ?? report.projects[resolvedCwd] ?? createMetrics();
   const resources: ResourceMetrics = {
     scope: resolvedCwd,
     tools: {},
@@ -101,8 +103,8 @@ export function addResourceInventory(
     diagnostics: inventory.diagnostics,
   };
 
-  for (const name of new Set([...Object.keys(history.toolUsage), ...Object.keys(inventory.tools)])) {
-    const calls = history.toolUsage[name]?.calls ?? 0;
+  for (const name of new Set([...Object.keys(report.toolUsage), ...Object.keys(inventory.tools)])) {
+    const calls = report.toolUsage[name]?.calls ?? 0;
     const source = inventory.tools[name];
     resources.tools[name] = {
       status: status(source !== undefined, calls > 0),
@@ -111,8 +113,8 @@ export function addResourceInventory(
     };
   }
 
-  for (const name of new Set([...Object.keys(history.skills), ...Object.keys(inventory.skills)])) {
-    const usage = history.skills[name] ?? { reads: 0, explicit: 0 };
+  for (const name of new Set([...Object.keys(report.skills), ...Object.keys(inventory.skills)])) {
+    const usage = report.skills[name] ?? { reads: 0, explicit: 0 };
     const source = inventory.skills[name];
     resources.skills[name] = {
       status: status(source !== undefined, usage.reads + usage.explicit > 0),
