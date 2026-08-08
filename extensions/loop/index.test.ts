@@ -124,10 +124,7 @@ test("failed model runs do not consume loop turns or queued reports", async () =
     "a retry must preserve the report for the eventual successful turn end",
   );
 
-  await end(
-    { messages: [{ role: "assistant", stopReason: "stop", content: [] }] },
-    ctx,
-  );
+  await end({ messages: [{ role: "assistant", stopReason: "stop", content: [] }] }, ctx);
   assert.equal(sent.length, 1);
   assert.match(sent[0], /keep this report across retry/);
   assert.equal(loopController.snapshot()?.turns, 1);
