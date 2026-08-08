@@ -21,7 +21,7 @@ Protocol + session trace + observation
       execute     +-----------> reject proposal
 ```
 
-TODO completion is therefore evidence, not a completion transition. `runner.progress` records completed steps while the runner stays active. Once all steps are reported, the continuation context changes to verification; the agent must call `runner.finish` with concise evidence. A future model-backed reviewer can be added as another async supervisor without changing the runner protocol or turning it into a workflow engine.
+TODO completion is therefore evidence, not a completion transition. `runner.progress` records completed steps while the runner stays active. Once all steps are reported, the continuation context asks the agent to apply the `complete-task` skill: compare the requested outcome with the actual workspace and available evidence, then call `runner.finish` only when completion is supported. A future model-backed reviewer can be added as another async supervisor without changing the runner protocol or turning it into a workflow engine.
 
 Hard runtime facts remain explicit state. The shared `loop` controller owns bounded continuation, owner arbitration, and exhaustion. Loop exhaustion objectively stops a running plan; these lifecycle facts should not be inferred by the agent.
 
@@ -30,4 +30,5 @@ The separation is intentional:
 ```text
 objective runtime lifecycle  -> explicit state
 agent task judgment          -> supervised protocol
+completion semantics         -> complete-task skill
 ```
