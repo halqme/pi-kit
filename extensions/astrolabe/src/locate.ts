@@ -120,17 +120,17 @@ function scoreCandidate(
   for (const symbol of symbols) {
     if (symbol === qualified) {
       score += 100;
-      reasons.push(`symbol:${symbol}`);
+      reasons.push(`tree-sitter:symbol:${symbol}:qualified`);
     } else if (symbol === name) {
       score += 90;
-      reasons.push(`symbol:${symbol}`);
+      reasons.push(`tree-sitter:symbol:${symbol}:name`);
     }
   }
   const normalized = source.toLocaleLowerCase();
   for (const term of terms) {
     if (normalized.includes(term.toLocaleLowerCase())) {
       score += 10;
-      reasons.push(`term:${term}`);
+      reasons.push(`text:term:${term}`);
     }
   }
   return { score, reasons };
