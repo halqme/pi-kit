@@ -1,8 +1,18 @@
 import { addToReport, analyzeFile, createReport, type MetricsReport } from "./analyze.ts";
 import { sessionFiles } from "./files.ts";
 
+function validateSince(since?: string): void {
+  if (
+    since &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(since) || Number.isNaN(Date.parse(`${since}T00:00:00Z`)))
+  ) {
+    throw new Error(`Invalid since date: ${since}`);
+  }
+}
+
 /** Builds a deterministic report directly from Pi session JSONL files. */
 export async function buildReport(sessionsPath: string, since?: string): Promise<MetricsReport> {
+  validateSince(since);
   const sessions = [];
   for (const path of await sessionFiles(sessionsPath)) sessions.push(await analyzeFile(path));
   const selected = sessions
