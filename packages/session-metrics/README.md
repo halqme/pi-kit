@@ -49,15 +49,17 @@ skill readはread対象とresultをtool call idで対応付け、skill本文のf
 - `DefaultResourceLoader`で現在のskillsとextensionsを取得
 - Piのtool factoriesでbuilt-in toolsを取得
 - loaded extensionのregistered toolsを取得
-- historical usageと現在inventoryを照合
+- selected historical usageと現在inventoryを照合
 
 statusは次の3種類です。
 
-- `available`: 現在発見でき、対象履歴でも使用されている
-- `missing`: 対象履歴にはあるが現在は発見できない
-- `unused`: 現在発見できるが対象履歴では未使用
+- `available`: 現在のcwdで発見でき、対象履歴でも使用されている
+- `missing`: 対象履歴にはあるが現在のcwdでは発見できない
+- `unused`: 現在のcwdで発見できるが対象履歴では未使用
 
-current statusはhistorical metricsをfilterしたり書き換えたりしません。CLIでは`--skills`、`--tools`、`--json`でresource enrichmentを行います。
+`missing`は「削除済み」を断定する値ではありません。package/extensionの削除だけでなく、disableや現在のcwdでは有効でないproject-local resourceも含む「現在のPi resource setから発見できない」という状態です。
+
+current statusはhistorical metricsをfilterしたり書き換えたりしません。`cwd`は現在inventoryを解決するscopeだけを決め、usage/status判定には`since`等で選択済みのreport全体を使います。CLIでは`--skills`、`--tools`、`--json`でresource enrichmentを行います。
 
 Pi resource loaderはPi本体と同様にextension registration factoryをloadします。そのためcurrent inventory取得はpureなsession parsingとは分離し、`buildReport()`から暗黙には実行しません。
 
