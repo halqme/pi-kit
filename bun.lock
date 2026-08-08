@@ -184,10 +184,6 @@
       "bin": {
         "session-metrics": "cli.ts",
       },
-      "dependencies": {
-        "@earendil-works/pi-ai": "catalog:",
-        "@earendil-works/pi-coding-agent": "catalog:",
-      },
       "devDependencies": {
         "@types/bun": "catalog:",
         "typescript": "catalog:",

@@ -165,7 +165,11 @@ function createAccumulator() {
         result.errors++;
       }
       const endedAt = timestampMs(event.timestamp);
-      if (pending?.timestampMs !== undefined && endedAt !== undefined && endedAt >= pending.timestampMs) {
+      if (
+        pending?.timestampMs !== undefined &&
+        endedAt !== undefined &&
+        endedAt >= pending.timestampMs
+      ) {
         const duration = endedAt - pending.timestampMs;
         tool.completedCalls++;
         tool.totalDurationMs += duration;

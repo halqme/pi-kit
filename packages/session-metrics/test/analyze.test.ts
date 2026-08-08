@@ -4,7 +4,12 @@ import { addToReport, analyzeLines, createReport } from "../src/analyze.ts";
 
 test("aggregates usage, tool latency, and errors from generic session events", () => {
   const result = analyzeLines([
-    JSON.stringify({ type: "session", id: "s1", cwd: "/tmp", timestamp: "2026-01-01T00:00:00.000Z" }),
+    JSON.stringify({
+      type: "session",
+      id: "s1",
+      cwd: "/tmp",
+      timestamp: "2026-01-01T00:00:00.000Z",
+    }),
     JSON.stringify({
       type: "message",
       timestamp: "2026-01-01T00:00:01.000Z",
@@ -13,7 +18,9 @@ test("aggregates usage, tool latency, and errors from generic session events", (
         model: "model-a",
         stopReason: "toolUse",
         usage: { input: 10, output: 4, cacheRead: 20, totalTokens: 34 },
-        content: [{ type: "toolCall", id: "call-1", name: "example", arguments: { action: "anything" } }],
+        content: [
+          { type: "toolCall", id: "call-1", name: "example", arguments: { action: "anything" } },
+        ],
       },
     }),
     JSON.stringify({
@@ -30,7 +37,13 @@ test("aggregates usage, tool latency, and errors from generic session events", (
     JSON.stringify({
       type: "message",
       timestamp: "2026-01-01T00:00:02.000Z",
-      message: { role: "assistant", model: "model-a", stopReason: "stop", usage: { totalTokens: 2 }, content: [] },
+      message: {
+        role: "assistant",
+        model: "model-a",
+        stopReason: "stop",
+        usage: { totalTokens: 2 },
+        content: [],
+      },
     }),
   ]);
 

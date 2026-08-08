@@ -237,9 +237,7 @@ function activityChart(entries: Array<[string, MetricSummary]>): string {
   const weeks = Math.ceil(points.length / 7);
   const cell = (value: number): string => {
     if (maximum <= 0 || value <= 0) return BAR_LEVELS[0]!;
-    return BAR_LEVELS[
-      Math.max(1, Math.round((value / maximum) * (BAR_LEVELS.length - 1)))
-    ]!;
+    return BAR_LEVELS[Math.max(1, Math.round((value / maximum) * (BAR_LEVELS.length - 1)))]!;
   };
   return [
     "Recent activity (tokens, 30 days)",
@@ -427,9 +425,7 @@ export function reportSections(
   if ((options.view ?? "summary") === "summary") return summarySections(report, options);
   const markdown = renderView(report, options);
   const [heading, ...rest] = markdown.split("\n");
-  return [
-    { title: heading?.replace(/^## /, "") ?? "Session Metrics", markdown: rest.join("\n") },
-  ];
+  return [{ title: heading?.replace(/^## /, "") ?? "Session Metrics", markdown: rest.join("\n") }];
 }
 
 export function renderSummary(report: MetricsReport, options: ReportOptions = {}): string {

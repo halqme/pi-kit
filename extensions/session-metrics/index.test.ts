@@ -14,6 +14,9 @@ test("registers one passive session metrics tool without session hooks", () => {
     },
   };
   sessionMetricsExtension(pi as never);
-  assert.deepEqual(tools.map((tool) => tool.name), ["session_metrics"]);
+  assert.deepEqual(
+    tools.map((tool) => tool.name),
+    ["session_metrics"],
+  );
   assert.deepEqual(hooks, []);
 });

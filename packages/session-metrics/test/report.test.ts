@@ -20,7 +20,12 @@ test("renders deterministic generic summary and token cache details", () => {
         message: {
           role: "assistant",
           model: "model/a",
-          usage: { input: 100_000, cacheRead: 900_000, totalTokens: 1_240_000, cost: { total: 18.42 } },
+          usage: {
+            input: 100_000,
+            cacheRead: 900_000,
+            totalTokens: 1_240_000,
+            cost: { total: 18.42 },
+          },
           content: [],
         },
       }),

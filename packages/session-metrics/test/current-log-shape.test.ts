@@ -35,7 +35,12 @@ test("infers completed turns and separates tool from model errors", () => {
     }),
     JSON.stringify({
       type: "message",
-      message: { role: "assistant", stopReason: "error", errorMessage: "connection timeout", content: [] },
+      message: {
+        role: "assistant",
+        stopReason: "error",
+        errorMessage: "connection timeout",
+        content: [],
+      },
     }),
     JSON.stringify({
       type: "message",
