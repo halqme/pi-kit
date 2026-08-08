@@ -8,6 +8,7 @@ export const adapter: LanguageAdapter = {
     packageName: "tree-sitter-go",
     wasmFile: "tree-sitter-go.wasm",
   },
+  lsp: { servers: [{ command: "gopls" }] },
   outlineQuery,
   labelsQuery,
   searchQueries,
