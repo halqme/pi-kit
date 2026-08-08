@@ -3,11 +3,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildReport } from "./src/build-report.ts";
 import { reportSections, type ReportOptions, type ReportView } from "./src/report.ts";
+import { addCurrentResources } from "./src/resources.ts";
 
 type CliOptions = ReportOptions & { json: boolean; target: string };
 
 function usage(): string {
-  return `Usage: session-metrics [path] [options]\n\nOptions:\n  --json              Output MetricsReport JSON\n  --daily             Show daily activity\n  --weekly            Show weekly activity\n  --projects          Show project ranking\n  --models            Show model / effort ranking\n  --tools             Show tool usage and latency\n  --since YYYY-MM-DD  Filter activity from this UTC date\n  --limit N           Limit rendered rows\n  --help              Show this help`;
+  return `Usage: session-metrics [path] [options]\n\nOptions:\n  --json              Output MetricsReport JSON with current resource inventory\n  --daily             Show daily activity\n  --weekly            Show weekly activity\n  --projects          Show project ranking\n  --models            Show model / effort ranking\n  --skills            Show skill usage and current status\n  --tools             Show tool usage, latency, and current status\n  --tool-actions      Show action facets within tools\n  --since YYYY-MM-DD  Filter activity from this UTC date\n  --limit N           Limit rendered rows\n  --help              Show this help`;
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -20,7 +21,11 @@ function parseArgs(args: string[]): CliOptions {
     if (arg === undefined) continue;
     if (arg === "--help") throw new Error(usage());
     if (arg === "--json") options.json = true;
-    else if (["--daily", "--weekly", "--projects", "--models", "--tools"].includes(arg))
+    else if (
+      ["--daily", "--weekly", "--projects", "--models", "--skills", "--tools", "--tool-actions"].includes(
+        arg,
+      )
+    )
       options.view = arg.slice(2) as ReportView;
     else if (arg === "--since") {
       const value = args[++index];
@@ -39,6 +44,9 @@ function parseArgs(args: string[]): CliOptions {
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const options = parseArgs(args);
   const report = await buildReport(options.target, options.since);
+  if (options.json || options.view === "skills" || options.view === "tools") {
+    await addCurrentResources(report, process.cwd());
+  }
   if (options.json) {
     console.log(JSON.stringify(report, null, 2));
     return;
