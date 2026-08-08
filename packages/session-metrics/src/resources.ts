@@ -80,15 +80,16 @@ export async function discoverPiResources(
   };
 }
 
-function status(available: boolean, used: boolean): ResourceStatus {
-  if (available && used) return "available";
-  return available ? "unused" : "missing";
+function status(discovered: boolean, used: boolean): ResourceStatus {
+  if (discovered && used) return "available";
+  return discovered ? "unused" : "missing";
 }
 
 /**
  * Compare the selected historical report with one explicitly supplied current resource inventory.
  * `cwd` defines where the current Pi resource set is resolved; historical counts remain the report's
- * selected scope (for example all sessions, or all sessions after `since`).
+ * selected scope (for example all sessions, or all sessions after `since`). `missing` means only that
+ * the resource is not discoverable in that current scope; it does not prove that a package was removed.
  */
 export function addResourceInventory(
   report: MetricsReport,
@@ -130,7 +131,7 @@ export function addResourceInventory(
 
 /**
  * Enrich a historical report with the current Pi resources for one cwd.
- * Historical counts are never filtered or rewritten by current availability.
+ * Historical counts are never filtered or rewritten by current discoverability.
  */
 export async function addCurrentResources(
   report: MetricsReport,
