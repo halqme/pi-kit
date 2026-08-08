@@ -1,9 +1,5 @@
 import { fileURLToPath } from "node:url";
-import {
-  adapterForLanguage,
-  adapterForPath,
-  type LanguageAdapter,
-} from "./language-profile.ts";
+import { adapterForLanguage, adapterForPath, type LanguageAdapter } from "./language-profile.ts";
 import {
   declarationAtIndex,
   locateDetailed,
@@ -55,7 +51,11 @@ function queryForSymbol(symbol: string): string {
   return symbol.split(/[.#]/).at(-1) ?? symbol;
 }
 
-function mergeMatches(structural: LocateMatch[], semantic: LocateMatch[]): LocateMatch[] {
+function mergeMatches(
+  structural: LocateMatch[],
+  semantic: LocateMatch[],
+  handles: HandleStore,
+): LocateMatch[] {
   const merged = new Map<string, LocateMatch>();
   for (const match of [...structural, ...semantic]) {
     const key = `${match.path}\0${match.handle.startIndex}\0${match.handle.endIndex}`;
@@ -64,8 +64,12 @@ function mergeMatches(structural: LocateMatch[], semantic: LocateMatch[]): Locat
       merged.set(key, match);
       continue;
     }
-    existing.score = Math.max(existing.score, match.score);
+
+    // Independent evidence sources corroborating the same concrete syntax node
+    // increase confidence instead of merely replacing one another's score.
+    existing.score += match.score;
     existing.reasons = [...new Set([...existing.reasons, ...match.reasons])];
+    handles.delete(match.handle.id);
   }
   return [...merged.values()].sort(
     (left, right) =>
@@ -75,20 +79,14 @@ function mergeMatches(structural: LocateMatch[], semantic: LocateMatch[]): Locat
   );
 }
 
-async function adaptersToQuery(
-  params: LocateParams,
-  cwd: string,
-  structural: readonly LocateMatch[],
-): Promise<LanguageAdapter[]> {
-  const ids = new Set(structural.map((match) => match.handle.languageId));
-  if (ids.size === 0) {
-    const paths = await sourceFilesInScope(cwd, params.scope, (path) => Boolean(adapterForPath(path)));
-    for (const path of paths) {
-      const adapter = adapterForPath(path);
-      if (adapter) ids.add(adapter.id);
-    }
+async function adaptersToQuery(params: LocateParams, cwd: string): Promise<LanguageAdapter[]> {
+  const paths = await sourceFilesInScope(cwd, params.scope, (path) => Boolean(adapterForPath(path)));
+  const ids = new Set<string>();
+  for (const path of paths) {
+    const adapter = adapterForPath(path);
+    if (adapter?.lsp) ids.add(adapter.id);
   }
-  return [...ids].map((id) => adapterForLanguage(id)).filter((adapter) => adapter.lsp);
+  return [...ids].map((id) => adapterForLanguage(id));
 }
 
 function inScope(scope: Awaited<ReturnType<typeof resolveExistingScope>>, path: string): boolean {
@@ -100,47 +98,56 @@ async function semanticMatches(
   cwd: string,
   handles: HandleStore,
   lsp: LspService,
-  adapters: readonly LanguageAdapter[],
 ): Promise<LocateMatch[]> {
   const symbols = params.symbols ?? [];
-  if (symbols.length === 0 || adapters.length === 0) return [];
-  const scope = await resolveExistingScope(cwd, params.scope);
+  if (symbols.length === 0) return [];
+
+  const [scope, adapters] = await Promise.all([
+    resolveExistingScope(cwd, params.scope),
+    adaptersToQuery(params, cwd),
+  ]);
+  if (adapters.length === 0) return [];
+
+  const requests = adapters.flatMap((adapter) =>
+    symbols.map(async (requested) => ({
+      adapter,
+      requested,
+      results: await lsp.workspaceSymbols(adapter, cwd, queryForSymbol(requested)),
+    })),
+  );
+  const responses = await Promise.all(requests);
   const matches: LocateMatch[] = [];
 
-  for (const adapter of adapters) {
-    for (const requested of symbols) {
-      const results = await lsp.workspaceSymbols(adapter, cwd, queryForSymbol(requested));
-      for (const symbol of results) {
-        if (!symbol.uri.startsWith("file:")) continue;
-        let path: string;
-        try {
-          path = await resolveExistingPath(cwd, fileURLToPath(symbol.uri));
-        } catch {
-          continue;
-        }
-        if (!inScope(scope, path)) continue;
-        const actualAdapter = adapterForPath(path);
-        if (!actualAdapter || actualAdapter.id !== adapter.id) continue;
-        const file = await parseFile(path, actualAdapter);
-        const index = positionToStringIndex(file.source, symbol.range.start);
-        if (index === undefined) continue;
-        const declaration = declarationAtIndex(file, actualAdapter, index);
-        if (!declaration) continue;
-        matches.push(
-          locateMatchForDeclaration(file, declaration, actualAdapter, handles, symbolScore(requested, symbol), [
-            `lsp:workspaceSymbol:${requested}`,
-          ]),
-        );
+  for (const { adapter, requested, results } of responses) {
+    for (const symbol of results) {
+      if (!symbol.uri.startsWith("file:")) continue;
+      let path: string;
+      try {
+        path = await resolveExistingPath(cwd, fileURLToPath(symbol.uri));
+      } catch {
+        continue;
       }
+      if (!inScope(scope, path)) continue;
+      const actualAdapter = adapterForPath(path);
+      if (!actualAdapter || actualAdapter.id !== adapter.id) continue;
+      const file = await parseFile(path, actualAdapter);
+      const index = positionToStringIndex(file.source, symbol.range.start);
+      if (index === undefined) continue;
+      const declaration = declarationAtIndex(file, actualAdapter, index);
+      if (!declaration) continue;
+      matches.push(
+        locateMatchForDeclaration(
+          file,
+          declaration,
+          actualAdapter,
+          handles,
+          symbolScore(requested, symbol),
+          [`lsp:workspaceSymbol:${requested}`],
+        ),
+      );
     }
   }
   return matches;
-}
-
-function structurallyResolved(matches: readonly LocateMatch[]): boolean {
-  const first = matches[0];
-  const second = matches[1];
-  return Boolean(first && first.score >= 90 && (!second || first.score - second.score >= 50));
 }
 
 export async function locateResolvedDetailed(
@@ -149,9 +156,9 @@ export async function locateResolvedDetailed(
   handles: HandleStore,
   lsp: LspService,
 ): Promise<LocateMatch[]> {
-  const structural = await locateDetailed(params, cwd, handles);
-  if ((params.symbols?.length ?? 0) === 0 || structurallyResolved(structural)) return structural;
-  const adapters = await adaptersToQuery(params, cwd, structural);
-  const semantic = await semanticMatches(params, cwd, handles, lsp, adapters);
-  return mergeMatches(structural, semantic);
+  const [structural, semantic] = await Promise.all([
+    locateDetailed(params, cwd, handles),
+    semanticMatches(params, cwd, handles, lsp),
+  ]);
+  return mergeMatches(structural, semantic, handles);
 }
