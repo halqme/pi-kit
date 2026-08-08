@@ -7,7 +7,7 @@ import { reportSections, type ReportOptions, type ReportView } from "./src/repor
 type CliOptions = ReportOptions & { json: boolean; target: string };
 
 function usage(): string {
-  return `Usage: session-metrics [path] [options]\n\nOptions:\n  --json              Output MetricsReport JSON\n  --daily             Show daily activity\n  --weekly            Show weekly activity\n  --projects          Show project ranking\n  --models            Show model / effort ranking\n  --tools             Show tool usage and latency\n  --since YYYY-MM-DD  Filter activity from this UTC date\n  --limit N           Limit rows\n  --help              Show this help`;
+  return `Usage: session-metrics [path] [options]\n\nOptions:\n  --json              Output MetricsReport JSON\n  --daily             Show daily activity\n  --weekly            Show weekly activity\n  --projects          Show project ranking\n  --models            Show model / effort ranking\n  --tools             Show tool usage and latency\n  --since YYYY-MM-DD  Filter activity from this UTC date\n  --limit N           Limit rendered rows\n  --help              Show this help`;
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -38,7 +38,7 @@ function parseArgs(args: string[]): CliOptions {
 
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const options = parseArgs(args);
-  const report = await buildReport(options.target, options.since, options.limit);
+  const report = await buildReport(options.target, options.since);
   if (options.json) {
     console.log(JSON.stringify(report, null, 2));
     return;
