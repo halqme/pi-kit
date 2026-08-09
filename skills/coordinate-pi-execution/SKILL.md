@@ -1,6 +1,6 @@
 ---
-name: operation
-description: Use this skill when a task requires coordinating multiple Pi execution primitives or composing them into a parent-child operation. Do not use it to learn a single tool's behavior; the current tool description and implementation are authoritative for that.
+name: coordinate-pi-execution
+description: Use this skill when coordinating multiple Pi execution primitives whose lifecycle, ownership, handoff, or cleanup matters, such as child agents, terminal processes, background processes, loops, or durable handles. Do not use it for independent tool calls in one turn or to learn a single tool's API; use that tool's description instead.
 ---
 
 # Pi Work Operations
