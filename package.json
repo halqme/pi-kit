@@ -14,7 +14,7 @@
     "lint": "oxlint ."
   },
   "dependencies": {
-    "pi-intercom": "^0.9.2"
+    "pi-intercom": "^0.9.3"
   },
   "bundledDependencies": [
     "pi-intercom"
