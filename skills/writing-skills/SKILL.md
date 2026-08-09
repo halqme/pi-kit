@@ -1,6 +1,6 @@
 ---
 name: writing-skills
-description: Creates, improves, and verifies agent Skills. Use when designing a new Skill, editing an existing SKILL.md or its bundled references/scripts, evaluating Skill behavior, or improving activation; do not use for merely running an existing Skill.
+description: Use this skill when designing, creating, improving, or verifying agent Skills, including editing an existing SKILL.md or bundled references/scripts, evaluating Skill behavior, or improving activation. Do not use it merely to run an existing Skill.
 ---
 
 # Writing Skills
@@ -10,7 +10,7 @@ Treat a Skill as a small, reusable service: a precise trigger, a focused contrac
 ## Workflow
 
 1. **Inspect the target**: read `SKILL.md`, frontmatter, and the contents of `references/`, `scripts/`, `assets/`, and evaluation files when present. Identify the Skill's trigger, non-trigger, inputs, outputs, side effects, failure behavior, and current gaps.
-2. **Define the contract**: write a specific third-person `description` that says what the Skill does and when it applies. Include a meaningful non-trigger boundary. Keep `name` lowercase, hyphenated, and within the format limits.
+2. **Define the contract**: Write a specific `description` in imperative form—preferably “Use this skill when …”—that states the user intent it serves, when it applies, and meaningful cases where it should not trigger. Treat the `description` as the primary activation signal and the `name` as a secondary routing cue. Choose a concise, lowercase, hyphen-separated `name`; prefer an action–target name (such as `implement-change` or `verify-work`) when one clear user-facing action accurately describes the Skill’s scope, otherwise use the clearest domain- or purpose-based name. Follow the host’s documented name syntax and length limits; do not rely on the name alone for activation.
 3. **Design the smallest useful procedure**: prefer a clear default over a menu of equivalent options. Match specificity to risk: use flexible guidance for judgment-heavy work and exact commands/guardrails for fragile or consequential operations.
 4. **Place information deliberately**: keep trigger-critical gotchas and the core workflow in `SKILL.md`; move detailed API knowledge, edge cases, examples, and runbooks to directly linked reference files. Keep references one level deep and state when each one should be read.
 5. **Add verification**: require the agent to inspect or validate its output before proceeding. For batch, destructive, or high-stakes work, use an intermediate plan and validate it before execution. For deterministic repeated work, prefer a tested script; document its inputs, outputs, prerequisites, exit codes, and safe defaults.
