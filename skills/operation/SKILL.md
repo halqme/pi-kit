@@ -26,11 +26,11 @@ Use a terminal-hosted child Pi when the parent has resolved the implementation c
 5. A watch match only wakes the parent. Inspect the child's actual changes and check output before accepting the work.
 6. Close the child deliberately after verification and cancel watches that are no longer useful.
 
-Prefer `threads` instead when the important abstraction is a separately tracked Pi conversation or hierarchical workstream rather than an interactive subprocess. Prefer direct parent execution when the parent must make a material decision after each step.
+Prefer `pi-intercom` instead when the important abstraction is communication with a separately tracked Pi conversation or hierarchical workstream rather than an interactive subprocess. Prefer direct parent execution when the parent must make a material decision after each step.
 
 ## Coordination boundaries
 
-When several threads or child agents can mutate shared state, the coordinator is responsible for choosing an appropriate concurrency strategy from the facts exposed by the tools and repository. Do not hard-code worktree or file-partition policy here when the agents can determine the safe strategy from the task.
+When several Pi conversations or child agents can mutate shared state, the coordinator is responsible for choosing an appropriate concurrency strategy from the facts exposed by the tools and repository. Do not hard-code worktree or file-partition policy here when the agents can determine the safe strategy from the task.
 
 ## Evidence and completion
 
