@@ -17,7 +17,7 @@ function taskFor(state: PlanState): string {
   if (!remaining.length)
     return [
       "All approved TODO steps are reported complete.",
-      "Apply complete-task to evaluate the requested outcome against the actual workspace and available evidence.",
+      "Apply assess-task-completion to evaluate the requested outcome against the actual workspace and available evidence.",
       "Do not infer completion from the empty TODO list alone.",
       "Call runner.finish with a concise evidence summary only when completion is supported; otherwise continue working or call runner.stop if blocked.",
     ].join("\n");
@@ -72,7 +72,7 @@ export default function runnerExtension(pi: ExtensionAPI): void {
     promptGuidelines: [
       "After runner.start, execute the first remaining step in the current turn instead of waiting for a follow-up.",
       "Before every agent_end while runner is active, call runner.progress even when no whole step completed; use summary to report partial progress.",
-      "Treat completed TODO steps as execution evidence, not as a completion verdict. After every step is reported complete, apply complete-task and call runner.finish with concise evidence only when the requested outcome is supported.",
+      "Treat completed TODO steps as execution evidence, not as a completion verdict. After every step is reported complete, apply assess-task-completion and call runner.finish with concise evidence only when the requested outcome is supported.",
       "If supervision injects additional context, use it to re-evaluate the next action instead of treating the proposal as accepted.",
       "Use runner.stop when the approved plan becomes invalid, blocked, or requires a material decision outside its acceptance boundary.",
       "Do not call loop.report or loop.stop for a runner-owned loop; runner owns its continuation state.",
@@ -210,7 +210,7 @@ export default function runnerExtension(pi: ExtensionAPI): void {
             {
               type: "text" as const,
               text: verificationPending
-                ? "All TODO steps are reported complete. Apply complete-task, then call runner.finish with concise evidence only when the requested outcome is supported."
+                ? "All TODO steps are reported complete. Apply assess-task-completion, then call runner.finish with concise evidence only when the requested outcome is supported."
                 : "Progress recorded.",
             },
           ],

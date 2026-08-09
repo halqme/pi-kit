@@ -15,10 +15,10 @@ description: Implement, modify, refactor, or remove code, configuration, tests, 
 5. Update tests and documentation when the externally observable behavior, contract, or operating procedure changes.
 6. Run the narrowest relevant checks first, then broader checks proportionate to risk. Inspect full failures, warnings, skipped cases, and truncation; fix causes rather than suppressing signals. Record actual results and use new evidence to resolve material uncertainty rather than repeating unchanged actions.
 7. Review the resulting diff for scope, accidental changes, stale comments, secrets, missing coverage, inconsistent style, type-system escapes, abnormal defensive code, and obvious performance or resource regressions.
-8. Before claiming the work is finished, apply `complete-task` to evaluate the requested outcome against the actual resulting state and evidence.
+8. Before claiming the work is finished, apply `assess-task-completion` to evaluate the requested outcome against the actual resulting state and evidence.
 
 Stop and ask before a choice that materially changes product behavior, public interfaces, data, dependencies, or external state and cannot be resolved from project evidence.
 
 ## Trigger and contract
 
-Use when the user requests an implementation, modification, refactor, removal, or documentation/configuration change. Do not edit for diagnosis or review-only requests. Input is the request plus repository evidence; output is the smallest coherent change with relevant verification evidence. Completion itself is evaluated by `complete-task`. Stop before editing when scope, approval, compatibility, or a competing hypothesis remains materially unresolved.
+Use when the user requests an implementation, modification, refactor, removal, or documentation/configuration change. Do not edit for diagnosis or review-only requests. Input is the request plus repository evidence; output is the smallest coherent change with relevant verification evidence. Completion itself is evaluated by `assess-task-completion`. Stop before editing when scope, approval, compatibility, or a competing hypothesis remains materially unresolved.
