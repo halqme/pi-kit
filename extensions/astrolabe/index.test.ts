@@ -13,6 +13,8 @@ interface CapturedTool {
 interface SyntaxResponse {
   ok: boolean;
   action: string;
+  outline?: string;
+  source?: string;
   data?: {
     outline?: string;
     source?: string;
