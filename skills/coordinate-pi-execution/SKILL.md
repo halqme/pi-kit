@@ -13,7 +13,7 @@ When a coordination rule becomes stable and deterministic, move it into an exten
 
 Select the smallest execution shape that matches the work. A detached process, an interactive terminal, a separately tracked Pi conversation, a bounded self-continuation loop, and a deliberative agent team are different primitives rather than levels of "more autonomy".
 
-Do not introduce a child agent merely because work is long. Use a child only when separate agent context or lifecycle control is itself useful. Keep user-facing decisions and materially unresolved design questions with the parent unless the user explicitly delegates them.
+Prefer a child when separate context, autonomous execution, or independently verifiable workstreams will preserve the parent’s attention or improve throughput. Do not delegate an unresolved product decision or a conflicting shared mutation: keep the decision with the parent, resolve ownership, and then delegate the self-contained work. When the user asks to split or delegate, load `delegate-task` and follow its handoff and acceptance protocol rather than defaulting to direct execution.
 
 ## Terminal-hosted child Pi operation
 
