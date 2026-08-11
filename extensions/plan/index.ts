@@ -1,9 +1,29 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 export default function planExtension(pi: ExtensionAPI): void {
+  const lightPlanGuidance = [
+    "<light-plan>",
+    "For non-trivial requests, before the first implementation or research tool call, state a concise 2-4 step light plan.",
+    "Identify independently verifiable workstreams, note a delegation candidate when useful, and keep unresolved product or architecture decisions with the parent.",
+    "Skip planning ceremony for one-step requests. A light plan does not invoke grill, planner, or runner; use the full /plan workflow when architecture, risk, or lifecycle supervision warrants it.",
+    "</light-plan>",
+  ].join("\n");
+
+  pi.on("before_agent_start", async (event) => ({
+    systemPrompt: `${event.systemPrompt}\n\n${lightPlanGuidance}`,
+  }));
+
   pi.registerCommand("plan", {
-    description: "Create or manage a plan through grill, planner, and runner.",
+    description: "Create or manage a light or full plan through grill, planner, and runner.",
     handler: async (args, ctx) => {
       const input = args.trim();
+      if (input === "light") {
+        await ctx.ui.notify("Light plan requested.", "info");
+        pi.sendUserMessage(
+          "Create a concise 2-4 step light plan before the first implementation or research tool call. Identify independently verifiable workstreams and delegation candidates; do not invoke the full grill/planner/runner workflow.",
+          { deliverAs: "followUp" },
+        );
+        return;
+      }
       if (input === "execute" || input === "do") {
         pi.sendUserMessage(
           "Start the approved TODO plan with runner and continue until completion or a blocking issue.",

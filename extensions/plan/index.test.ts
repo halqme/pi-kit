@@ -3,6 +3,7 @@ import test from "node:test";
 import grill from "../grill/index.ts";
 import planner from "../planner/index.ts";
 import runner from "../runner/index.ts";
+import planExtension from "./index.ts";
 
 test("grill, planner, and runner share session state through the public tool flow", async () => {
   const tools = new Map<string, any>();
@@ -68,4 +69,40 @@ test("grill, planner, and runner share session state through the public tool flo
       ctx,
     );
   assert.equal(completed.details.status, "completed");
+});
+
+test("plan extension injects light guidance and supports /plan light", async () => {
+  let command: any;
+  let beforeAgentStart: any;
+  const messages: string[] = [];
+  const notifications: string[] = [];
+  const pi: any = {
+    registerCommand(name: string, value: any) {
+      assert.equal(name, "plan");
+      command = value;
+    },
+    on(name: string, handler: any) {
+      if (name === "before_agent_start") beforeAgentStart = handler;
+    },
+    sendUserMessage(message: string) {
+      messages.push(message);
+    },
+  };
+  planExtension(pi);
+
+  const started = await beforeAgentStart({ systemPrompt: "base" });
+  assert.match(started.systemPrompt, /<light-plan>/);
+  assert.match(started.systemPrompt, /concise 2-4 step light plan/);
+  assert.match(started.systemPrompt, /delegation candidate/);
+
+  await command.handler("light", {
+    ui: {
+      notify: async (message: string) => {
+        notifications.push(message);
+      },
+    },
+  });
+  assert.deepEqual(notifications, ["Light plan requested."]);
+  assert.match(messages[0] ?? "", /concise 2-4 step light plan/);
+  assert.match(messages[0] ?? "", /do not invoke the full grill\/planner\/runner workflow/);
 });
