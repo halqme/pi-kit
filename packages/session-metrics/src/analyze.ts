@@ -57,7 +57,15 @@ export function createMetrics(): SessionMetrics {
     toolCallsByName: {},
     toolUsage: {},
     toolActions: {},
-    logicalOperations: { operations: 0, toolCalls: 0, returnedTokens: 0, wallClockMs: 0, errors: 0, retries: 0, successes: 0 },
+    logicalOperations: {
+      operations: 0,
+      toolCalls: 0,
+      returnedTokens: 0,
+      wallClockMs: 0,
+      errors: 0,
+      retries: 0,
+      successes: 0,
+    },
     skills: {},
     models: {},
     thinkingLevels: {},
@@ -144,7 +152,8 @@ function createAccumulator() {
         result.logicalOperations.errors += operationErrors;
         result.logicalOperations.retries += operationRetries;
         result.logicalOperations.successes += operationErrors === 0 ? 1 : 0;
-        if (operationLastAt !== undefined) result.logicalOperations.wallClockMs += operationLastAt - operationStartedAt;
+        if (operationLastAt !== undefined)
+          result.logicalOperations.wallClockMs += operationLastAt - operationStartedAt;
         operationStartedAt = undefined;
         operationLastAt = undefined;
         operationErrors = operationRetries = operationToolCalls = operationReturnedTokens = 0;
@@ -170,6 +179,7 @@ function createAccumulator() {
         result.modelErrors++;
         result.errors++;
       }
+      const provider = event.provider ?? "unknown";
       const model = event.model ?? "unknown";
       const modelUsage = (result.models[model] ??= { messages: 0, usage: emptyUsage() });
       modelUsage.messages++;
@@ -180,8 +190,9 @@ function createAccumulator() {
       });
       effortUsage.messages++;
       addUsage(effortUsage.usage, event.usage);
-      const modelEffortKey = `${model}\0${thinkingLevel}`;
+      const modelEffortKey = `${provider}\0${model}\0${thinkingLevel}`;
       const modelEffort = (result.modelEfforts[modelEffortKey] ??= {
+        provider,
         model,
         effort: thinkingLevel,
         messages: 0,
@@ -222,7 +233,8 @@ function createAccumulator() {
     if (event.kind === "tool_result") {
       const at = timestampMs(event.timestamp);
       if (at !== undefined) operationLastAt = at;
-      operationReturnedTokens += event.reportedTokens || Math.ceil(textContent(event.content).length / 4);
+      operationReturnedTokens +=
+        event.reportedTokens || Math.ceil(textContent(event.content).length / 4);
       if (event.isError) operationErrors++;
       result.messages++;
       result.toolResults++;
@@ -263,7 +275,8 @@ function createAccumulator() {
         result.logicalOperations.errors += operationErrors;
         result.logicalOperations.retries += operationRetries;
         result.logicalOperations.successes += operationErrors === 0 ? 1 : 0;
-        if (operationLastAt !== undefined) result.logicalOperations.wallClockMs += operationLastAt - operationStartedAt;
+        if (operationLastAt !== undefined)
+          result.logicalOperations.wallClockMs += operationLastAt - operationStartedAt;
       }
       return result;
     },
@@ -374,6 +387,7 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   }
   for (const [key, effort] of Object.entries(source.modelEfforts)) {
     const item = (target.modelEfforts[key] ??= {
+      provider: effort.provider,
       model: effort.model,
       effort: effort.effort,
       messages: 0,

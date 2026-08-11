@@ -79,7 +79,7 @@ export interface MetricSummary {
   thinkingLevels: Record<string, { messages: number; usage: UsageTotals }>;
   modelEfforts: Record<
     string,
-    { model: string; effort: string; messages: number; usage: UsageTotals }
+    { provider: string; model: string; effort: string; messages: number; usage: UsageTotals }
   >;
   toolErrors: number;
   modelErrors: number;

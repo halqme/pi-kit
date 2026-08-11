@@ -4,9 +4,11 @@ Piのsession JSONLをofflineで読み、利用統計へ変換するpackage / CLI
 
 ```sh
 session-metrics
+session-metrics --all
 session-metrics ~/.pi/agent/sessions --daily --since 2026-04-01 --limit 20
 session-metrics --weekly
 session-metrics --monthly
+session-metrics --monthly-activity
 session-metrics --projects
 session-metrics --models
 session-metrics --skills
@@ -98,8 +100,8 @@ for await (const event of readSessionEvents(sessionPath)) {
 }
 ```
 
-CLIは常にcanonical JSONを出力します。summary、daily、weekly、monthly、projects、models、skills、tools、tool-actions、logical-operationsは、よく使うqueryへのaliasです。`--since`は入力sessionの選択に一律適用し、`--limit`は結果rowsだけを制限します。集計対象sessionやsummaryの集計値は`--limit`で変わりません。
+オプション指定時のCLIはcanonical JSONを出力します。オプションなしの場合だけ、overview（ツール・スキル頻度、モデル概況、Activity草、MonthlyActivity）のTUI風表示を出します。`--all`は従来の全レポート相当を返します。summary、daily、weekly、monthly、monthly-activity、projects、models、skills、tools、tool-actions、logical-operationsは、よく使うqueryへのaliasです。`--since`は入力sessionの選択に一律適用し、`--limit`は結果rowsだけを制限します。集計対象sessionやsummaryの集計値は`--limit`で変わりません。
 
-`--tools`ではtool別のcalls、errors、estimated / reported result tokens、平均・最大latencyとcurrent statusをJSONで返します。timestampが不足するcallはlatency集計から除外します。`--skills`ではreads / explicit invocationとcurrent statusを返します。`--tool-actions`ではtool inputのstring `action`をaction名として使い、`action`がないtoolはtool名（例: `bash`）を既定actionとしてaction単位で集計します。`--logical-operations`ではturn単位のlogical operationについてtool call、returned token、wall clock、error、retry、successを返します。表示はNuShell用スクリプトなどのconsumerに委ねます。
+`--tools`ではtool別のcalls、errors、estimated / reported result tokens、平均・最大latencyとcurrent statusをJSONで返します。`--monthly-activity`では月別のsessions / turns / messages / tokens / cost / errorsを返します。timestampが不足するcallはlatency集計から除外します。`--skills`ではreads / explicit invocationとcurrent statusを返します。overviewではスキルのfrequency（reads + explicit）を上位10件返します。`--tool-actions`ではtool inputのstring `action`をaction名として使い、`action`がないtoolはtool名（例: `bash`）を既定actionとしてaction単位で集計します。`--logical-operations`ではturn単位のlogical operationについてtool call、returned token、wall clock、error、retry、successを返します。表示はNuShell用スクリプトなどのconsumerに委ねます。
 
 session本文やtool引数は集計結果へコピーしません。custom analyzer向けevent APIでは元sessionが持つgeneric payloadを参照できますが、reportには件数・usage等のメタデータだけを保持します。

@@ -6,16 +6,19 @@ Pi session JSONLの統計をagentから読むための`session_metrics` toolを�
 
 利用できるview:
 
+- `overview`: 概況（tool / skill頻度、modelのprovider・cache・cost、Activity、MonthlyActivity）
 - `summary`: session / turn / token / cache / errorと主要model・skill・tool
 - `daily`: 日別集計
 - `weekly`: 週別集計
 - `monthly`: 月別集計
+- `monthly-activity`: 月別活動のrows
 - `projects`: cwd別集計
 - `models`: model + thinking level別集計
 - `skills`: skillのread / explicit invocationと現在status
 - `tools`: tool別calls / errors / result tokens / latencyと現在status
 - `tool-actions`: string `action`を持つtool inputのaction別統計
 - `logical-operations`: turn単位のtool call / token / wall clock / error / retry / success統計
+- `all`: 選択済みの全MetricsReport
 
 `since`、`limit`、`sessionsPath`を指定できます。結果は常に`query`と選択済み`data`を持つcanonical JSONです。
 

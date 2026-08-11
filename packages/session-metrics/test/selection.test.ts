@@ -45,6 +45,58 @@ test("returns canonical JSON selection data and applies limit only to rows", () 
   assert.equal((result.data as { rows: Array<{ project: string }> }).rows[0]?.project, "/one");
 });
 
+test("returns overview rankings by frequency", () => {
+  const report = createReport();
+  addToReport(
+    report,
+    analyzeLines([
+      JSON.stringify({
+        type: "session",
+        id: "overview",
+        cwd: "/repo",
+        timestamp: "2026-01-01T00:00:00Z",
+      }),
+      JSON.stringify({
+        type: "message",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Use the skill." }],
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "skill-1",
+              name: "read",
+              arguments: { path: "/skills/demo/SKILL.md" },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolCallId: "skill-1",
+          toolName: "read",
+          content: [{ type: "text", text: "---\nname: demo\n---\nskill body" }],
+        },
+      }),
+    ]),
+  );
+
+  const result = selectReport(report);
+  assert.equal(result.data.kind, "overview");
+  if (result.data.kind !== "overview") return;
+  assert.equal(result.data.skills[0]?.name, "demo");
+  assert.ok((result.data.skills[0]?.frequency ?? 0) > 0);
+  assert.equal(result.data.monthlyActivity[0]?.period, "2026-01");
+});
+
 test("selects logical operations as structured data", () => {
   const result = selectReport(reportWithProjects(), { view: "logical-operations" });
   assert.deepEqual(result.query, { view: "logical-operations" });

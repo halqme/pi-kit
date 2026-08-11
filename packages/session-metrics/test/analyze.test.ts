@@ -15,6 +15,7 @@ test("aggregates usage, tool latency, actions, and errors from session events", 
       timestamp: "2026-01-01T00:00:01.000Z",
       message: {
         role: "assistant",
+        provider: "provider-a",
         model: "model-a",
         stopReason: "toolUse",
         usage: { input: 10, output: 4, cacheRead: 20, totalTokens: 34 },
@@ -59,6 +60,7 @@ test("aggregates usage, tool latency, actions, and errors from session events", 
   assert.equal(result.toolActions.example?.anything?.errors, 1);
   assert.equal(result.toolActions.example?.anything?.totalDurationMs, 125);
   assert.equal(result.models["model-a"]?.messages, 2);
+  assert.equal(Object.values(result.modelEfforts)[0]?.provider, "provider-a");
   assert.equal(result.tokens.total, 36);
   assert.equal(result.toolErrors, 1);
   assert.equal(result.errors, 1);

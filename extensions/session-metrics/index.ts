@@ -20,10 +20,13 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
     parameters: Type.Object({
       view: Type.Optional(
         Type.Union([
+          Type.Literal("overview"),
           Type.Literal("summary"),
+          Type.Literal("all"),
           Type.Literal("daily"),
           Type.Literal("weekly"),
           Type.Literal("monthly"),
+          Type.Literal("monthly-activity"),
           Type.Literal("projects"),
           Type.Literal("models"),
           Type.Literal("skills"),
@@ -37,10 +40,16 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
       sessionsPath: Type.Optional(Type.String({ description: "Session JSONL file or directory." })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const view = (params.view ?? "summary") as QueryView;
+      const view = (params.view ?? "overview") as QueryView;
       try {
         const report = await buildReport(params.sessionsPath ?? SESSIONS_ROOT, params.since);
-        if (view === "skills" || view === "tools" || view === "tool-actions") {
+        if (
+          view === "overview" ||
+          view === "all" ||
+          view === "skills" ||
+          view === "tools" ||
+          view === "tool-actions"
+        ) {
           await addCurrentResources(report, ctx.cwd);
         }
         const text = JSON.stringify(

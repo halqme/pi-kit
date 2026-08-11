@@ -26,6 +26,7 @@ export type SessionEvent =
   | {
       kind: "assistant_message";
       timestamp?: string;
+      provider?: string;
       model?: string;
       stopReason?: string;
       errorMessage?: string;
@@ -131,6 +132,7 @@ function messageEvents(entry: RecordValue, message: RecordValue): SessionEvent[]
     ];
   }
   if (role === "assistant") {
+    const provider = string(message.provider);
     const model = string(message.model);
     const stopReason = string(message.stopReason);
     const errorMessage = string(message.errorMessage);
@@ -138,6 +140,7 @@ function messageEvents(entry: RecordValue, message: RecordValue): SessionEvent[]
       {
         kind: "assistant_message",
         ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
+        ...(provider ? { provider } : {}),
         ...(model ? { model } : {}),
         ...(stopReason ? { stopReason } : {}),
         ...(errorMessage ? { errorMessage } : {}),
