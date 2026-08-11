@@ -5,7 +5,7 @@
     "": {
       "name": "@halqme/pi-kit",
       "dependencies": {
-        "pi-intercom": "^0.9.2",
+        "pi-intercom": "^0.9.3",
       },
       "peerDependencies": {
         "oxfmt": "latest",
@@ -44,6 +44,17 @@
     },
     "extensions/background-process": {
       "name": "@halqme/background-process",
+      "dependencies": {
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "extensions/bm25-search": {
+      "name": "@halqme/bm25-search",
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
@@ -167,13 +178,6 @@
     },
     "packages/plan-state": {
       "name": "@halqme/plan-state",
-      "devDependencies": {
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/protocol-supervision": {
-      "name": "@halqme/protocol-supervision",
       "devDependencies": {
         "@types/node": "catalog:",
         "typescript": "catalog:",
@@ -330,6 +334,8 @@
     "@halqme/astrolabe": ["@halqme/astrolabe@workspace:extensions/astrolabe"],
 
     "@halqme/background-process": ["@halqme/background-process@workspace:extensions/background-process"],
+
+    "@halqme/bm25-search": ["@halqme/bm25-search@workspace:extensions/bm25-search"],
 
     "@halqme/grill": ["@halqme/grill@workspace:extensions/grill"],
 
