@@ -16,13 +16,13 @@
   "dependencies": {
     "pi-intercom": "^0.9.3"
   },
-  "bundledDependencies": [
-    "pi-intercom"
-  ],
   "peerDependencies": {
     "oxfmt": "latest",
     "oxlint": "latest"
   },
+  "bundledDependencies": [
+    "pi-intercom"
+  ],
   "catalog": {
     "@earendil-works/pi-agent-core": "0.83.0",
     "@earendil-works/pi-ai": "0.83.0",

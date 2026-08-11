@@ -25,7 +25,10 @@ test("locate ranks an exact qualified symbol above term-only declarations", asyn
   );
   assert.equal(matches[0]?.name, "parse");
   assert.match(matches[0]?.source ?? "", /return input\.trim/);
-  assert.deepEqual(matches[0]?.reasons, ["symbol:Parser.parse", "term:parse"]);
+  assert.deepEqual(matches[0]?.reasons, [
+    "tree-sitter:symbol:Parser.parse:qualified",
+    "text:term:parse",
+  ]);
   clearFileCache(path);
 });
 

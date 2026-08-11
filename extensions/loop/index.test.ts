@@ -46,8 +46,8 @@ test("loop follows up only while the task remains unfinished", async () => {
 
   await end({}, ctx);
   assert.equal(sent.length, 1);
-  assert.match(sent[0], /No completion report/);
-  assert.match(sent[0], /finish the change/);
+  assert.match(sent[0] ?? "", /No completion report/);
+  assert.match(sent[0] ?? "", /finish the change/);
 
   const continued = await tool.execute(
     "id",
@@ -59,7 +59,7 @@ test("loop follows up only while the task remains unfinished", async () => {
   assert.equal(continued.details.status, "active");
   await end({}, ctx);
   assert.equal(sent.length, 2);
-  assert.match(sent[1], /tests still running/);
+  assert.match(sent[1] ?? "", /tests still running/);
 
   const done = await tool.execute(
     "id",
@@ -126,7 +126,7 @@ test("failed model runs do not consume loop turns or queued reports", async () =
 
   await end({ messages: [{ role: "assistant", stopReason: "stop", content: [] }] }, ctx);
   assert.equal(sent.length, 1);
-  assert.match(sent[0], /keep this report across retry/);
+  assert.match(sent[0] ?? "", /keep this report across retry/);
   assert.equal(loopController.snapshot()?.turns, 1);
   assert.equal(loopController.snapshot()?.pendingReport, undefined);
 });
