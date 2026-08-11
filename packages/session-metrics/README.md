@@ -100,6 +100,6 @@ for await (const event of readSessionEvents(sessionPath)) {
 
 CLIは常にcanonical JSONを出力します。summary、daily、weekly、monthly、projects、models、skills、tools、tool-actions、logical-operationsは、よく使うqueryへのaliasです。`--since`は入力sessionの選択に一律適用し、`--limit`は結果rowsだけを制限します。集計対象sessionやsummaryの集計値は`--limit`で変わりません。
 
-`--tools`ではtool別のcalls、errors、estimated / reported result tokens、平均・最大latencyとcurrent statusをJSONで返します。timestampが不足するcallはlatency集計から除外します。`--skills`ではreads / explicit invocationとcurrent statusを返します。`--tool-actions`ではstring `action`を持つtoolだけをaction単位で集計します。`--logical-operations`ではturn単位のlogical operationについてtool call、returned token、wall clock、error、retry、successを返します。表示はNuShell用スクリプトなどのconsumerに委ねます。
+`--tools`ではtool別のcalls、errors、estimated / reported result tokens、平均・最大latencyとcurrent statusをJSONで返します。timestampが不足するcallはlatency集計から除外します。`--skills`ではreads / explicit invocationとcurrent statusを返します。`--tool-actions`ではtool inputのstring `action`をaction名として使い、`action`がないtoolはtool名（例: `bash`）を既定actionとしてaction単位で集計します。`--logical-operations`ではturn単位のlogical operationについてtool call、returned token、wall clock、error、retry、successを返します。表示はNuShell用スクリプトなどのconsumerに委ねます。
 
 session本文やtool引数は集計結果へコピーしません。custom analyzer向けevent APIでは元sessionが持つgeneric payloadを参照できますが、reportには件数・usage等のメタデータだけを保持します。

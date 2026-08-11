@@ -55,6 +55,7 @@ export type SelectionData =
         tool: string;
         action: string;
         metrics: MetricSummary["toolActions"][string][string];
+        status?: "available" | "missing" | "unused";
       }>;
     };
 
@@ -150,10 +151,17 @@ function modelEntries(metrics: MetricSummary) {
     .map(([name, metrics]) => ({ name, metrics }));
 }
 
-function actionEntries(metrics: MetricSummary) {
+function actionEntries(report: MetricsReport, metrics: MetricSummary) {
   return Object.entries(metrics.toolActions)
     .flatMap(([tool, actions]) =>
-      Object.entries(actions).map(([action, metrics]) => ({ tool, action, metrics })),
+      Object.entries(actions).map(([action, metrics]) => ({
+        tool,
+        action,
+        metrics,
+        ...(report.resources?.tools[tool]?.status
+          ? { status: report.resources.tools[tool].status }
+          : {}),
+      })),
     )
     .sort(
       (left, right) =>
@@ -220,5 +228,5 @@ export function selectReport(
     return { query, data: { kind: view, rows: rows(skillEntries(report, metrics), limit) } };
   if (view === "tools")
     return { query, data: { kind: view, rows: rows(toolEntries(report, metrics), limit) } };
-  return { query, data: { kind: view, rows: rows(actionEntries(metrics), limit) } };
+  return { query, data: { kind: view, rows: rows(actionEntries(report, metrics), limit) } };
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeLines, createReport, addToReport } from "../src/analyze.ts";
+import { addResourceInventory } from "../src/resources.ts";
 import { selectReport } from "../src/selection.ts";
 
 function reportWithProjects() {
@@ -49,6 +50,32 @@ test("selects logical operations as structured data", () => {
   assert.deepEqual(result.query, { view: "logical-operations" });
   assert.equal((result.data as { kind: string }).kind, "logical-operations");
   assert.equal((result.data as { metrics: { operations: number } }).metrics.operations, 0);
+});
+
+test("includes the same tool resource status in tool-action rows", () => {
+  const report = createReport();
+  addToReport(
+    report,
+    analyzeLines([
+      JSON.stringify({ type: "session", id: "bash", cwd: "/repo" }),
+      JSON.stringify({
+        type: "message",
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "bash-1", name: "bash", arguments: {} }],
+        },
+      }),
+    ]),
+  );
+  addResourceInventory(report, "/repo", {
+    tools: { bash: { source: "builtin" } },
+    skills: {},
+    diagnostics: [],
+  });
+
+  const result = selectReport(report, { view: "tool-actions" });
+  const row = (result.data as { rows: Array<{ status?: string }> }).rows[0];
+  assert.equal(row?.status, "available");
 });
 
 test("rejects invalid query boundaries", () => {

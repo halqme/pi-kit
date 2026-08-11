@@ -5,10 +5,10 @@ function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * Returns the conventional string `action` facet when a tool input exposes one.
- * The analyzer does not know which tool produced the input or what the action means.
+ * Returns the explicit string `action` facet, or the tool name for the default action.
+ * The analyzer does not interpret the action's meaning.
  */
-export function toolAction(input: unknown): string | undefined {
+export function toolAction(toolName: string, input: unknown): string {
   const action = record(input)?.action;
-  return typeof action === "string" && action.length > 0 ? action : undefined;
+  return typeof action === "string" && action.length > 0 ? action : toolName;
 }

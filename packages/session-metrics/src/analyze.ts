@@ -202,7 +202,7 @@ function createAccumulator() {
       result.toolCallsByName[event.toolName] = (result.toolCallsByName[event.toolName] ?? 0) + 1;
       const tool = (result.toolUsage[event.toolName] ??= createToolMetrics());
       tool.calls++;
-      const action = toolAction(event.input);
+      const action = toolAction(event.toolName, event.input);
       if (action) {
         const actions = (result.toolActions[event.toolName] ??= {});
         (actions[action] ??= createToolMetrics()).calls++;

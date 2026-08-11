@@ -64,6 +64,29 @@ test("aggregates usage, tool latency, actions, and errors from session events", 
   assert.equal(result.errors, 1);
 });
 
+test("uses the tool name as the default action when input has no action", () => {
+  const result = analyzeLines([
+    JSON.stringify({
+      type: "message",
+      message: {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "bash-1", name: "bash", arguments: { command: "pwd" } }],
+      },
+    }),
+    JSON.stringify({
+      type: "message",
+      message: {
+        role: "toolResult",
+        toolCallId: "bash-1",
+        toolName: "bash",
+        content: [],
+      },
+    }),
+  ]);
+
+  assert.equal(result.toolActions.bash?.bash?.calls, 1);
+});
+
 test("tracks explicit and model-loaded skills independently from current inventory", () => {
   const result = analyzeLines([
     JSON.stringify({

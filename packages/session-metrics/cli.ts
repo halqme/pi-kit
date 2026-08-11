@@ -55,7 +55,7 @@ function parseArgs(args: string[]): CliOptions {
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const options = parseArgs(args);
   const report = await buildReport(options.target, options.since);
-  if (options.view === "skills" || options.view === "tools") {
+  if (options.view === "skills" || options.view === "tools" || options.view === "tool-actions") {
     await addCurrentResources(report, process.cwd());
   }
   process.stdout.write(

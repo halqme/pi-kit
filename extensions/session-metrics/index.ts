@@ -40,7 +40,7 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
       const view = (params.view ?? "summary") as QueryView;
       try {
         const report = await buildReport(params.sessionsPath ?? SESSIONS_ROOT, params.since);
-        if (view === "skills" || view === "tools") {
+        if (view === "skills" || view === "tools" || view === "tool-actions") {
           await addCurrentResources(report, ctx.cwd);
         }
         const text = JSON.stringify(
