@@ -19,6 +19,16 @@ export interface ToolMetrics {
   maxDurationMs: number;
 }
 
+export interface LogicalOperationMetrics {
+  operations: number;
+  toolCalls: number;
+  returnedTokens: number;
+  wallClockMs: number;
+  errors: number;
+  retries: number;
+  successes: number;
+}
+
 export interface SkillMetrics {
   reads: number;
   explicit: number;
@@ -63,6 +73,7 @@ export interface MetricSummary {
   toolCallsByName: Record<string, number>;
   toolUsage: Record<string, ToolMetrics>;
   toolActions: Record<string, Record<string, ToolMetrics>>;
+  logicalOperations: LogicalOperationMetrics;
   skills: Record<string, SkillMetrics>;
   models: Record<string, { messages: number; usage: UsageTotals }>;
   thinkingLevels: Record<string, { messages: number; usage: UsageTotals }>;

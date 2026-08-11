@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { buildReport } from "../src/build-report.ts";
-import { renderSummary } from "../src/report.ts";
+import { selectReport } from "../src/selection.ts";
 
-test("builds all sessions while render limits only rows", async () => {
+test("builds all sessions while selection limits only rows", async () => {
   const root = await mkdtemp(join(tmpdir(), "session-report-"));
   try {
     await writeFile(
@@ -20,8 +20,9 @@ test("builds all sessions while render limits only rows", async () => {
 
     const report = await buildReport(root);
     assert.equal(report.sessions, 2);
-    const output = renderSummary(report, { view: "projects", limit: 1 });
-    assert.equal((output.match(/^\| \/[ab] \|/gm) ?? []).length, 1);
+    const output = selectReport(report, { view: "projects", limit: 1 });
+    assert.equal((output.data as { rows: unknown[] }).rows.length, 1);
+    assert.equal(report.sessions, 2);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

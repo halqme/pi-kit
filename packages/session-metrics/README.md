@@ -4,21 +4,20 @@ Piのsession JSONLをofflineで読み、利用統計へ変換するpackage / CLI
 
 ```sh
 session-metrics
-session-metrics --json
 session-metrics ~/.pi/agent/sessions --daily --since 2026-04-01 --limit 20
 session-metrics --weekly
+session-metrics --monthly
 session-metrics --projects
 session-metrics --models
 session-metrics --skills
 session-metrics --tools
 session-metrics --tool-actions
+session-metrics --logical-operations
 ```
 
 既定の入力は `~/.pi/agent/sessions` です。単一JSONLファイルまたはディレクトリを指定でき、ディレクトリはsymlinkを辿らず再帰的に読み取ります。JSONLはstream処理し、壊れた行は `invalidLines` として数えつつ残りのsessionを解析します。
 
-## 境界
-
-session-metricsは3種類の情報を混ぜずに扱います。
+## 構造
 
 ### Session facts
 
@@ -37,8 +36,6 @@ session JSONLだけから再計算できる、Pi上の利用形態に沿った�
 
 - skill usage: `/skill:name` の明示呼出しと、`read`で読み込まれたskill file
 - tool action: tool inputにstring `action`がある場合のaction別calls / errors / result tokens / latency
-
-`tool-actions`はAstrolabeやLoopのtool名を特別扱いしません。`action`という入力facetだけを読み、actionの意味自体は解釈しません。
 
 skill readはread対象とresultをtool call idで対応付け、skill本文のfrontmatter `name`を優先して名前を確定します。現在そのskillがinstallされているかには依存しないため、削除済みskillの過去usageも残ります。
 
@@ -59,7 +56,7 @@ statusは次の3種類です。
 
 `missing`は「削除済み」を断定する値ではありません。package/extensionの削除だけでなく、disableや現在のcwdでは有効でないproject-local resourceも含む「現在のPi resource setから発見できない」という状態です。
 
-current statusはhistorical metricsをfilterしたり書き換えたりしません。`cwd`は現在inventoryを解決するscopeだけを決め、usage/status判定には`since`等で選択済みのreport全体を使います。CLIでは`--skills`、`--tools`、`--json`でresource enrichmentを行います。
+current statusはhistorical metricsをfilterしたり書き換えたりしません。`cwd`は現在inventoryを解決するscopeだけを決め、usage/status判定には`since`等で選択済みのreport全体を使います。CLIでは`--skills`、`--tools`でresource enrichmentを行います。
 
 Pi resource loaderはPi本体と同様にextension registration factoryをloadします。そのためcurrent inventory取得はpureなsession parsingとは分離し、`buildReport()`から暗黙には実行しません。
 
@@ -101,8 +98,8 @@ for await (const event of readSessionEvents(sessionPath)) {
 }
 ```
 
-通常表示ではsummary、daily、weekly、projects、models、skills、tools、tool-actionsのviewを選べます。`--limit`は表示行だけを制限し、集計対象sessionを切り捨てません。
+CLIは常にcanonical JSONを出力します。summary、daily、weekly、monthly、projects、models、skills、tools、tool-actions、logical-operationsは、よく使うqueryへのaliasです。`--since`は入力sessionの選択に一律適用し、`--limit`は結果rowsだけを制限します。集計対象sessionやsummaryの集計値は`--limit`で変わりません。
 
-`--tools`ではtool別のcalls、errors、estimated / reported result tokens、平均・最大latencyとcurrent statusを表示します。timestampが不足するcallはlatency集計から除外します。`--skills`ではreads / explicit invocationとcurrent statusを表示します。`--tool-actions`ではstring `action`を持つtoolだけをaction単位で集計します。
+`--tools`ではtool別のcalls、errors、estimated / reported result tokens、平均・最大latencyとcurrent statusをJSONで返します。timestampが不足するcallはlatency集計から除外します。`--skills`ではreads / explicit invocationとcurrent statusを返します。`--tool-actions`ではstring `action`を持つtoolだけをaction単位で集計します。`--logical-operations`ではturn単位のlogical operationについてtool call、returned token、wall clock、error、retry、successを返します。表示はNuShell用スクリプトなどのconsumerに委ねます。
 
 session本文やtool引数は集計結果へコピーしません。custom analyzer向けevent APIでは元sessionが持つgeneric payloadを参照できますが、reportには件数・usage等のメタデータだけを保持します。

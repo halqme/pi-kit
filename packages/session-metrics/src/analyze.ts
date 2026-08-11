@@ -57,6 +57,7 @@ export function createMetrics(): SessionMetrics {
     toolCallsByName: {},
     toolUsage: {},
     toolActions: {},
+    logicalOperations: { operations: 0, toolCalls: 0, returnedTokens: 0, wallClockMs: 0, errors: 0, retries: 0, successes: 0 },
     skills: {},
     models: {},
     thinkingLevels: {},
@@ -105,6 +106,12 @@ function createAccumulator() {
   let thinkingLevel = "unknown";
   let explicitTurnEnds = 0;
   let inferredTurnEnds = 0;
+  let operationStartedAt: number | undefined;
+  let operationLastAt: number | undefined;
+  let operationErrors = 0;
+  let operationRetries = 0;
+  let operationToolCalls = 0;
+  let operationReturnedTokens = 0;
   const pendingTools = new Map<
     string,
     { toolName: string; action?: string; skillPath?: string; timestampMs?: number }
@@ -127,7 +134,21 @@ function createAccumulator() {
       return;
     }
     if (event.kind === "turn_end") {
+      const at = timestampMs(event.timestamp);
+      if (at !== undefined) operationLastAt = at;
       explicitTurnEnds++;
+      if (operationStartedAt !== undefined) {
+        result.logicalOperations.operations++;
+        result.logicalOperations.toolCalls += operationToolCalls;
+        result.logicalOperations.returnedTokens += operationReturnedTokens;
+        result.logicalOperations.errors += operationErrors;
+        result.logicalOperations.retries += operationRetries;
+        result.logicalOperations.successes += operationErrors === 0 ? 1 : 0;
+        if (operationLastAt !== undefined) result.logicalOperations.wallClockMs += operationLastAt - operationStartedAt;
+        operationStartedAt = undefined;
+        operationLastAt = undefined;
+        operationErrors = operationRetries = operationToolCalls = operationReturnedTokens = 0;
+      }
       return;
     }
     if (event.kind === "user_message") {
@@ -139,6 +160,9 @@ function createAccumulator() {
       return;
     }
     if (event.kind === "assistant_message") {
+      const at = timestampMs(event.timestamp);
+      if (operationStartedAt === undefined && at !== undefined) operationStartedAt = at;
+      if (at !== undefined) operationLastAt = at;
       result.messages++;
       result.assistantMessages++;
       if (event.stopReason === "stop") inferredTurnEnds++;
@@ -169,6 +193,11 @@ function createAccumulator() {
       return;
     }
     if (event.kind === "tool_call") {
+      operationToolCalls++;
+      if (operationErrors > operationRetries) operationRetries++;
+      const at = timestampMs(event.timestamp);
+      if (operationStartedAt === undefined && at !== undefined) operationStartedAt = at;
+      if (at !== undefined) operationLastAt = at;
       result.toolCalls++;
       result.toolCallsByName[event.toolName] = (result.toolCallsByName[event.toolName] ?? 0) + 1;
       const tool = (result.toolUsage[event.toolName] ??= createToolMetrics());
@@ -191,6 +220,10 @@ function createAccumulator() {
       return;
     }
     if (event.kind === "tool_result") {
+      const at = timestampMs(event.timestamp);
+      if (at !== undefined) operationLastAt = at;
+      operationReturnedTokens += event.reportedTokens || Math.ceil(textContent(event.content).length / 4);
+      if (event.isError) operationErrors++;
       result.messages++;
       result.toolResults++;
       const pending = event.toolCallId ? pendingTools.get(event.toolCallId) : undefined;
@@ -223,6 +256,15 @@ function createAccumulator() {
     push,
     finish(): SessionMetrics {
       result.turns = explicitTurnEnds > 0 ? explicitTurnEnds : inferredTurnEnds;
+      if (operationStartedAt !== undefined) {
+        result.logicalOperations.operations++;
+        result.logicalOperations.toolCalls += operationToolCalls;
+        result.logicalOperations.returnedTokens += operationReturnedTokens;
+        result.logicalOperations.errors += operationErrors;
+        result.logicalOperations.retries += operationRetries;
+        result.logicalOperations.successes += operationErrors === 0 ? 1 : 0;
+        if (operationLastAt !== undefined) result.logicalOperations.wallClockMs += operationLastAt - operationStartedAt;
+      }
       return result;
     },
   };
@@ -297,6 +339,13 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.toolCalls += source.toolCalls;
   target.toolErrors += source.toolErrors;
   target.modelErrors += source.modelErrors;
+  target.logicalOperations.operations += source.logicalOperations.operations;
+  target.logicalOperations.toolCalls += source.logicalOperations.toolCalls;
+  target.logicalOperations.returnedTokens += source.logicalOperations.returnedTokens;
+  target.logicalOperations.wallClockMs += source.logicalOperations.wallClockMs;
+  target.logicalOperations.errors += source.logicalOperations.errors;
+  target.logicalOperations.retries += source.logicalOperations.retries;
+  target.logicalOperations.successes += source.logicalOperations.successes;
   target.errors += source.errors;
   target.invalidLines += source.invalidLines;
   for (const [name, count] of Object.entries(source.toolCallsByName))
