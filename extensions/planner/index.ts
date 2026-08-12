@@ -1,5 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { emptyPlan, restorePlanState, savePlanState, type PlanState } from "@halqme/plan-state";
 export default function plannerExtension(pi: ExtensionAPI): void {
   let state: PlanState = emptyPlan("planner");
@@ -12,6 +13,28 @@ export default function plannerExtension(pi: ExtensionAPI): void {
       architecture: Type.Optional(Type.String()),
       steps: Type.Optional(Type.Array(Type.String({ minLength: 4 }))),
     }),
+    renderCall(args, theme) {
+      return new Text(
+        `${theme.fg("toolTitle", theme.bold("planner"))} ${theme.fg("accent", args.action)}`,
+        0,
+        0,
+      );
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) return new Text(theme.fg("warning", "Updating planner..."), 0, 0);
+      const current = result.details as PlanState | undefined;
+      const steps = current?.steps ?? [];
+      const completed = steps.filter((step) => step.completed).length;
+      const content = result.content
+        .filter((item) => item.type === "text")
+        .map((item) => item.text ?? "")
+        .join("\n");
+      let text = context.isError
+        ? content.split("\n")[0] || "Planner failed"
+        : `status=${current?.status ?? "unknown"} (${completed}/${steps.length} steps)`;
+      if (expanded) text += `\n\n${content}\n\n${JSON.stringify(current ?? {}, null, 2)}`;
+      return new Text(theme.fg(context.isError ? "error" : "toolOutput", text), 0, 0);
+    },
     async execute(_id, params, _signal, _update, ctx) {
       state = restorePlanState(ctx.sessionManager.getEntries()) ?? state;
       if (params.action === "create") {

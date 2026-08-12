@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import {
   acknowledgeProcess,
   inspectProcess,
@@ -127,6 +128,47 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
       id: Type.Optional(Type.String({ description: "Process ID for check or stop" })),
       includeCompleted: Type.Optional(Type.Boolean({ default: false })),
     }),
+    renderCall(args, theme) {
+      const command = typeof args.command === "string" ? args.command.trim() : "";
+      const label = typeof args.label === "string" ? args.label.trim() : "";
+      const preview = command.length > 80 ? `${command.slice(0, 77)}...` : command;
+      return new Text(
+        `${theme.fg("toolTitle", theme.bold("background_process"))} ${theme.fg("accent", args.action)}${label ? ` ${theme.fg("dim", label)}` : ""}${preview ? ` ${theme.fg("dim", preview)}` : ""}`,
+        0,
+        0,
+      );
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) return new Text(theme.fg("warning", "Updating background process..."), 0, 0);
+      const content = result.content
+        .filter((item) => item.type === "text")
+        .map((item) => item.text ?? "")
+        .join("\n");
+      const details = result.details as unknown;
+      let summary = content.split("\n")[0] || "Done";
+      if (!context.isError && Array.isArray(details)) {
+        summary = `${details.length} process(es)`;
+      } else if (!context.isError && details && typeof details === "object") {
+        const record = details as Record<string, unknown>;
+        if (Array.isArray(record.started)) {
+          summary = `Started ${record.started.length} process(es)`;
+          if (Array.isArray(record.failed) && record.failed.length > 0) {
+            summary += `; ${record.failed.length} failed`;
+          }
+        } else {
+          const snapshot = (record.snapshot ?? record) as ProcessSnapshot;
+          if (snapshot && typeof snapshot === "object" && "request" in snapshot) {
+            summary = describe(snapshot);
+          }
+        }
+      }
+      if (context.isError) summary = content.split("\n")[0] || "Background process failed";
+      if (expanded) {
+        summary += `\n\n${content}`;
+        if (details !== undefined) summary += `\n\n${JSON.stringify(details, null, 2)}`;
+      }
+      return new Text(theme.fg(context.isError ? "error" : "toolOutput", summary), 0, 0);
+    },
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (!ctx.sessionManager.getSessionFile()) {
         throw new Error("background-process requires a persistent session.");
@@ -227,6 +269,25 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
         details: { snapshot, output },
       };
     },
+  });
+
+  pi.registerMessageRenderer?.("background-process-status", (message, { expanded }, theme) => {
+    const body =
+      typeof message.content === "string"
+        ? message.content
+        : message.content
+            .filter((item) => item.type === "text")
+            .map((item) => item.text ?? "")
+            .join("\n");
+    const details = message.details as ProcessSnapshot | undefined;
+    let text = body;
+    if (!expanded && details) text = describe(details);
+    if (expanded && details) text += `\n\n${JSON.stringify(details, null, 2)}`;
+    return new Text(
+      theme.fg(details?.result?.outcome === "success" ? "success" : "toolOutput", text),
+      0,
+      0,
+    );
   });
 
   pi.on("session_start", async (_event, ctx) => {

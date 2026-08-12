@@ -541,17 +541,29 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
         0,
       );
     },
-    renderResult(result, { isPartial }, theme, context) {
+    renderResult(result, { expanded, isPartial }, theme, context) {
       if (isPartial) return new Text(theme.fg("warning", "Processing Astrolabe..."), 0, 0);
       const output = resultText(result);
-      return new Text(
-        theme.fg(
-          context.isError ? "error" : "success",
-          context.isError ? output : "Astrolabe complete",
-        ),
-        0,
-        0,
-      );
+      let parsed: SyntaxResponse | undefined;
+      try {
+        parsed = JSON.parse(output) as SyntaxResponse;
+      } catch {
+        parsed = undefined;
+      }
+      const response = parsed;
+      let summary = response
+        ? `${response.action}: ${response.ok ? "ok" : (response.error?.code ?? "failed")}`
+        : output || "Astrolabe failed";
+      if (response?.data) {
+        const data = response.data;
+        const candidateCount =
+          typeof data.candidateCount === "number" ? `; ${data.candidateCount} candidate(s)` : "";
+        const matchCount =
+          typeof data.matchCount === "number" ? `; ${data.matchCount} match(es)` : "";
+        summary += candidateCount + matchCount;
+      }
+      if (expanded) summary += `\n\n${output}`;
+      return new Text(theme.fg(context.isError ? "error" : "toolOutput", summary), 0, 0);
     },
     async execute(_id, params, _signal, _update, ctx) {
       const start = Date.now();

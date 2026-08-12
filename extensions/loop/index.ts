@@ -1,5 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { loopController } from "./control.ts";
 
 const LOOP_STATE_ENTRY = "loop-state";
@@ -62,6 +63,46 @@ export default function loopExtension(pi: ExtensionAPI): void {
         Type.String({ description: "Reason for explicitly stopping the loop" }),
       ),
     }),
+    renderCall(args, theme) {
+      const task = typeof args.task === "string" ? args.task.trim() : "";
+      const label = task.length > 80 ? `${task.slice(0, 77)}...` : task;
+      return new Text(
+        `${theme.fg("toolTitle", theme.bold("loop"))} ${theme.fg("accent", args.action)}${label ? ` ${theme.fg("dim", label)}` : ""}`,
+        0,
+        0,
+      );
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) return new Text(theme.fg("warning", "Updating loop..."), 0, 0);
+      const state = result.details as
+        | {
+            status?: string;
+            turns?: number;
+            maxTurns?: number;
+            owner?: string;
+            task?: string;
+            lastSummary?: string;
+            stopReason?: string;
+          }
+        | undefined;
+      const content = result.content
+        .filter((item) => item.type === "text")
+        .map((item) => item.text ?? "")
+        .join("\n");
+      const status = state?.status ?? "unknown";
+      let text = context.isError
+        ? content.split("\n")[0] || "Loop failed"
+        : `${status}${state?.turns !== undefined && state.maxTurns !== undefined ? ` (${state.turns}/${state.maxTurns})` : ""}`;
+      if (!context.isError) {
+        if (state?.lastSummary) text += ` — ${state.lastSummary}`;
+        if (state?.stopReason) text += ` — ${state.stopReason}`;
+      }
+      if (expanded) {
+        text += `\n\n${content}`;
+        if (state) text += `\n\n${JSON.stringify(state, null, 2)}`;
+      }
+      return new Text(theme.fg(context.isError ? "error" : "toolOutput", text), 0, 0);
+    },
     async execute(_id, params) {
       if (params.action === "status") {
         const state = loopController.snapshot();
@@ -137,5 +178,32 @@ export default function loopExtension(pi: ExtensionAPI): void {
         { triggerTurn: false, deliverAs: "nextTurn" },
       );
     }
+  });
+
+  pi.registerMessageRenderer?.("loop-status", (message, { expanded }, theme) => {
+    const details = message.details as
+      | {
+          status?: string;
+          turns?: number;
+          maxTurns?: number;
+          stopReason?: string;
+          lastSummary?: string;
+        }
+      | undefined;
+    let text = typeof message.content === "string" ? message.content : "";
+    if (details) {
+      const progress =
+        details.turns !== undefined && details.maxTurns !== undefined
+          ? ` (${details.turns}/${details.maxTurns} turns)`
+          : "";
+      text = `${details.status ?? "loop"}${progress}${details.stopReason ? `: ${details.stopReason}` : ""}`;
+      if (details.lastSummary) text += `\n${details.lastSummary}`;
+      if (expanded) text += `\n\n${JSON.stringify(details, null, 2)}`;
+    }
+    return new Text(
+      theme.fg(details?.status === "exhausted" ? "warning" : "toolOutput", text),
+      0,
+      0,
+    );
   });
 }

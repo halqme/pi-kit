@@ -3,6 +3,8 @@ import type { Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, matchesGlob, relative, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
+
 import { rankDocuments, tokenize, BM25_B, BM25_K1, type Bm25Document } from "./bm25.ts";
 
 const TOOL_NAME = "bm25_search";
@@ -313,7 +315,9 @@ async function inheritedIgnoreRules(
   rules.push(...(await readIgnoreRules(base, "")));
   let directory = base;
   for (let index = 0; index < count; index++) {
-    directory = join(directory, segments[index]);
+    const segment = segments[index];
+    if (!segment) continue;
+    directory = join(directory, segment);
     const display = normalizedPath(segments.slice(0, index + 1).join("/"));
     rules.push(...(await readIgnoreRules(directory, display)));
   }
@@ -555,7 +559,8 @@ function rankedSnippets(text: string, query: string, contextLines: number): Sear
 
   const windows = new Map<string, { start: number; end: number; text: string }>();
   for (let index = 0; index < lines.length; index++) {
-    const lineTerms = new Set(tokenize(lines[index]));
+    const line = lines[index] ?? "";
+    const lineTerms = new Set(tokenize(line));
     if (![...queryTerms].some((term) => lineTerms.has(term))) continue;
     const start = Math.max(0, index - contextLines);
     const end = Math.min(lines.length - 1, index + contextLines);
@@ -697,12 +702,16 @@ export default function bm25SearchExtension(pi: ExtensionAPI): void {
       "Built-in exclusions and .gitignore/.ignore/.agentsignore/.agentignore rules are intentional; do not bypass them to widen a search.",
     ],
     parameters: Type.Object({
-      query: Type.String({ minLength: 1, description: "Natural-language concept or behavior to locate" }),
+      query: Type.String({
+        minLength: 1,
+        description: "Natural-language concept or behavior to locate",
+      }),
       paths: Type.Optional(
         Type.Array(Type.String({ minLength: 1 }), {
           minItems: 1,
           maxItems: MAX_PATHS,
-          description: "Files or directories to search in one ranked result set; defaults to ctx.cwd",
+          description:
+            "Files or directories to search in one ranked result set; defaults to ctx.cwd",
         }),
       ),
       limit: Type.Optional(
@@ -746,6 +755,40 @@ export default function bm25SearchExtension(pi: ExtensionAPI): void {
         }),
       ),
     }),
+    renderCall(args, theme) {
+      const query = typeof args.query === "string" ? args.query.trim() : "";
+      const preview = query.length > 100 ? `${query.slice(0, 97)}...` : query;
+      return new Text(
+        `${theme.fg("toolTitle", theme.bold("bm25-search"))}${preview ? ` ${theme.fg("accent", preview)}` : ""}`,
+        0,
+        0,
+      );
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) return new Text(theme.fg("warning", "Searching..."), 0, 0);
+      const details = result.details as SearchDetails | undefined;
+      const results = Array.isArray(details?.results) ? details.results : [];
+      const stats = details?.stats;
+      const content = result.content
+        .filter((item) => item.type === "text")
+        .map((item) => item.text ?? "")
+        .join("\n");
+      if (context.isError) {
+        return new Text(theme.fg("error", content || "BM25 search failed"), 0, 0);
+      }
+      let text = results.length
+        ? results
+            .slice(0, 3)
+            .map(
+              (item, index) =>
+                `${index + 1}. ${item.path} (${item.score.toFixed(3)}, ${item.matchedTerms} terms)`,
+            )
+            .join("\n")
+        : "No matching files.";
+      if (stats?.truncated) text += "\nScan limit reached.";
+      if (expanded) text += `\n\n${content}\n\n${JSON.stringify(details ?? {}, null, 2)}`;
+      return new Text(theme.fg("toolOutput", text), 0, 0);
+    },
     async execute(
       _toolCallId: string,
       params: Bm25SearchParams,

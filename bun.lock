@@ -48,6 +48,7 @@
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
       },
       "devDependencies": {
         "@types/node": "catalog:",
@@ -59,6 +60,7 @@
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
       },
       "devDependencies": {
         "@types/node": "catalog:",
@@ -70,6 +72,7 @@
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
         "@halqme/plan-state": "workspace:*",
       },
       "devDependencies": {
@@ -92,6 +95,7 @@
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
       },
       "devDependencies": {
         "@types/node": "catalog:",
@@ -110,6 +114,7 @@
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
         "@halqme/plan-state": "workspace:*",
       },
       "devDependencies": {
@@ -122,6 +127,7 @@
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
         "@halqme/plan-state": "workspace:*",
         "@halqme/protocol-supervision": "workspace:*",
       },
@@ -135,6 +141,7 @@
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
         "@halqme/pi-session-metrics": "workspace:*",
       },
       "devDependencies": {
@@ -171,6 +178,7 @@
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
       },
       "devDependencies": {
         "@types/node": "catalog:",

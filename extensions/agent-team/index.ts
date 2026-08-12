@@ -207,11 +207,48 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
       ),
     }),
     renderCall(args, theme, _context) {
+      const action = typeof args.action === "string" ? args.action : "";
       const topic = typeof args.topic === "string" ? args.topic.trim() : "";
       const text =
         theme.fg("toolTitle", theme.bold("agent_team")) +
-        (topic ? ` ${theme.fg("accent", `Topic: ${topic}`)}` : "");
+        (action ? ` ${theme.fg("accent", action)}` : "") +
+        (topic ? ` ${theme.fg("dim", topic)}` : "");
       return new Text(text, 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) return new Text(theme.fg("warning", "Running agent team..."), 0, 0);
+      const content = result.content
+        .filter((item) => item.type === "text")
+        .map((item) => item.text ?? "")
+        .join("\n");
+      const snapshots = Array.isArray(result.details) ? result.details : [result.details];
+      if (snapshots.length === 0 || !snapshots[0]) {
+        const text = context.isError ? content || "Agent-team failed." : "No agent-team session.";
+        return new Text(theme.fg(context.isError ? "error" : "toolOutput", text), 0, 0);
+      }
+      const snapshot = snapshots[0];
+      let text =
+        snapshots.length > 1
+          ? snapshots
+              .map((item) => {
+                const answer = item.finalAnswer?.trim();
+                const preview = answer
+                  ? ` — ${answer.length > 120 ? `${answer.slice(0, 117)}...` : answer}`
+                  : "";
+                return `${item.id} [${item.mode}:${item.status}] ${item.completedRounds}/${item.maxRounds} round(s)${preview}`;
+              })
+              .join("\n")
+          : `${snapshot.status} · ${snapshot.mode} · ${snapshot.members?.length ?? 0} member(s) · ${snapshot.completedRounds}/${snapshot.maxRounds} round(s)`;
+      if (snapshots.length === 1 && snapshot.finalAnswer) {
+        const answer = snapshot.finalAnswer.trim();
+        text += `\n${answer.length > 240 && !expanded ? `${answer.slice(0, 237)}...` : answer}`;
+      }
+      if (snapshot.error) text += `\nError: ${snapshot.error}`;
+      if (expanded) {
+        text += `\n\n${snapshots.map((item) => formatAgentTeam(item)).join("\n\n")}`;
+        text += `\n\n${JSON.stringify(result.details, null, 2)}`;
+      }
+      return new Text(theme.fg(context.isError ? "error" : "toolOutput", text), 0, 0);
     },
     async execute(
       _toolCallId: string,

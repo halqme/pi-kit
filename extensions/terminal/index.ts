@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 
 const exec = promisify(execFile);
 const SESSION_ENTRY = "terminal:session";
@@ -405,6 +406,53 @@ export default function terminalExtension(pi: ExtensionAPI): void {
       watchId: Type.Optional(Type.String()),
       timeoutMs: Type.Optional(Type.Integer({ minimum: 1 })),
     }),
+    renderCall(args, theme) {
+      const detail =
+        typeof args.command === "string"
+          ? args.command
+          : typeof args.pattern === "string"
+            ? args.pattern
+            : typeof args.text === "string"
+              ? args.text
+              : "";
+      const preview = detail.length > 80 ? `${detail.slice(0, 77)}...` : detail;
+      return new Text(
+        `${theme.fg("toolTitle", theme.bold("terminal"))} ${theme.fg("accent", args.action)}${args.name ? ` ${theme.fg("accent", args.name)}` : ""}${preview ? ` ${theme.fg("dim", preview)}` : ""}`,
+        0,
+        0,
+      );
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) return new Text(theme.fg("warning", "Updating terminal..."), 0, 0);
+      const content = result.content
+        .filter((item) => item.type === "text")
+        .map((item) => item.text ?? "")
+        .join("\n");
+      const details = result.details as unknown;
+      let summary = content.split("\n")[0] || "Done";
+      if (Array.isArray(details)) {
+        summary = `${details.length} terminal(s)`;
+      } else if (details && typeof details === "object") {
+        const record = details as Record<string, unknown>;
+        const name = typeof record.name === "string" ? record.name : undefined;
+        const status = typeof record.status === "string" ? record.status : undefined;
+        const output = typeof record.output === "string" ? record.output : undefined;
+        if (name && output !== undefined) {
+          const lines = output ? output.split("\n").length : 0;
+          summary = `${name}: ${lines} output line(s)`;
+        } else if (name && status) {
+          summary = `${name}: ${status}`;
+        } else if (status) {
+          summary = status;
+        }
+      }
+      if (context.isError) summary = content.split("\n")[0] || "Terminal failed";
+      if (expanded) {
+        summary += `\n\n${content}`;
+        if (details !== undefined) summary += `\n\n${JSON.stringify(details, null, 2)}`;
+      }
+      return new Text(theme.fg(context.isError ? "error" : "toolOutput", summary), 0, 0);
+    },
     async execute(_callId, params, _signal, _update, ctx) {
       try {
         if (params.action === "list") {
@@ -602,4 +650,33 @@ export default function terminalExtension(pi: ExtensionAPI): void {
       }
     },
   });
+
+  const renderTerminalMessage = (
+    message: { content: string | Array<{ type: string; text?: string }>; details?: unknown },
+    expanded: boolean,
+    theme: import("@earendil-works/pi-coding-agent").Theme,
+  ) => {
+    const body =
+      typeof message.content === "string"
+        ? message.content
+        : message.content
+            .filter((item) => item.type === "text")
+            .map((item) => item.text ?? "")
+            .join("\n");
+    const details = message.details as Record<string, unknown> | undefined;
+    let text = body;
+    if (!expanded && details) {
+      const exitCode = typeof details.exitCode === "number" ? ` (exit ${details.exitCode})` : "";
+      text = `${body.split("\n")[0]}${exitCode}`;
+    }
+    if (expanded && details) text += `\n\n${JSON.stringify(details, null, 2)}`;
+    return new Text(theme.fg("toolOutput", text), 0, 0);
+  };
+
+  pi.registerMessageRenderer?.("terminal-call", (message, { expanded }, theme) =>
+    renderTerminalMessage(message, expanded, theme),
+  );
+  pi.registerMessageRenderer?.("terminal-watch", (message, { expanded }, theme) =>
+    renderTerminalMessage(message, expanded, theme),
+  );
 }
