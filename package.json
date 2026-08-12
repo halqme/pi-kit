@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "hooks:install": "git config core.hooksPath .githooks",
-    "check": "bun run lint && bun run --sequential --workspaces --if-present typecheck && bun run --sequential --workspaces --if-present test",
+    "check": "bun run lint && bun run --sequential --workspaces --if-present check",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint ."
