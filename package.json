@@ -4,13 +4,16 @@
   "keywords": [
     "pi-package"
   ],
+  "packageManager": "bun@1.3.14",
   "workspaces": [
     "extensions/*",
     "packages/*"
   ],
   "scripts": {
     "hooks:install": "git config core.hooksPath .githooks",
+    "check": "bun run format:check && bun run lint && bun run --workspaces --if-present check",
     "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
     "lint": "oxlint ."
   },
   "dependencies": {
