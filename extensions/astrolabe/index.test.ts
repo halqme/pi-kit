@@ -141,10 +141,7 @@ test("inspect_many reads selected continuations across files without proposing c
   const inspected = responseOf(
     await call(tool, dir, {
       action: "inspect_many",
-      targets: [
-        { continuation: first.continuation },
-        { continuation: second.continuation },
-      ],
+      targets: [{ continuation: first.continuation }, { continuation: second.continuation }],
     }),
   );
   assert.equal(inspected.ok, true);
