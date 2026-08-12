@@ -169,7 +169,10 @@ test("multiple search roots share one ranking and overlapping roots do not dupli
   await withTempDirectory(async (root) => {
     await mkdir(join(root, "src"), { recursive: true });
     await mkdir(join(root, "docs"), { recursive: true });
-    await writeFile(join(root, "src", "implementation.ts"), "conceptual cache invalidation behavior\n");
+    await writeFile(
+      join(root, "src", "implementation.ts"),
+      "conceptual cache invalidation behavior\n",
+    );
     await writeFile(join(root, "docs", "guide.md"), "conceptual cache behavior\n");
 
     const tool = registeredTool();
