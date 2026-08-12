@@ -93,7 +93,7 @@ export class HandleStore {
   private next = 1;
   private readonly handles = new Map<string, NodeHandle>();
   private readonly handlesByPath = new Map<string, Set<string>>();
-  private readonly continuations = new Map<string, string>();
+  private readonly continuations = new Map<string, NodeHandle>();
   private readonly continuationByHandle = new Map<string, Set<string>>();
   private readonly maxHandlesPerFile: number;
 
@@ -172,9 +172,10 @@ export class HandleStore {
   }
 
   issueContinuation(id: string): string | undefined {
-    if (!this.get(id)) return undefined;
+    const handle = this.get(id);
+    if (!handle) return undefined;
     const token = randomUUID();
-    this.continuations.set(token, id);
+    this.continuations.set(token, handle);
     const tokens = this.continuationByHandle.get(id) ?? new Set<string>();
     tokens.add(token);
     this.continuationByHandle.set(id, tokens);
@@ -182,13 +183,32 @@ export class HandleStore {
   }
 
   resolveContinuation(token: string): NodeHandle | undefined {
-    const id = this.continuations.get(token);
-    return id ? this.get(id) : undefined;
+    const snapshot = this.continuations.get(token);
+    if (!snapshot) return undefined;
+    const active = this.get(snapshot.id);
+    if (active) return active;
+
+    this.handles.set(snapshot.id, snapshot);
+    const fileHandles = this.handlesByPath.get(snapshot.path) ?? new Set<string>();
+    fileHandles.add(snapshot.id);
+    this.handlesByPath.set(snapshot.path, fileHandles);
+    this.evictOldest(snapshot.path, fileHandles);
+    return snapshot;
   }
 
   private deleteContinuations(id: string): void {
     for (const token of this.continuationByHandle.get(id) ?? []) this.continuations.delete(token);
     this.continuationByHandle.delete(id);
+  }
+
+  private deleteContinuationsForPath(path: string): void {
+    for (const [token, handle] of this.continuations) {
+      if (handle.path !== path) continue;
+      this.continuations.delete(token);
+      const tokens = this.continuationByHandle.get(handle.id);
+      tokens?.delete(token);
+      if (tokens?.size === 0) this.continuationByHandle.delete(handle.id);
+    }
   }
 
   size(path?: string): number {
@@ -204,12 +224,17 @@ export class HandleStore {
 
   delete(id: string): boolean {
     const handle = this.handles.get(id);
-    if (!handle) return false;
+    const continuationToken = this.continuationByHandle.get(id)?.values().next().value;
+    const continuationHandle = continuationToken
+      ? this.continuations.get(continuationToken)
+      : undefined;
+    if (!handle && !continuationHandle) return false;
     this.handles.delete(id);
     this.deleteContinuations(id);
-    const fileHandles = this.handlesByPath.get(handle.path);
+    const path = handle?.path ?? continuationHandle!.path;
+    const fileHandles = this.handlesByPath.get(path);
     fileHandles?.delete(id);
-    if (fileHandles?.size === 0) this.handlesByPath.delete(handle.path);
+    if (fileHandles?.size === 0) this.handlesByPath.delete(path);
     return true;
   }
 
@@ -220,6 +245,7 @@ export class HandleStore {
         this.deleteContinuations(id);
       }
       this.handlesByPath.delete(path);
+      this.deleteContinuationsForPath(path);
       return;
     }
     this.handles.clear();
@@ -254,7 +280,6 @@ export class HandleStore {
       if (!oldest) break;
       fileHandles.delete(oldest);
       this.handles.delete(oldest);
-      this.deleteContinuations(oldest);
     }
     if (fileHandles.size === 0) this.handlesByPath.delete(path);
   }

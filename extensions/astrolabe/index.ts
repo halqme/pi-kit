@@ -34,7 +34,7 @@ const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDesc
 
 const GUIDANCE = [
   `For existing ${supportedLanguageDescription} source, use astrolabe before read or edit. Do not use read/edit for a supported existing source file unless astrolabe reports unsupported, generated, or configuration content.`,
-  "For an edit intent or known symbol, use locate first. locate fuses Tree-sitter structural/textual evidence with LSP workspace-symbol evidence whenever a configured language server is available; corroborating signals for the same concrete node increase its rank, while unavailable LSP simply leaves structural resolution in place. If locate returns mode=source, use that source and continuation directly with replace; do not inspect the same candidate again. If it returns mode=cards, inspect only when the card does not provide enough context for the intended replacement. When several same-file cards need source context, inspect them together with inspect_many before replace_many. Use search or outline inspection only when locate cannot identify the target.",
+  "For an edit intent or known symbol, use locate first. locate fuses Tree-sitter structural/textual evidence with LSP workspace-symbol evidence whenever a configured language server is available; corroborating signals for the same concrete node increase its rank, while unavailable LSP simply leaves structural resolution in place. If locate returns mode=source, use that source and continuation directly with replace; do not inspect the same candidate again. If it returns mode=cards, inspect only when the card does not provide enough context for the intended replacement. When several cards need source context, inspect them together with inspect_many; it can batch reads across files and only proposes replace_many when all selected targets share one file. Use search for functions, calls, or imports, and use outline inspection when locate cannot identify the target.",
   "For a semantic symbol rename, pass the located declaration continuation to rename instead of emulating references with replace_many. The language server proposes the WorkspaceEdit; Astrolabe validates staleness and syntax before committing it.",
   "Use read or normal edits for unsupported languages, generated/configuration files, new files, or when astrolabe explicitly reports that the target is not applicable.",
 ];
@@ -42,10 +42,25 @@ const GUIDANCE = [
 const actionSchema = Type.Union([
   Type.Object({
     action: Type.Literal("inspect"),
-    continuation: Type.Optional(Type.Object({ token: Type.String() })),
-    path: Type.Optional(Type.String()),
+    continuation: Type.Optional(
+      Type.Object({
+        token: Type.String({
+          description: "Continuation returned by locate, search, or outline inspection",
+        }),
+      }),
+    ),
+    path: Type.Optional(
+      Type.String({
+        description:
+          "Existing supported source path for outline inspection. Source inspection requires a continuation instead of a bare path.",
+      }),
+    ),
     language: Type.Optional(StringEnum(supportedLanguageIds)),
-    detail: Type.Optional(StringEnum(["outline", "source"] as const)),
+    detail: Type.Optional(
+      StringEnum(["outline", "source"] as const, {
+        description: "outline for a path; source for a selected continuation",
+      }),
+    ),
     depth: Type.Optional(Type.Integer({ minimum: 0, maximum: 12 })),
   }),
   Type.Object({
@@ -53,6 +68,8 @@ const actionSchema = Type.Union([
     targets: Type.Array(Type.Object({ continuation: Type.Object({ token: Type.String() }) }), {
       minItems: 1,
       maxItems: 10,
+      description:
+        "Selected continuations to inspect concurrently. Targets may span files; replace_many is suggested only when they share one file.",
     }),
   }),
   Type.Object({
@@ -60,7 +77,13 @@ const actionSchema = Type.Union([
     scope: Type.String({ description: "Existing supported source file or directory scope" }),
     symbols: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
     terms: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
-    maxCandidates: Type.Optional(Type.Integer({ minimum: 1, maximum: 5 })),
+    maxCandidates: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        maximum: 5,
+        description: "Maximum ranked declaration candidates to return (1-5)",
+      }),
+    ),
   }),
   Type.Object({
     action: Type.Literal("search"),
@@ -171,7 +194,7 @@ async function dispatch(
       return failure(
         "locate",
         "no_candidates",
-        "No declarations matched the available structural or semantic signals.",
+        "No declaration candidates matched. locate resolves declarations; use search for functions, calls, or imports, and use ordinary text retrieval for arbitrary literals.",
       );
     }
     const includeTopSource = includeSource(matches);
@@ -266,53 +289,49 @@ async function dispatch(
         "Every continuation must be valid and unexpired.",
       );
     }
-    const firstPath = resolved[0]!.handle!.path;
-    if (resolved.some((target) => target.handle!.path !== firstPath)) {
-      return failure(
-        "inspect_many",
-        "mixed_paths",
-        "inspect_many requires all targets to belong to the same file.",
-      );
-    }
 
-    const sources: Array<{
-      continuation: { token: string };
-      path: string;
-      type: string;
-      source: string;
-    }> = [];
-    for (const target of resolved) {
-      const handle = target.handle!;
-      const output = await inspect(
-        { path: handle.path, nodeId: handle.id, view: "source" },
-        cwd,
-        handles,
-      );
-      if (output.startsWith("stale_node:")) {
-        return failure("inspect_many", "stale_node", output, [
-          { action: "inspect", continuation: target.continuation, detail: "source" },
-        ]);
-      }
-      sources.push({
-        continuation: target.continuation,
-        path: handle.path,
-        type: handle.type,
-        source: output,
-      });
+    const inspected = await Promise.all(
+      resolved.map(async (target) => {
+        const handle = target.handle!;
+        const output = await inspect(
+          { path: handle.path, nodeId: handle.id, view: "source" },
+          cwd,
+          handles,
+        );
+        return { continuation: target.continuation, handle, output };
+      }),
+    );
+    const stale = inspected.find((target) => target.output.startsWith("stale_node:"));
+    if (stale) {
+      return failure("inspect_many", "stale_node", stale.output, [
+        { action: "inspect", continuation: stale.continuation, detail: "source" },
+      ]);
     }
+    const sources = inspected.map((target) => ({
+      continuation: target.continuation,
+      path: target.handle.path,
+      type: target.handle.type,
+      source: target.output,
+    }));
+    const firstPath = sources[0]?.path;
+    const samePath = Boolean(firstPath && sources.every((source) => source.path === firstPath));
     return {
       ok: true,
       action: "inspect_many",
       data: { sources },
-      next: [
-        {
-          action: "replace_many",
-          targets: sources.map((source) => ({
-            continuation: source.continuation,
-            replacement: "",
-          })),
-        },
-      ],
+      ...(samePath
+        ? {
+            next: [
+              {
+                action: "replace_many" as const,
+                targets: sources.map((source) => ({
+                  continuation: source.continuation,
+                  replacement: "",
+                })),
+              },
+            ],
+          }
+        : {}),
     };
   }
 
@@ -346,7 +365,7 @@ async function dispatch(
       return failure(
         "inspect",
         "source_requires_target",
-        "Request outline first or pass a search continuation.",
+        "Source inspection requires a selected continuation; request outline first or pass a continuation returned by locate or search.",
         [outlineRequest(request.path as string, request.language)],
       );
     }

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import { Type } from "@earendil-works/pi-ai";
+import { StringEnum, Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { agentTeamTaskRoot, createPiAgentFactory } from "./pi-runner.ts";
@@ -18,7 +18,8 @@ import {
 
 const TOOL_NAME = "agent_team";
 const STATUS_KEY = "agent-team";
-const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls", "web_search", "web_fetch"]);
+const READ_ONLY_TOOL_NAMES = ["read", "grep", "find", "ls", "web_search", "web_fetch"] as const;
+const READ_ONLY_TOOLS = new Set<string>(READ_ONLY_TOOL_NAMES);
 
 interface AgentTeamToolParams {
   action: "start" | "list" | "check" | "answer" | "stop";
@@ -43,10 +44,13 @@ interface AgentTeamToolParams {
 }
 
 function selectTools(requested: string[] | undefined, available: Set<string>): string[] {
-  if (requested?.some((tool) => !READ_ONLY_TOOLS.has(tool))) {
-    throw new Error("agent-team only accepts known read-only tools");
+  const unsupported = requested?.filter((tool) => !READ_ONLY_TOOLS.has(tool)) ?? [];
+  if (unsupported.length > 0) {
+    throw new Error(
+      `agent-team only accepts supported read-only tools (${READ_ONLY_TOOL_NAMES.join(", ")}); unsupported: ${unsupported.join(", ")}`,
+    );
   }
-  return (requested ?? [...READ_ONLY_TOOLS]).filter((tool) => available.has(tool));
+  return (requested ?? [...READ_ONLY_TOOL_NAMES]).filter((tool) => available.has(tool));
 }
 
 async function resolveSkill(spec: string, cwd: string): Promise<string> {
@@ -198,8 +202,9 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
       answer: Type.Optional(Type.String({ description: "User direction for a waiting team" })),
       thinking: Type.Optional(Type.String({ description: "Thinking level for child Pi agents" })),
       tools: Type.Optional(
-        Type.Array(Type.String(), {
-          description: "Read-only tools available to team members",
+        Type.Array(StringEnum(READ_ONLY_TOOL_NAMES), {
+          description:
+            "Optional allowlist of supported read-only tools for team members. Omit to use every supported read-only tool that is currently available.",
         }),
       ),
       turnTimeoutMs: Type.Optional(

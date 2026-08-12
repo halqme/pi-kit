@@ -10,7 +10,9 @@
   ],
   "scripts": {
     "hooks:install": "git config core.hooksPath .githooks",
+    "check": "bun run lint && bun run --sequential --workspaces --if-present check",
     "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
     "lint": "oxlint ."
   },
   "dependencies": {
@@ -23,6 +25,7 @@
   "bundledDependencies": [
     "pi-intercom"
   ],
+  "packageManager": "bun@1.3.14",
   "catalog": {
     "@earendil-works/pi-agent-core": "^0.84.1",
     "@earendil-works/pi-ai": "^0.84.1",

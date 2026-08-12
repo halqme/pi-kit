@@ -22,6 +22,8 @@ Keep the work in the parent when it is a trivial one-step edit, the contract or 
 
 Before starting more than one mutating worker in a shared workspace, declare non-overlapping file ownership and verify it. Otherwise use one mutating worker at a time. Worktree automation is not assumed.
 
+When concurrent writers share a workspace, an observed filesystem change is evidence that the shared workspace changed, not evidence of which worker caused it. Do not stop a worker merely because its session reports a changed file outside its ownership while another writer is active. Establish provenance from an isolated diff/commit or an attributable worker action; if the available tooling cannot attribute writes, serialize or isolate the writers before enforcing ownership.
+
 ## Workflow
 
 1. **Resolve the worker contract.** Write down the objective, relevant context, allowed paths, forbidden paths, acceptance criteria, verification commands, workspace/Git rules, and the expected report. Do not delegate an ambiguous design decision; keep that decision with the parent.

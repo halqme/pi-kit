@@ -29,10 +29,16 @@ interface SyntaxResponse {
       flow: { calls: string[]; branches: number; returns: number; throws: number; awaits: number };
       score: number;
     }>;
+    sources?: Array<{
+      continuation: { token: string };
+      path: string;
+      type: string;
+      source: string;
+    }>;
   };
   handles?: Array<{ continuation: { token: string }; capabilities: string[] }>;
   next?: Array<Record<string, unknown>>;
-  error?: { code: string };
+  error?: { code: string; message?: string };
 }
 
 interface ToolResult {
@@ -113,6 +119,39 @@ test("inspect path returns an executable next action and continuation source loo
   assert.equal("structure" in (sourcedResponse.data ?? {}), false);
   assert.doesNotMatch(sourced.content[0]?.text ?? "", /\n/);
   assert.equal(sourcedResponse.next?.[0]?.action, "replace");
+});
+
+test("inspect_many reads selected continuations across files without proposing cross-file mutation", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
+  await writeFile(join(dir, "first.ts"), "function first() { return 1; }\n");
+  await writeFile(join(dir, "second.ts"), "function second() { return 2; }\n");
+  const tool = setup(dir);
+
+  const firstOutline = responseOf(
+    await call(tool, dir, { action: "inspect", path: "first.ts", detail: "outline" }),
+  );
+  const secondOutline = responseOf(
+    await call(tool, dir, { action: "inspect", path: "second.ts", detail: "outline" }),
+  );
+  const first = firstOutline.next?.[0] as { continuation?: { token: string } } | undefined;
+  const second = secondOutline.next?.[0] as { continuation?: { token: string } } | undefined;
+  assert.ok(first?.continuation);
+  assert.ok(second?.continuation);
+
+  const inspected = responseOf(
+    await call(tool, dir, {
+      action: "inspect_many",
+      targets: [
+        { continuation: first.continuation },
+        { continuation: second.continuation },
+      ],
+    }),
+  );
+  assert.equal(inspected.ok, true);
+  assert.equal(inspected.data?.sources?.length, 2);
+  assert.match(inspected.data?.sources?.[0]?.source ?? "", /function first/);
+  assert.match(inspected.data?.sources?.[1]?.source ?? "", /function second/);
+  assert.equal(inspected.next, undefined);
 });
 
 test("locate returns a ranked source-inspected candidate usable for direct replacement", async () => {
@@ -213,6 +252,7 @@ test("locate rejects missing hints and returns no-candidate failures", async () 
   });
   assert.equal(noCandidates.ok, false);
   assert.equal(noCandidates.error?.code, "no_candidates");
+  assert.match(noCandidates.error?.message ?? "", /locate resolves declarations/);
 });
 
 test("directory search returns continuations usable for direct replacement", async () => {

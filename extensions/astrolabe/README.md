@@ -11,7 +11,7 @@ Astrolabeがコードで強制するのは、continuationの有効性、対象�
 - `locate`は編集意図に含まれる`symbols`または`terms`から宣言ノードを順位付けします。Tree-sitterの構造・本文signalと、利用可能なLSPの`workspace/symbol`を独立したcandidate generatorとして並行して使い、同じconcrete syntax nodeを支持するevidenceは加算してconfidenceを上げます。LSPが利用できなければstructural/textual signalだけで同じ処理を続行します。完全一致symbolで明確に首位かつ本文が6,000 bytes以下なら`mode: "source"`として本文も返し、それ以外は`mode: "cards"`としてシグネチャ、親宣言、flow、範囲、continuationを返します。
 - `search`は構文形状による補助探索です。関数・呼出し・importを検索し、`locate`で対象を特定できない調査に使います。
 - `inspect`は`path`でoutlineを取得するか、continuationで選んだ構文ノードのsourceを取得します。
-- `inspect_many`は同一ファイルの複数continuationを一度にsourceまで取得し、`replace_many`用のテンプレートを返します。
+- `inspect_many`は複数continuationをファイルをまたいで並列にsourceまで取得します。対象がすべて同一ファイルなら`replace_many`用のテンプレートも返し、複数ファイルにまたがる場合は読み取り結果だけを返します。
 - `replace`は有効なcontinuationと完全な`replacement`を受け、現在のsource hash、ノード型・範囲・親文脈を再検証してから保存します。
 - `replace_many`は同一ファイル内の複数continuationを全件検証し、置換後の構文検査に成功した場合だけatomicに保存します。
 - `rename`は宣言continuationと`newName`を受け、LSPの`textDocument/rename`に意味論的なWorkspaceEditを生成させます。AstrolabeはWorkspaceEditを即適用せず、対象ファイルのstaleness、範囲重複、対応言語、置換後の構文を検証してからcommitします。
@@ -74,13 +74,13 @@ WorkspaceEditは既存のAstrolabe対応ソースへのtext editだけを受理�
 
 - `locate(mode: "source")` → 通常はそのまま`replace`。同じnodeを再度`inspect`しません。
 - `locate(mode: "cards")` → cardだけでreplacementが決まるなら直接`replace`。本文が必要なら選んだcardだけ`inspect`します。
-- 同一ファイルの複数cardで本文が必要 → `inspect_many` → `replace_many`。
+- 複数cardで本文が必要 → `inspect_many`。同一ファイルなら`replace_many`を次手として返し、複数ファイルなら読み取りだけをbatchします。
 - シンボル自体のrename → `locate` → `rename`。referencesを手作業で`replace_many`しません。
-- `locate`で対象を絞れない → `search`またはoutline `inspect`へ広げます。
+- `locate`で対象を絞れない → 関数・呼出し・importなら`search`、より広い構造確認ならoutline `inspect`へ広げます。任意の文字列検索は通常のtext retrievalを使います。
 
 ## ハンドルと位置
 
-continuationは短命かつセッション限定です。ハンドルはsource hash、ノード型、親宣言、祖先型、field、前後兄弟、周辺sourceを保持し、ファイル変更後も同一ノードを一意に再同定できる場合だけ通常のnode replacementを継続します。曖昧なら`stale_node`で拒否します。
+continuationはセッション限定です。内部のhandle cacheからLRU evictionされてもcontinuationが保持するsnapshotから再活性化するため、cache pressureだけでは失効しません。ハンドルはsource hash、ノード型、親宣言、祖先型、field、前後兄弟、周辺sourceを保持し、ファイル変更後も同一ノードを一意に再同定できる場合だけ通常のnode replacementを継続します。曖昧なら`stale_node`で拒否します。明示的に無効化されたcontinuationや終了済みセッションのcontinuationは`invalid_continuation`です。
 
 `web-tree-sitter`の公開インデックスと`Point`はこのバインディングのUTF-16 JavaScript文字列位置として扱います。ハンドルには別途UTF-8バイト範囲も保存します。サロゲートペアやUTF-8コードポイントの途中は位置として受け付けません。
 
@@ -108,7 +108,7 @@ Astrolabeのスコープは編集です。LSPやTree-sitterによる探索は、
 ## 状態コード
 
 - `stale_node`: continuationの対象を現在のファイルから一意に再同定できません。
-- `invalid_continuation`: continuationが失効したか変更されています。
+- `invalid_continuation`: continuationが明示的に無効化されたか、現在のセッションに存在しません。通常のhandle cache evictionだけでは発生しません。
 - `lsp_unavailable`: 対応language serverを起動できません。
 - `rename_unavailable`: language serverまたは対象位置がrenameを受け付けません。
 - `stale_workspace_edit`: LSPがWorkspaceEditを生成した後に対象ファイルが変化しました。semantic operationを再実行します。
