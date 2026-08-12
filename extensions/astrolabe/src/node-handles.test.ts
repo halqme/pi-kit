@@ -155,5 +155,5 @@ test("does not select a nearby node when rematching has multiple candidates", as
   const handles = new HandleStore();
   const handle = handles.issue(before, node);
   const after = await parseSource(path, `${source}${"\n".repeat(25)}${source}`);
-  assert.equal(handles.findReplacement(after, handles, handle), undefined);
+  assert.equal(resolveHandle(after, handles, handle), undefined);
 });
