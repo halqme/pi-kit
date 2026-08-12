@@ -16,11 +16,7 @@ export default function plannerExtension(pi: ExtensionAPI): void {
       state = restorePlanState(ctx.sessionManager.getEntries()) ?? state;
       if (params.action === "create") {
         if (!params.architecture?.trim() || !params.steps?.length)
-          return {
-            content: [{ type: "text" as const, text: "architecture and steps are required" }],
-            details: {},
-            isError: true,
-          };
+          throw new Error("architecture and steps are required");
         state = emptyPlan("planner");
         state.architecture = params.architecture.trim();
         state.steps = params.steps.map((text, i) => ({
@@ -39,12 +35,7 @@ export default function plannerExtension(pi: ExtensionAPI): void {
         };
       }
       if (params.action === "approve") {
-        if (state.status !== "planned")
-          return {
-            content: [{ type: "text" as const, text: "No planned TODO is awaiting approval." }],
-            details: state,
-            isError: true,
-          };
+        if (state.status !== "planned") throw new Error("No planned TODO is awaiting approval.");
         state.status = "approved";
         savePlanState(pi, state);
         return {

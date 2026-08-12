@@ -564,10 +564,10 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
       }
       const text = responseText(response);
       record(metrics, request.action, JSON.stringify(params).length, text, start);
+      if (!response.ok) throw new Error(text);
       return {
         content: [{ type: "text", text }],
         details: { metrics },
-        ...(response.ok ? {} : { isError: true }),
       };
     },
   });

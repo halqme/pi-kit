@@ -127,25 +127,23 @@ test("public tool reports truncation and rejects empty or missing search targets
     assert.equal(sizeLimited.details.stats.skippedOversize, 1);
     assert.equal(sizeLimited.details.results.length, 0);
 
-    const empty = await tool.execute(
-      "3",
-      { query: "   " },
-      new AbortController().signal,
-      undefined,
-      { cwd: root },
+    await assert.rejects(
+      () =>
+        tool.execute("3", { query: "   " }, new AbortController().signal, undefined, { cwd: root }),
+      /query must not be empty/,
     );
-    assert.equal(empty.isError, true);
-    assert.match(empty.content[0].text, /query must not be empty/);
 
-    const missing = await tool.execute(
-      "4",
-      { query: "BM25", path: "missing" },
-      new AbortController().signal,
-      undefined,
-      { cwd: root },
+    await assert.rejects(
+      () =>
+        tool.execute(
+          "4",
+          { query: "BM25", path: "missing" },
+          new AbortController().signal,
+          undefined,
+          { cwd: root },
+        ),
+      /Unable to access search path/,
     );
-    assert.equal(missing.isError, true);
-    assert.match(missing.content[0].text, /Unable to access search path/);
   });
 });
 

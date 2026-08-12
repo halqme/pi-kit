@@ -219,7 +219,10 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
       signal: AbortSignal,
       _onUpdate: unknown,
       ctx: ExtensionContext,
-    ) {
+    ): Promise<{
+      content: Array<{ type: "text"; text: string }>;
+      details: AgentTeamSnapshot | AgentTeamSnapshot[];
+    }> {
       try {
         if (params.action === "list") {
           const snapshots = summarizeTeams(teams);
@@ -340,11 +343,7 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
         };
       } catch (error) {
         updateStatus(ctx, teams);
-        return {
-          content: [{ type: "text" as const, text: String(error) }],
-          details: {},
-          isError: true,
-        };
+        throw error;
       }
     },
   });

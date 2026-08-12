@@ -31,12 +31,7 @@ export default function grillExtension(pi: ExtensionAPI): void {
         };
       }
       if (params.action === "resolve") {
-        if (!params.architecture?.trim())
-          return {
-            content: [{ type: "text" as const, text: "architecture is required" }],
-            details: {},
-            isError: true,
-          };
+        if (!params.architecture?.trim()) throw new Error("architecture is required");
         state.architecture = params.architecture.trim();
         state.status = "resolved";
         savePlanState(pi, state);

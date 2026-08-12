@@ -17,8 +17,10 @@ test("planner creates and approves a TODO through the public tool flow", async (
   const tool = tools.get("planner");
   const ctx = { sessionManager: { getEntries: () => entries } };
 
-  const rejected = await tool.execute("1", { action: "approve" }, undefined, undefined, ctx);
-  assert.equal(rejected.isError, true);
+  await assert.rejects(
+    () => tool.execute("1", { action: "approve" }, undefined, undefined, ctx),
+    /No planned TODO is awaiting approval\./,
+  );
 
   const created = await tool.execute(
     "2",

@@ -35,18 +35,12 @@ function rejectedProposal(
   decision: Exclude<SupervisionDecision, { type: "allow" }>,
   state: PlanState,
 ) {
+  if (decision.type === "block") {
+    throw new Error(`Runner proposal blocked: ${decision.reason}`);
+  }
   return {
-    content: [
-      {
-        type: "text" as const,
-        text:
-          decision.type === "block"
-            ? `Runner proposal blocked: ${decision.reason}`
-            : decision.context,
-      },
-    ],
+    content: [{ type: "text" as const, text: decision.context }],
     details: state,
-    ...(decision.type === "block" ? { isError: true } : {}),
   };
 }
 
@@ -139,19 +133,11 @@ export default function runnerExtension(pi: ExtensionAPI): void {
         return rejectedProposal(supervision.decision, state);
 
       if (proposal.type === "start") {
-        try {
-          loopController.start("runner", taskFor(state), proposal.maxTurns);
-          state.status = "running";
-          state.stage = "runner";
-          delete state.stopReason;
-          savePlanState(pi, state);
-        } catch (error) {
-          return {
-            content: [{ type: "text" as const, text: String(error) }],
-            details: state,
-            isError: true,
-          };
-        }
+        loopController.start("runner", taskFor(state), proposal.maxTurns);
+        state.status = "running";
+        state.stage = "runner";
+        delete state.stopReason;
+        savePlanState(pi, state);
         return {
           content: [
             {
@@ -175,11 +161,7 @@ export default function runnerExtension(pi: ExtensionAPI): void {
           } catch {
             // Preserve the plan failure even if loop state was already lost.
           }
-          return {
-            content: [{ type: "text" as const, text: `Runner stopped: ${state.stopReason}` }],
-            details: state,
-            isError: true,
-          };
+          throw new Error(`Runner stopped: ${state.stopReason}`);
         }
 
         savePlanState(pi, state);
@@ -198,11 +180,7 @@ export default function runnerExtension(pi: ExtensionAPI): void {
           state.status = "stopped";
           state.stopReason = `Runner loop unavailable: ${String(error)}`;
           savePlanState(pi, state);
-          return {
-            content: [{ type: "text" as const, text: state.stopReason }],
-            details: state,
-            isError: true,
-          };
+          throw new Error(state.stopReason);
         }
 
         return {
@@ -225,16 +203,7 @@ export default function runnerExtension(pi: ExtensionAPI): void {
         try {
           loopController.report("runner", "done", proposal.evidence);
         } catch (error) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `Plan completed, but runner loop finalization failed: ${String(error)}`,
-              },
-            ],
-            details: state,
-            isError: true,
-          };
+          throw new Error(`Plan completed, but runner loop finalization failed: ${String(error)}`);
         }
         return {
           content: [{ type: "text" as const, text: "Plan completed after supervised finish." }],

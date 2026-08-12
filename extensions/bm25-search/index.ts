@@ -491,11 +491,7 @@ export default function bm25SearchExtension(pi: ExtensionAPI): void {
           details,
         };
       } catch (error) {
-        return {
-          content: [{ type: "text" as const, text: errorText(error) }],
-          details: {},
-          isError: true,
-        };
+        throw new Error(errorText(error));
       }
     },
   });

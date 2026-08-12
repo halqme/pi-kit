@@ -63,62 +63,54 @@ export default function loopExtension(pi: ExtensionAPI): void {
       ),
     }),
     async execute(_id, params) {
-      try {
-        if (params.action === "status") {
-          const state = loopController.snapshot();
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: state
-                  ? `Loop ${state.status} (${state.turns}/${state.maxTurns} turns, owner=${state.owner}): ${state.task}`
-                  : "No loop state.",
-              },
-            ],
-            details: state ?? {},
-          };
-        }
-        if (params.action === "start") {
-          if (!params.task?.trim()) throw new Error("task is required for start");
-          const state = loopController.start("loop", params.task, params.maxTurns ?? 8);
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `Loop started for up to ${state.maxTurns} turns. Work on the task now and report its status before ending this turn.`,
-              },
-            ],
-            details: state,
-          };
-        }
-        if (params.action === "report") {
-          if (!params.status) throw new Error("status is required for report");
-          const state = loopController.report("loop", params.status, params.summary);
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text:
-                  params.status === "continue"
-                    ? "Loop progress recorded; a follow-up will be sent after agent_end."
-                    : `Loop ${state.status}.`,
-              },
-            ],
-            details: state,
-          };
-        }
-        const state = loopController.stop("loop", params.reason);
+      if (params.action === "status") {
+        const state = loopController.snapshot();
         return {
-          content: [{ type: "text" as const, text: "Loop stopped." }],
-          details: state,
-        };
-      } catch (error) {
-        return {
-          content: [{ type: "text" as const, text: String(error) }],
-          details: loopController.snapshot() ?? {},
-          isError: true,
+          content: [
+            {
+              type: "text" as const,
+              text: state
+                ? `Loop ${state.status} (${state.turns}/${state.maxTurns} turns, owner=${state.owner}): ${state.task}`
+                : "No loop state.",
+            },
+          ],
+          details: state ?? {},
         };
       }
+      if (params.action === "start") {
+        if (!params.task?.trim()) throw new Error("task is required for start");
+        const state = loopController.start("loop", params.task, params.maxTurns ?? 8);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Loop started for up to ${state.maxTurns} turns. Work on the task now and report its status before ending this turn.`,
+            },
+          ],
+          details: state,
+        };
+      }
+      if (params.action === "report") {
+        if (!params.status) throw new Error("status is required for report");
+        const state = loopController.report("loop", params.status, params.summary);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                params.status === "continue"
+                  ? "Loop progress recorded; a follow-up will be sent after agent_end."
+                  : `Loop ${state.status}.`,
+            },
+          ],
+          details: state,
+        };
+      }
+      const state = loopController.stop("loop", params.reason);
+      return {
+        content: [{ type: "text" as const, text: "Loop stopped." }],
+        details: state,
+      };
     },
   });
 

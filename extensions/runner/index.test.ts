@@ -143,9 +143,10 @@ test("runner blocks direct competition with another active loop", async () => {
   approved.steps = [{ step: 1, text: "change code", completed: false }];
   savePlanState(h.pi, approved);
 
-  const result = await h.tool.execute("1", { action: "start" }, undefined, undefined, h.ctx);
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /loop is active/);
+  await assert.rejects(
+    () => h.tool.execute("1", { action: "start" }, undefined, undefined, h.ctx),
+    /loop is active/,
+  );
 });
 
 test("runner records loop exhaustion as a hard runtime stop", async () => {

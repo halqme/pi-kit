@@ -41,40 +41,30 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const view = (params.view ?? "overview") as QueryView;
-      try {
-        const report = await buildReport(params.sessionsPath ?? SESSIONS_ROOT, params.since);
-        if (
-          view === "overview" ||
-          view === "all" ||
-          view === "skills" ||
-          view === "tools" ||
-          view === "tool-actions"
-        ) {
-          await addCurrentResources(report, ctx.cwd);
-        }
-        const text = JSON.stringify(
-          selectReport(report, {
-            view,
-            ...(params.since ? { since: params.since } : {}),
-            ...(params.limit !== undefined ? { limit: params.limit } : {}),
-            ...(params.sessionsPath ? { source: params.sessionsPath } : {}),
-          }),
-          null,
-          2,
-        );
-        return {
-          content: [{ type: "text" as const, text }],
-          details: { view },
-        };
-      } catch (error) {
-        return {
-          content: [
-            { type: "text" as const, text: error instanceof Error ? error.message : String(error) },
-          ],
-          details: { view },
-          isError: true,
-        };
+      const report = await buildReport(params.sessionsPath ?? SESSIONS_ROOT, params.since);
+      if (
+        view === "overview" ||
+        view === "all" ||
+        view === "skills" ||
+        view === "tools" ||
+        view === "tool-actions"
+      ) {
+        await addCurrentResources(report, ctx.cwd);
       }
+      const text = JSON.stringify(
+        selectReport(report, {
+          view,
+          ...(params.since ? { since: params.since } : {}),
+          ...(params.limit !== undefined ? { limit: params.limit } : {}),
+          ...(params.sessionsPath ? { source: params.sessionsPath } : {}),
+        }),
+        null,
+        2,
+      );
+      return {
+        content: [{ type: "text" as const, text }],
+        details: { view },
+      };
     },
   });
 }

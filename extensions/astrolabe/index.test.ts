@@ -73,6 +73,24 @@ async function call(
   );
 }
 
+async function callFailure(
+  tool: CapturedTool,
+  cwd: string,
+  request: Record<string, unknown>,
+): Promise<SyntaxResponse> {
+  let parsed: SyntaxResponse | undefined;
+  await assert.rejects(
+    () => call(tool, cwd, request),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      parsed = JSON.parse(error.message) as SyntaxResponse;
+      return true;
+    },
+  );
+  if (!parsed) throw new Error("expected Astrolabe tool failure");
+  return parsed;
+}
+
 test("inspect path returns an executable next action and continuation source lookup", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
   await writeFile(join(dir, "sample.ts"), "function answer() { return 1; }\n");
@@ -185,12 +203,14 @@ test("locate rejects missing hints and returns no-candidate failures", async () 
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
   await writeFile(join(dir, "sample.ts"), "function answer() { return 1; }\n");
   const tool = setup(dir);
-  const missingHint = responseOf(await call(tool, dir, { action: "locate", scope: "sample.ts" }));
+  const missingHint = await callFailure(tool, dir, { action: "locate", scope: "sample.ts" });
   assert.equal(missingHint.ok, false);
   assert.equal(missingHint.error?.code, "locate_requires_hint");
-  const noCandidates = responseOf(
-    await call(tool, dir, { action: "locate", scope: "sample.ts", symbols: ["missing"] }),
-  );
+  const noCandidates = await callFailure(tool, dir, {
+    action: "locate",
+    scope: "sample.ts",
+    symbols: ["missing"],
+  });
   assert.equal(noCandidates.ok, false);
   assert.equal(noCandidates.error?.code, "no_candidates");
 });
@@ -262,14 +282,13 @@ test("replace_many rejects a stale target without writing", async () => {
   const next = responseOf(outlined).next ?? [];
   await writeFile(path, "function first() { return 99; }\nfunction second() { return 2; }\n");
 
-  const replaced = await call(tool, dir, {
+  const response = await callFailure(tool, dir, {
     action: "replace_many",
     targets: next.map((action) => ({
       continuation: (action as { continuation: { token: string } }).continuation,
       replacement: "function changed() { return 0; }",
     })),
   });
-  const response = responseOf(replaced);
   assert.equal(response.ok, false);
   assert.equal(response.error?.code, "stale_node");
   assert.match(await readFile(path, "utf8"), /return 99/);
@@ -286,7 +305,7 @@ test("replace_many rejects a replacement that introduces syntax errors", async (
     detail: "outline",
   });
   const next = responseOf(outlined).next ?? [];
-  const replaced = await call(tool, dir, {
+  const replaced = await callFailure(tool, dir, {
     action: "replace_many",
     targets: [
       {
@@ -299,7 +318,7 @@ test("replace_many rejects a replacement that introduces syntax errors", async (
       },
     ],
   });
-  assert.equal(responseOf(replaced).ok, false);
+  assert.equal(replaced.ok, false);
   assert.match(await readFile(path, "utf8"), /function first\(\) \{ return 1; \}/);
 });
 
@@ -321,12 +340,11 @@ test("replace rejects a changed target without writing and returns recovery", as
   assert.ok(continuation);
   await writeFile(path, "function answer() { return 99; }\n");
 
-  const replaced = await call(tool, dir, {
+  const replacedResponse = await callFailure(tool, dir, {
     action: "replace",
     continuation,
     replacement: "function answer() { return 2; }",
   });
-  const replacedResponse = responseOf(replaced);
   assert.equal(replacedResponse.ok, false);
   assert.equal(replacedResponse.error?.code, "stale_node");
   assert.ok(replacedResponse.next?.[0]);
@@ -338,8 +356,11 @@ test("source request without a target returns a directly executable recovery act
   const path = join(dir, "sample.ts");
   await writeFile(path, "function answer() {}\n");
   const tool = setup(dir);
-  const failed = await call(tool, dir, { action: "inspect", path, detail: "source" });
-  const failedResponse = responseOf(failed);
+  const failedResponse = await callFailure(tool, dir, {
+    action: "inspect",
+    path,
+    detail: "source",
+  });
   assert.equal(failedResponse.ok, false);
   const next = failedResponse.next?.[0];
   assert.ok(next);

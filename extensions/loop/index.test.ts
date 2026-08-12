@@ -33,6 +33,10 @@ test("loop follows up only while the task remains unfinished", async () => {
   loopExtension(pi);
   const ctx = { sessionManager: { getEntries: () => entries } } as any;
   await startSession({}, ctx);
+  await assert.rejects(
+    () => tool.execute("invalid", { action: "start", task: "   " }, undefined, undefined, ctx),
+    /task is required for start/,
+  );
 
   const started = await tool.execute(
     "id",

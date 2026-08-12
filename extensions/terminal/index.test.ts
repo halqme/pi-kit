@@ -85,26 +85,28 @@ test("public tool rejects concurrent calls and rolls back failed create", async 
     ctx,
   );
   assert.equal(first.details.status, "accepted");
-  const second = await registered.execute(
-    "3",
-    { action: "call", name: "x", command: "echo later" },
-    undefined,
-    undefined,
-    ctx,
+  await assert.rejects(() =>
+    registered.execute(
+      "3",
+      { action: "call", name: "x", command: "echo later" },
+      undefined,
+      undefined,
+      ctx,
+    ),
   );
-  assert.equal(second.isError, true);
   now = 1_000_000;
   await runTerminalPollForTests();
   assert.equal(sent.length, 1);
   failSend = true;
-  const failed = await registered.execute(
-    "4",
-    { action: "create", name: "y", command: "sh" },
-    undefined,
-    undefined,
-    ctx,
+  await assert.rejects(() =>
+    registered.execute(
+      "4",
+      { action: "create", name: "y", command: "sh" },
+      undefined,
+      undefined,
+      ctx,
+    ),
   );
-  assert.equal(failed.isError, true);
   assert.equal(killed.length, 1);
   await events.get("session_shutdown")?.({}, ctx);
   globalThis.setInterval = originalSetInterval;

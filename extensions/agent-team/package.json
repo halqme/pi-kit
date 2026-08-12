@@ -16,6 +16,7 @@
     "@halqme/background-process": "workspace:*"
   },
   "devDependencies": {
+    "@earendil-works/pi-agent-core": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   },

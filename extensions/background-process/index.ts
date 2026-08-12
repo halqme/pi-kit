@@ -129,117 +129,103 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (!ctx.sessionManager.getSessionFile()) {
-        return {
-          content: [
-            { type: "text" as const, text: "background-process requires a persistent session." },
-          ],
-          details: {},
-          isError: true,
-        };
+        throw new Error("background-process requires a persistent session.");
       }
       const root = rootFor(ctx);
-      try {
-        if (params.action === "start") {
-          if (!params.command?.trim()) throw new Error("command is required for start");
-          const snapshot = await startBackgroundProcess({
-            taskRoot: root,
-            ownerSessionId: ctx.sessionManager.getSessionId(),
-            cwd: resolve(ctx.cwd, params.cwd ?? "."),
-            spec: { type: "shell", command: params.command },
-            ...(params.label ? { label: params.label } : {}),
-          });
-          announced.set(snapshot.request.id, snapshot.phase);
-          await poll(ctx);
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `Started ${describe(snapshot)}\nDo not wait or poll for completion; end this turn and let background-process notify you.`,
-              },
-            ],
-            details: snapshot,
-          };
-        }
-        if (params.action === "start_many") {
-          const processes = params.processes;
-          if (!processes?.length) throw new Error("processes is required and must not be empty");
-          if (processes.some((process) => !process.command.trim())) {
-            throw new Error("every process command is required");
-          }
-          const results = await Promise.allSettled(
-            processes.map((process) =>
-              startBackgroundProcess({
-                taskRoot: root,
-                ownerSessionId: ctx.sessionManager.getSessionId(),
-                cwd: resolve(ctx.cwd, process.cwd ?? "."),
-                spec: { type: "shell", command: process.command },
-                ...(process.label ? { label: process.label } : {}),
-              }),
-            ),
-          );
-          const started = results.flatMap((result) =>
-            result.status === "fulfilled" ? [result.value] : [],
-          );
-          const failed = results.flatMap((result, index) =>
-            result.status === "rejected" ? [{ index, error: String(result.reason) }] : [],
-          );
-          for (const snapshot of started) announced.set(snapshot.request.id, snapshot.phase);
-          await poll(ctx);
-          const text = [
-            started.length
-              ? `Started ${started.length} process(es):\n${started.map(describe).join("\n")}`
-              : "No processes started.",
-            failed.length
-              ? `Failed ${failed.length} process(es):\n${failed.map((item) => `${item.index}: ${item.error}`).join("\n")}`
-              : "",
-            started.length
-              ? "Do not wait or poll for completion; end this turn and let background-process notify you."
-              : "",
-          ]
-            .filter(Boolean)
-            .join("\n\n");
-          return {
-            content: [{ type: "text" as const, text }],
-            details: { started, failed },
-            ...(failed.length ? { isError: true } : {}),
-          };
-        }
-        if (params.action === "list") {
-          const snapshots = await listProcesses(root, {
-            includeCompleted: params.includeCompleted ?? false,
-          });
-          return {
-            content: [{ type: "text" as const, text: formatList(snapshots) }],
-            details: snapshots,
-          };
-        }
-        if (!params.id) throw new Error(`id is required for ${params.action}`);
-        const dir = taskPath(root, params.id);
-        if (params.action === "stop") {
-          const snapshot = await requestProcessStop(dir);
-          return {
-            content: [{ type: "text" as const, text: `Stop requested: ${describe(snapshot)}` }],
-            details: snapshot,
-          };
-        }
-        const snapshot = await inspectProcess(dir);
-        const output = await readProcessOutput(dir);
+      if (params.action === "start") {
+        if (!params.command?.trim()) throw new Error("command is required for start");
+        const snapshot = await startBackgroundProcess({
+          taskRoot: root,
+          ownerSessionId: ctx.sessionManager.getSessionId(),
+          cwd: resolve(ctx.cwd, params.cwd ?? "."),
+          spec: { type: "shell", command: params.command },
+          ...(params.label ? { label: params.label } : {}),
+        });
+        announced.set(snapshot.request.id, snapshot.phase);
+        await poll(ctx);
         return {
           content: [
             {
               type: "text" as const,
-              text: `${describe(snapshot)}\n\nstdout:\n${output.stdout || "(empty)"}\n\nstderr:\n${output.stderr || "(empty)"}`,
+              text: `Started ${describe(snapshot)}\nDo not wait or poll for completion; end this turn and let background-process notify you.`,
             },
           ],
-          details: { snapshot, output },
-        };
-      } catch (error) {
-        return {
-          content: [{ type: "text" as const, text: String(error) }],
-          details: {},
-          isError: true,
+          details: snapshot,
         };
       }
+      if (params.action === "start_many") {
+        const processes = params.processes;
+        if (!processes?.length) throw new Error("processes is required and must not be empty");
+        if (processes.some((process) => !process.command.trim())) {
+          throw new Error("every process command is required");
+        }
+        const results = await Promise.allSettled(
+          processes.map((process) =>
+            startBackgroundProcess({
+              taskRoot: root,
+              ownerSessionId: ctx.sessionManager.getSessionId(),
+              cwd: resolve(ctx.cwd, process.cwd ?? "."),
+              spec: { type: "shell", command: process.command },
+              ...(process.label ? { label: process.label } : {}),
+            }),
+          ),
+        );
+        const started = results.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : [],
+        );
+        const failed = results.flatMap((result, index) =>
+          result.status === "rejected" ? [{ index, error: String(result.reason) }] : [],
+        );
+        for (const snapshot of started) announced.set(snapshot.request.id, snapshot.phase);
+        await poll(ctx);
+        const text = [
+          started.length
+            ? `Started ${started.length} process(es):\n${started.map(describe).join("\n")}`
+            : "No processes started.",
+          failed.length
+            ? `Failed ${failed.length} process(es):\n${failed.map((item) => `${item.index}: ${item.error}`).join("\n")}`
+            : "",
+          started.length
+            ? "Do not wait or poll for completion; end this turn and let background-process notify you."
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+        if (failed.length) throw new Error(text);
+        return {
+          content: [{ type: "text" as const, text }],
+          details: { started, failed },
+        };
+      }
+      if (params.action === "list") {
+        const snapshots = await listProcesses(root, {
+          includeCompleted: params.includeCompleted ?? false,
+        });
+        return {
+          content: [{ type: "text" as const, text: formatList(snapshots) }],
+          details: snapshots,
+        };
+      }
+      if (!params.id) throw new Error(`id is required for ${params.action}`);
+      const dir = taskPath(root, params.id);
+      if (params.action === "stop") {
+        const snapshot = await requestProcessStop(dir);
+        return {
+          content: [{ type: "text" as const, text: `Stop requested: ${describe(snapshot)}` }],
+          details: snapshot,
+        };
+      }
+      const snapshot = await inspectProcess(dir);
+      const output = await readProcessOutput(dir);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `${describe(snapshot)}\n\nstdout:\n${output.stdout || "(empty)"}\n\nstderr:\n${output.stderr || "(empty)"}`,
+          },
+        ],
+        details: { snapshot, output },
+      };
     },
   });
 

@@ -26,14 +26,10 @@ test("grill resolves a grounded architecture through the public tool flow", asyn
   );
   assert.equal(started.details.status, "grilling");
 
-  const invalid = await tool.execute(
-    "2",
-    { action: "resolve", architecture: "   " },
-    undefined,
-    undefined,
-    ctx,
+  await assert.rejects(
+    () => tool.execute("2", { action: "resolve", architecture: "   " }, undefined, undefined, ctx),
+    /architecture is required/,
   );
-  assert.equal(invalid.isError, true);
 
   const resolved = await tool.execute(
     "3",

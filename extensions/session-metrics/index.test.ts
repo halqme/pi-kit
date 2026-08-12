@@ -20,3 +20,23 @@ test("registers one passive session metrics tool without session hooks", () => {
   );
   assert.deepEqual(hooks, []);
 });
+
+test("propagates report failures from execute", async () => {
+  let tool: { execute: (...args: any[]) => Promise<unknown> } | undefined;
+  sessionMetricsExtension({
+    registerTool(value: typeof tool) {
+      tool = value;
+    },
+  } as never);
+  const registeredTool = tool;
+  assert.ok(registeredTool);
+  await assert.rejects(() =>
+    registeredTool.execute(
+      "test-call",
+      { sessionsPath: "/definitely/missing/pi-session-metrics" },
+      undefined,
+      undefined,
+      { cwd: process.cwd() },
+    ),
+  );
+});

@@ -598,11 +598,7 @@ export default function terminalExtension(pi: ExtensionAPI): void {
         }
         throw new Error("Unsupported terminal action");
       } catch (error) {
-        return {
-          content: [{ type: "text" as const, text: String(error) }],
-          details: {},
-          isError: true,
-        };
+        throw error instanceof Error ? error : new Error(String(error));
       }
     },
   });

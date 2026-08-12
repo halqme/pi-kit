@@ -77,8 +77,9 @@ test("start_many starts independent commands and reports each process", async (t
   } as unknown as ExtensionContext;
 
   backgroundProcessExtension(pi);
-  assert.ok(tool);
-  const result = (await tool.execute(
+  const registeredTool = tool;
+  assert.ok(registeredTool);
+  const result = (await registeredTool.execute(
     "tool-call",
     {
       action: "start_many",
@@ -100,12 +101,15 @@ test("start_many starts independent commands and reports each process", async (t
     assert.ok(snapshot.request.label === "one" || snapshot.request.label === "two");
   }
 
-  const invalid = (await tool.execute(
-    "tool-call",
-    { action: "start_many", processes: [{ command: "   " }] },
-    undefined,
-    undefined,
-    ctx,
-  )) as { isError?: boolean };
-  assert.equal(invalid.isError, true);
+  await assert.rejects(
+    () =>
+      registeredTool.execute(
+        "tool-call",
+        { action: "start_many", processes: [{ command: "   " }] },
+        undefined,
+        undefined,
+        ctx,
+      ),
+    /every process command is required/,
+  );
 });
