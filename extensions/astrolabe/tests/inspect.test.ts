@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HandleStore } from "./node-handles.ts";
-import { inspect } from "./inspect.ts";
-import { parseFile, clearFileCache } from "./parser.ts";
+import { HandleStore } from "../src/node-handles.ts";
+import { inspect } from "../src/inspect.ts";
+import { parseFile, clearFileCache } from "../src/parser.ts";
 
 test("TypeScript outline maps a file by declarations without statement-level noise", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-inspect-"));

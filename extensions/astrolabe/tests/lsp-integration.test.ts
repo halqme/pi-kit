@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
-import { adapterForLanguage } from "./src/language-profile.ts";
-import type { LspService, LspWorkspaceEdit } from "./src/lsp.ts";
-import { HandleStore } from "./src/node-handles.ts";
-import { renameContinuationDetailed } from "./src/rename.ts";
-import { locateResolvedDetailed } from "./src/semantic-locate.ts";
+import { adapterForLanguage } from "../src/language-profile.ts";
+import type { LspService, LspWorkspaceEdit } from "../src/lsp.ts";
+import { HandleStore } from "../src/node-handles.ts";
+import { renameContinuationDetailed } from "../src/rename.ts";
+import { locateResolvedDetailed } from "../src/semantic-locate.ts";
 
 function fakeLsp(options: {
   symbols?: LspService["workspaceSymbols"];

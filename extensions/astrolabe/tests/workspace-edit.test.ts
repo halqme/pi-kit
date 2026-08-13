@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
-import { HandleStore } from "./src/node-handles.ts";
-import { applyWorkspaceEdit, WorkspaceMutationError } from "./src/workspace-edit.ts";
+import { HandleStore } from "../src/node-handles.ts";
+import { applyWorkspaceEdit, WorkspaceMutationError } from "../src/workspace-edit.ts";
 
 async function rejectsWithCode(promise: Promise<unknown>, code: string): Promise<void> {
   await assert.rejects(promise, (error: unknown) => {

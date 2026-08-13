@@ -75,6 +75,7 @@ const actionSchema = Type.Union([
   Type.Object({
     action: Type.Literal("locate"),
     scope: Type.String({ description: "Existing supported source file or directory scope" }),
+    language: Type.Optional(StringEnum(supportedLanguageIds)),
     symbols: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
     terms: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
     maxCandidates: Type.Optional(

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTreeEdit, parseSource } from "./parser.ts";
-import { findNewSyntaxIssues } from "./syntax-validation.ts";
+import { createTreeEdit, parseSource } from "../src/parser.ts";
+import { findNewSyntaxIssues } from "../src/syntax-validation.ts";
 
 test("maps an unchanged syntax issue after text is inserted before it", async () => {
   const source = "const broken = ;\nconst answer = 1;\n";

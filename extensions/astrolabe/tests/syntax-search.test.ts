@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HandleStore } from "./node-handles.ts";
-import { syntaxSearch } from "./syntax-search.ts";
+import { HandleStore } from "../src/node-handles.ts";
+import { syntaxSearch } from "../src/syntax-search.ts";
 
 test("syntax_search finds functions, calls, and imports by syntax", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-search-"));

@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { chmod, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clearFileCache, parseFile } from "./parser.ts";
-import { HandleStore } from "./node-handles.ts";
-import { edit, editContinuationDetailed } from "./edit.ts";
+import { clearFileCache, parseFile } from "../src/parser.ts";
+import { HandleStore } from "../src/node-handles.ts";
+import { edit, editContinuationDetailed } from "../src/edit.ts";
 
 test("replaces an inspected node and rejects stale content", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tree-edit-"));

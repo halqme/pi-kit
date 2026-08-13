@@ -125,6 +125,8 @@ class LspClient {
   private constructor(
     private readonly cwd: string,
     private readonly languageId: string,
+    private readonly lspLanguageId: string,
+    private readonly initializationOptions: unknown,
     private readonly server: LspServerSpec,
   ) {}
 
@@ -135,7 +137,13 @@ class LspClient {
     }
     const failures: string[] = [];
     for (const server of servers) {
-      const client = new LspClient(cwd, adapter.id, server);
+      const client = new LspClient(
+        cwd,
+        adapter.id,
+        adapter.lspLanguageId ?? adapter.id,
+        adapter.lsp?.initializationOptions,
+        server,
+      );
       try {
         await client.start();
         return client;
@@ -202,6 +210,9 @@ class LspClient {
         clientInfo: { name: "astrolabe" },
         rootUri,
         workspaceFolders: [{ uri: rootUri, name: basename(this.cwd) }],
+        ...(this.initializationOptions === undefined
+          ? {}
+          : { initializationOptions: this.initializationOptions }),
         capabilities: {
           general: { positionEncodings: ["utf-16"] },
           workspace: {
@@ -282,7 +293,7 @@ class LspClient {
     }
     const version = (previous?.version ?? 0) + 1;
     this.notify("textDocument/didOpen", {
-      textDocument: { uri, languageId: this.languageId, version, text: source },
+      textDocument: { uri, languageId: this.lspLanguageId, version, text: source },
     });
     this.opened.set(path, { source, version });
   }

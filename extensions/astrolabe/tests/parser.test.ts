@@ -4,7 +4,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { typescriptAdapter } from "../languages/typescript/config.ts";
-import type { LanguageAdapter } from "./language-profile.ts";
+import type { LanguageAdapter } from "../src/language-profile.ts";
 import {
   byteIndexToStringIndex,
   cacheFile,
@@ -17,7 +17,7 @@ import {
   startParserCaches,
   stringIndexToByteIndex,
   withParserActivity,
-} from "./parser.ts";
+} from "../src/parser.ts";
 
 test("parses TypeScript and preserves source ranges", async () => {
   const file = await parseSource("fixture.ts", "const answer: number = 42;\n");

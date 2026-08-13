@@ -36,6 +36,7 @@ export interface LocateRequest {
   scope: string;
   symbols?: string[];
   terms?: string[];
+  language?: LanguageId;
   maxCandidates?: number;
 }
 

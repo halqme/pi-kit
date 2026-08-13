@@ -8,7 +8,7 @@ import {
   resolveExistingPath,
   resolveExistingScope,
   sourceFilesInScope,
-} from "./path.ts";
+} from "../src/path.ts";
 
 test("resolves existing files using real paths", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-path-"));

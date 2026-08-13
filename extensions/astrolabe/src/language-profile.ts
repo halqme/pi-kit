@@ -16,6 +16,7 @@ export interface LspServerSpec {
 
 export interface LspProfile {
   servers: readonly LspServerSpec[];
+  initializationOptions?: unknown;
 }
 
 export type SyntaxSearchKind = "function" | "call" | "import";
@@ -23,8 +24,10 @@ export type SyntaxSearchKind = "function" | "call" | "import";
 export interface LanguageAdapter {
   id: string;
   extensions: readonly string[];
+  autoDetect?: boolean;
   grammar: GrammarDescriptor;
   lsp?: LspProfile;
+  lspLanguageId?: string;
   outlineQuery: string;
   labelsQuery: string;
   searchQueries: Record<SyntaxSearchKind, string>;
@@ -73,7 +76,13 @@ export function adapterForPath(path: string, language?: LanguageId): LanguageAda
   const extension = extname(path).toLowerCase();
   if (explicitlyUnsupportedExtensions.has(extension)) return undefined;
   if (language) return adaptersById.get(language);
-  return adapters.find((adapter) => adapter.extensions.includes(extension));
+  return adapters.find(
+    (adapter) => adapter.autoDetect !== false && adapter.extensions.includes(extension),
+  );
+}
+
+export function adapterSupportsPath(adapter: LanguageAdapter, path: string): boolean {
+  return adapter.extensions.includes(extname(path).toLowerCase());
 }
 
 export function requireAdapterForPath(path: string, language?: LanguageId): LanguageAdapter {

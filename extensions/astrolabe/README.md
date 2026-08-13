@@ -61,8 +61,11 @@ continuation
 LSPは任意機能です。Astrolabeはlanguage serverを自動インストールしません。PATH上で次のサーバーを順に試します。
 
 - TypeScript / JavaScript: `typescript-language-server --stdio`
+- Deno: `deno lsp`（`deno`がPATHにある場合）
 - Go: `gopls`
 - Python: `basedpyright-langserver --stdio`、次に`pyright-langserver --stdio`
+
+Denoは`deno`という独立した言語IDで選択できます。`.ts`、`.mts`、`.cts`は既存のTypeScript自動判定を維持するため、Denoとして扱う場合は`language: "deno"`を明示します。DenoアダプターのTree-sitter解析は`deno`バイナリがなくても利用できます。Deno LSPへは、サーバーが受け付ける`typescript`のlanguage IDと`{ "enable": true }`の初期化オプションを送ります。
 
 `locate`はLSPが設定されている言語ではTree-sitterとLSPを並行して使います。LSPを起動できない場合はそのsemantic signalだけを欠いた状態でstructural resolutionを継続します。`rename`は意味論的なWorkspaceEditが必要なので、サーバーがなければ`lsp_unavailable`を返します。現在はUTF-16 position encodingだけを受け付けます。
 

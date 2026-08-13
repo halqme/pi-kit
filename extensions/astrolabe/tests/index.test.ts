@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import astrolabe from "./index.ts";
+import astrolabe from "../index.ts";
 
 interface CapturedTool {
   execute: (...args: unknown[]) => Promise<unknown>;

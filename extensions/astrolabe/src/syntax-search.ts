@@ -2,12 +2,13 @@ import { Query, type Node } from "web-tree-sitter";
 import {
   adapterForLanguage,
   adapterForPath,
+  adapterSupportsPath,
   requireAdapterForPath,
   type LanguageId,
 } from "./language-profile.ts";
 import { HandleStore, type NodeHandle } from "./node-handles.ts";
 import { parseFile, sourceOf, type ParsedFile } from "./parser.ts";
-import { sourceFilesInScope } from "./path.ts";
+import { resolveExistingScope, sourceFilesInScope } from "./path.ts";
 
 export type SyntaxSearchKind = "function" | "call" | "import";
 
@@ -109,20 +110,25 @@ export async function syntaxSearchDetailed(
   cwd: string,
   handles: HandleStore,
 ): Promise<SyntaxSearchMatch[]> {
-  const paths = await sourceFilesInScope(cwd, requestedScope(params), (path) =>
-    Boolean(adapterForPath(path)),
+  const path = requestedScope(params);
+  const selectedAdapter = params.language ? adapterForLanguage(params.language) : undefined;
+  const scope = params.language ? await resolveExistingScope(cwd, path) : undefined;
+  const paths = await sourceFilesInScope(cwd, path, (candidate) =>
+    selectedAdapter
+      ? scope?.kind === "file"
+        ? Boolean(adapterForPath(candidate, params.language))
+        : adapterSupportsPath(selectedAdapter, candidate)
+      : Boolean(adapterForPath(candidate)),
   );
   const matches: SyntaxSearchMatch[] = [];
-  for (const path of paths) {
-    const adapter = params.language
-      ? adapterForLanguage(params.language)
-      : requireAdapterForPath(path);
-    const file = await parseFile(path, adapter);
+  for (const candidate of paths) {
+    const adapter = selectedAdapter ?? requireAdapterForPath(candidate);
+    const file = await parseFile(candidate, adapter);
     for (const match of collectMatches(file, params, adapter)) {
       const handle = handles.issue(file, match.node, "source");
       matches.push({
         handle,
-        path,
+        path: candidate,
         name: match.name,
         ...(match.source ? { source: match.source } : {}),
         description: describeMatch(file, match),

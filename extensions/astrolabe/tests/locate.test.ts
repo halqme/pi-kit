@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HandleStore } from "./node-handles.ts";
-import { clearFileCache } from "./parser.ts";
-import { locateDetailed } from "./locate.ts";
+import { HandleStore } from "../src/node-handles.ts";
+import { clearFileCache } from "../src/parser.ts";
+import { locateDetailed } from "../src/locate.ts";
 
 test("locate ranks an exact qualified symbol above term-only declarations", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-locate-"));

@@ -1,13 +1,21 @@
 import type { Node } from "web-tree-sitter";
-import { requireAdapterForPath, type LanguageAdapter } from "./language-profile.ts";
+import {
+  adapterForLanguage,
+  adapterForPath,
+  adapterSupportsPath,
+  requireAdapterForPath,
+  type LanguageAdapter,
+  type LanguageId,
+} from "./language-profile.ts";
 import { HandleStore, type NodeHandle } from "./node-handles.ts";
 import { parseFile, sourceOf, type ParsedFile } from "./parser.ts";
-import { sourceFilesInScope } from "./path.ts";
+import { resolveExistingScope, sourceFilesInScope } from "./path.ts";
 
 export interface LocateParams {
   scope: string;
   symbols?: string[];
   terms?: string[];
+  language?: LanguageId;
   maxCandidates?: number;
 }
 
@@ -176,18 +184,19 @@ export async function locateDetailed(
 ): Promise<LocateMatch[]> {
   const symbols = params.symbols ?? [];
   const terms = params.terms ?? [];
-  const paths = await sourceFilesInScope(cwd, params.scope, (path) => {
-    try {
-      requireAdapterForPath(path);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+  const selectedAdapter = params.language ? adapterForLanguage(params.language) : undefined;
+  const scope = params.language ? await resolveExistingScope(cwd, params.scope) : undefined;
+  const paths = await sourceFilesInScope(cwd, params.scope, (path) =>
+    selectedAdapter
+      ? scope?.kind === "file"
+        ? Boolean(adapterForPath(path, params.language))
+        : adapterSupportsPath(selectedAdapter, path)
+      : Boolean(adapterForPath(path)),
+  );
   const matches: LocateMatch[] = [];
 
   for (const path of paths) {
-    const adapter = requireAdapterForPath(path);
+    const adapter = selectedAdapter ?? requireAdapterForPath(path);
     const file = await parseFile(path, adapter);
     const visit = (node: Node): void => {
       if (adapter.declarationNodeTypes.has(node.type)) {

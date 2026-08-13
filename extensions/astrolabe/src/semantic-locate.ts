@@ -1,5 +1,10 @@
 import { fileURLToPath } from "node:url";
-import { adapterForLanguage, adapterForPath, type LanguageAdapter } from "./language-profile.ts";
+import {
+  adapterForLanguage,
+  adapterForPath,
+  adapterSupportsPath,
+  type LanguageAdapter,
+} from "./language-profile.ts";
 import {
   declarationAtIndex,
   locateDetailed,
@@ -91,6 +96,10 @@ function mergeMatches(
 }
 
 async function adaptersToQuery(params: LocateParams, cwd: string): Promise<LanguageAdapter[]> {
+  if (params.language) {
+    const adapter = adapterForLanguage(params.language);
+    return adapter.lsp ? [adapter] : [];
+  }
   const paths = await sourceFilesInScope(cwd, params.scope, (path) =>
     Boolean(adapterForPath(path)),
   );
@@ -141,7 +150,13 @@ async function semanticMatches(
         continue;
       }
       if (!inScope(scope, path)) continue;
-      const actualAdapter = adapterForPath(path);
+      const actualAdapter = params.language
+        ? scope.kind === "file"
+          ? adapterForPath(path, params.language)
+          : adapterSupportsPath(adapter, path)
+            ? adapter
+            : undefined
+        : adapterForPath(path);
       if (!actualAdapter || actualAdapter.id !== adapter.id) continue;
       const file = await parseFile(path, actualAdapter);
       const index = positionToStringIndex(file.source, symbol.range.start);
