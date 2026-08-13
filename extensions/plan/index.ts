@@ -17,7 +17,7 @@ export default function planExtension(pi: ExtensionAPI): void {
     handler: async (args, ctx) => {
       const input = args.trim();
       if (input === "light") {
-        await ctx.ui.notify("Light plan requested.", "info");
+        ctx.ui.notify("Light plan requested.", "info");
         pi.sendUserMessage(
           "Create a concise 2-4 step light plan before the first implementation or research tool call. Identify independently verifiable workstreams and delegation candidates; do not invoke the full grill/planner/runner workflow.",
           { deliverAs: "followUp" },
@@ -51,7 +51,7 @@ export default function planExtension(pi: ExtensionAPI): void {
         );
         return;
       }
-      await ctx.ui.notify("Plan workflow started: grill → planner → runner.", "info");
+      ctx.ui.notify("Plan workflow started: grill → planner → runner.", "info");
       pi.sendUserMessage(
         input ||
           "Start the plan workflow. Ground the repository, clarify intent, challenge the design, and resolve the architecture.",
