@@ -15,12 +15,13 @@ interface SyntaxResponse {
   action: string;
   outline?: string;
   source?: string;
+  message?: string;
   data?: {
     outline?: string;
     source?: string;
     matchCount?: number;
     candidateCount?: number;
-    mode?: "source" | "cards";
+    mode?: "source" | "cards" | "none";
     candidates?: Array<{
       continuation: { token: string };
       name: string;
@@ -118,7 +119,7 @@ test("inspect path returns an executable next action and continuation source loo
   assert.match(sourcedResponse.source ?? "", /return 1/);
   assert.equal("structure" in (sourcedResponse.data ?? {}), false);
   assert.doesNotMatch(sourced.content[0]?.text ?? "", /\n/);
-  assert.equal(sourcedResponse.next?.[0]?.action, "replace");
+  assert.equal(sourcedResponse.next?.[0]?.action, "edit");
 });
 
 test("inspect_many reads selected continuations across files without proposing cross-file mutation", async () => {
@@ -183,7 +184,7 @@ test("locate returns a ranked source-inspected candidate usable for direct repla
   assert.match(candidate?.source ?? "", /return input\.trim/);
 
   const replaced = await call(tool, dir, {
-    action: "replace",
+    action: "edit",
     continuation: candidate?.continuation,
     replacement: "parse(input: string) { return input.toLowerCase(); }",
   });
@@ -242,17 +243,19 @@ test("locate rejects missing hints and returns no-candidate failures", async () 
   const missingHint = await callFailure(tool, dir, { action: "locate", scope: "sample.ts" });
   assert.equal(missingHint.ok, false);
   assert.equal(missingHint.error?.code, "locate_requires_hint");
-  const noCandidates = await callFailure(tool, dir, {
+  const noCandidatesResult = await call(tool, dir, {
     action: "locate",
     scope: "sample.ts",
     symbols: ["missing"],
   });
-  assert.equal(noCandidates.ok, false);
-  assert.equal(noCandidates.error?.code, "no_candidates");
-  assert.match(noCandidates.error?.message ?? "", /locate resolves declarations/);
+  const noCandidates = responseOf(noCandidatesResult);
+  assert.equal(noCandidates.ok, true);
+  assert.equal(noCandidates.message, "no_match");
+  assert.equal(noCandidates.data?.candidateCount, 0);
+  assert.deepEqual(noCandidates.data?.candidates, []);
 });
 
-test("directory search returns continuations usable for direct replacement", async () => {
+test("directory search returns continuations usable for edit", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
   const path = join(dir, "sample.ts");
   await writeFile(path, "function answer() { return 1; }\nanswer();\n");
@@ -272,7 +275,7 @@ test("directory search returns continuations usable for direct replacement", asy
   assert.ok(continuation);
 
   const replaced = await call(tool, dir, {
-    action: "replace",
+    action: "edit",
     continuation,
     replacement: "function answer() { return 2; }",
   });
@@ -280,86 +283,47 @@ test("directory search returns continuations usable for direct replacement", asy
   assert.match(await readFile(path, "utf8"), /return 2/);
 });
 
-test("replace_many atomically replaces multiple continuations in one file", async () => {
+test("edit invalidates its old continuation and returns a fresh recovery target", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
   const path = join(dir, "sample.ts");
-  await writeFile(path, "function first() { return 1; }\nfunction second() { return 2; }\n");
+  await writeFile(path, "function answer() { return 1; }\n");
   const tool = setup(dir);
-  const outlined = await call(tool, dir, {
-    action: "inspect",
-    path: "sample.ts",
-    detail: "outline",
-  });
-  const next = responseOf(outlined).next ?? [];
-  assert.equal(next.length, 2);
+  const located = responseOf(
+    await call(tool, dir, {
+      action: "locate",
+      scope: "sample.ts",
+      symbols: ["answer"],
+      maxCandidates: 1,
+    }),
+  );
+  const continuation = located.data?.candidates?.[0]?.continuation;
+  assert.ok(continuation);
 
-  const replaced = await call(tool, dir, {
-    action: "replace_many",
-    targets: next.map((action, index) => ({
-      continuation: (action as { continuation: { token: string } }).continuation,
-      replacement: `function ${index === 0 ? "first" : "second"}() { return ${index + 3}; }`,
-    })),
+  const edited = responseOf(
+    await call(tool, dir, {
+      action: "edit",
+      continuation,
+      replacement: "function answer() { return 2; }",
+    }),
+  );
+  assert.equal(edited.ok, true);
+  const next = edited.next?.[0];
+  assert.ok(next);
+  assert.equal(next.action, "inspect");
+
+  const reused = await callFailure(tool, dir, {
+    action: "edit",
+    continuation,
+    replacement: "function answer() { return 3; }",
   });
-  assert.equal(responseOf(replaced).ok, true);
-  const output = await readFile(path, "utf8");
-  assert.match(output, /function first\(\) \{ return 3; \}/);
-  assert.match(output, /function second\(\) \{ return 4; \}/);
+  assert.equal(reused.error?.code, "invalid_continuation");
+
+  const refreshed = responseOf(await call(tool, dir, next));
+  assert.equal(refreshed.ok, true);
+  assert.match(refreshed.source ?? "", /return 2/);
 });
 
-test("replace_many rejects a stale target without writing", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
-  const path = join(dir, "sample.ts");
-  await writeFile(path, "function first() { return 1; }\nfunction second() { return 2; }\n");
-  const tool = setup(dir);
-  const outlined = await call(tool, dir, {
-    action: "inspect",
-    path: "sample.ts",
-    detail: "outline",
-  });
-  const next = responseOf(outlined).next ?? [];
-  await writeFile(path, "function first() { return 99; }\nfunction second() { return 2; }\n");
-
-  const response = await callFailure(tool, dir, {
-    action: "replace_many",
-    targets: next.map((action) => ({
-      continuation: (action as { continuation: { token: string } }).continuation,
-      replacement: "function changed() { return 0; }",
-    })),
-  });
-  assert.equal(response.ok, false);
-  assert.equal(response.error?.code, "stale_node");
-  assert.match(await readFile(path, "utf8"), /return 99/);
-});
-
-test("replace_many rejects a replacement that introduces syntax errors", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
-  const path = join(dir, "sample.ts");
-  await writeFile(path, "function first() { return 1; }\nfunction second() { return 2; }\n");
-  const tool = setup(dir);
-  const outlined = await call(tool, dir, {
-    action: "inspect",
-    path: "sample.ts",
-    detail: "outline",
-  });
-  const next = responseOf(outlined).next ?? [];
-  const replaced = await callFailure(tool, dir, {
-    action: "replace_many",
-    targets: [
-      {
-        continuation: (next[0] as { continuation: { token: string } }).continuation,
-        replacement: "function broken() {",
-      },
-      {
-        continuation: (next[1] as { continuation: { token: string } }).continuation,
-        replacement: "function alsoBroken() {",
-      },
-    ],
-  });
-  assert.equal(replaced.ok, false);
-  assert.match(await readFile(path, "utf8"), /function first\(\) \{ return 1; \}/);
-});
-
-test("replace rejects a changed target without writing and returns recovery", async () => {
+test("edit rejects a changed target without writing and returns recovery", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
   const path = join(dir, "sample.ts");
   await writeFile(path, "function answer() { return 1; }\n");
@@ -378,7 +342,7 @@ test("replace rejects a changed target without writing and returns recovery", as
   await writeFile(path, "function answer() { return 99; }\n");
 
   const replacedResponse = await callFailure(tool, dir, {
-    action: "replace",
+    action: "edit",
     continuation,
     replacement: "function answer() { return 2; }",
   });

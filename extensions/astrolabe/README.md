@@ -6,14 +6,14 @@ Astrolabeがコードで強制するのは、continuationの有効性、対象�
 
 ## `astrolabe` tool
 
-`action`で`locate`、`search`、`inspect`、`inspect_many`、`replace`、`replace_many`、`rename`を選びます。
+`action`で`locate`、`search`、`inspect`、`inspect_many`、`edit`、`rename`を選びます。
 
-- `locate`は編集意図に含まれる`symbols`または`terms`から宣言ノードを順位付けします。Tree-sitterの構造・本文signalと、利用可能なLSPの`workspace/symbol`を独立したcandidate generatorとして並行して使い、同じconcrete syntax nodeを支持するevidenceは加算してconfidenceを上げます。LSPが利用できなければstructural/textual signalだけで同じ処理を続行します。完全一致symbolで明確に首位かつ本文が6,000 bytes以下なら`mode: "source"`として本文も返し、それ以外は`mode: "cards"`としてシグネチャ、親宣言、flow、範囲、continuationを返します。
-- `search`は構文形状による補助探索です。関数・呼出し・importを検索し、`locate`で対象を特定できない調査に使います。
+- `locate`は編集意図に含まれる`symbols`または`terms`から、関数・型などの宣言ノードを順位付けします。Tree-sitterの構造・本文signalと、利用可能なLSPの`workspace/symbol`を独立したcandidate generatorとして並行して使い、同じconcrete syntax nodeを支持するevidenceは加算してconfidenceを上げます。`locate`は概念検索や任意文字列検索には使いません。候補がない場合は`ok: true`の`message: "no_match"`と空のcandidate listを返します。
+- `search`は対応言語の関数・呼出し・importを構文形状で探す補助探索です。正確な識別子や構文上の対象が分かっているときに使います。
+- `bm25_search`は、対象ファイルやシンボルがまだ分からず、「設定読み込みの失敗処理」のような概念・責務・挙動から関連箇所を探すために使います。BM25の結果にはAstrolabeのcontinuationは付きません。
 - `inspect`は`path`でoutlineを取得するか、continuationで選んだ構文ノードのsourceを取得します。
-- `inspect_many`は複数continuationをファイルをまたいで並列にsourceまで取得します。対象がすべて同一ファイルなら`replace_many`用のテンプレートも返し、複数ファイルにまたがる場合は読み取り結果だけを返します。
-- `replace`は有効なcontinuationと完全な`replacement`を受け、現在のsource hash、ノード型・範囲・親文脈を再検証してから保存します。
-- `replace_many`は同一ファイル内の複数continuationを全件検証し、置換後の構文検査に成功した場合だけatomicに保存します。
+- `inspect_many`は複数continuationをファイルをまたいで並列にsourceまで取得する、読み取り専用のbatchです。mutation actionは提案しません。
+- `edit`は有効なcontinuationと完全な`replacement`を受け、現在のsource hash、ノード型・範囲・親文脈を再検証してから保存します。成功後は古い対象を使い回さず、返された`next`から再inspectします。
 - `rename`は宣言continuationと`newName`を受け、LSPの`textDocument/rename`に意味論的なWorkspaceEditを生成させます。AstrolabeはWorkspaceEditを即適用せず、対象ファイルのstaleness、範囲重複、対応言語、置換後の構文を検証してからcommitします。
 
 ```json
@@ -37,7 +37,7 @@ edit intent
   -> candidate fusion / ranking
   -> concrete syntax node
   -> continuation
-  -> replace / replace_many
+  -> edit
   -> stale + syntax validation
   -> commit
 ```
@@ -75,11 +75,11 @@ WorkspaceEditは既存のAstrolabe対応ソースへのtext editだけを受理�
 
 `next`はpermissionではなく、結果から見た通常の最短経路です。
 
-- `locate(mode: "source")` → 通常はそのまま`replace`。同じnodeを再度`inspect`しません。
-- `locate(mode: "cards")` → cardだけでreplacementが決まるなら直接`replace`。本文が必要なら選んだcardだけ`inspect`します。
-- 複数cardで本文が必要 → `inspect_many`。同一ファイルなら`replace_many`を次手として返し、複数ファイルなら読み取りだけをbatchします。
-- シンボル自体のrename → `locate` → `rename`。referencesを手作業で`replace_many`しません。
-- `locate`で対象を絞れない → 関数・呼出し・importなら`search`、より広い構造確認ならoutline `inspect`へ広げます。任意の文字列検索は通常のtext retrievalを使います。
+- `locate(mode: "source")` → 通常はそのまま`edit`。同じnodeを再度`inspect`しません。
+- `locate(mode: "cards")` → cardだけでreplacementが決まるなら直接`edit`。本文が必要なら選んだcardだけ`inspect`します。
+- 複数cardで本文が必要 → `inspect_many`で読み取ります。複数箇所のmutationは、各対象を再確認して単一`edit`として実行します。
+- シンボル自体のrename → `locate` → `rename`。referencesを手作業で編集しません。
+- `locate`で対象を絞れない → 概念・責務なら`bm25_search`、関数・呼出し・importなら`search`、より広い構造確認ならoutline `inspect`へ広げます。任意の文字列検索は通常のtext retrievalを使います。
 
 ## ハンドルと位置
 

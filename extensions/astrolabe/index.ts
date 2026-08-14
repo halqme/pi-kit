@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { type ExtensionAPI, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { editContinuationDetailed, editManyContinuationDetailed } from "./src/edit.ts";
+import { editContinuationDetailed } from "./src/edit.ts";
 import { inspect } from "./src/inspect.ts";
 import {
   adapterForIdentity,
@@ -30,12 +30,12 @@ import { renameContinuationDetailed } from "./src/rename.ts";
 import { locateResolvedDetailed } from "./src/semantic-locate.ts";
 import { syntaxSearchDetailed } from "./src/syntax-search.ts";
 
-const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDescription} source, use locate to identify the target and return either its body or compact structural cards; use rename for semantic symbol renames when LSP is available; use read/edit for new, generated, configuration, or unsupported files.`;
+const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDescription} source, use astrolabe to resolve a concrete syntax target and use edit for a complete replacement; use rename for semantic symbol renames when LSP is available. Use bm25_search for unfamiliar concepts, responsibilities, or behavior; use search for exact syntax-shaped functions, calls, or imports; use ordinary text search for arbitrary literals. A no_match result from locate is a normal empty result; choose a different discovery route instead of retrying the same hints. Use read/edit for new, generated, configuration, or unsupported files.`;
 
 const GUIDANCE = [
   `For existing ${supportedLanguageDescription} source, use astrolabe before read or edit. Do not use read/edit for a supported existing source file unless astrolabe reports unsupported, generated, or configuration content.`,
-  "For an edit intent or known symbol, use locate first. locate fuses Tree-sitter structural/textual evidence with LSP workspace-symbol evidence whenever a configured language server is available; corroborating signals for the same concrete node increase its rank, while unavailable LSP simply leaves structural resolution in place. If locate returns mode=source, use that source and continuation directly with replace; do not inspect the same candidate again. If it returns mode=cards, inspect only when the card does not provide enough context for the intended replacement. When several cards need source context, inspect them together with inspect_many; it can batch reads across files and only proposes replace_many when all selected targets share one file. Use search for functions, calls, or imports, and use outline inspection when locate cannot identify the target.",
-  "For a semantic symbol rename, pass the located declaration continuation to rename instead of emulating references with replace_many. The language server proposes the WorkspaceEdit; Astrolabe validates staleness and syntax before committing it.",
+  "Choose discovery by intent: bm25_search finds conceptually relevant files and passages when the location or symbol is unknown; search finds exact syntax-shaped functions, calls, or imports; locate resolves known declaration/edit targets using Tree-sitter and optional LSP evidence. locate is not BM25 or arbitrary text search. A no_match result is a normal empty result; choose a different discovery route instead of retrying the same hints. If locate returns mode=source, use that source and continuation directly with edit; do not inspect the same candidate again. If it returns mode=cards, inspect only when the card does not provide enough context for the intended replacement. Use inspect_many only as a read-only batch for selected continuations.",
+  "For a semantic symbol rename, pass the located declaration continuation to rename. The language server proposes the WorkspaceEdit; Astrolabe validates staleness and syntax before committing it.",
   "Use read or normal edits for unsupported languages, generated/configuration files, new files, or when astrolabe explicitly reports that the target is not applicable.",
 ];
 
@@ -69,12 +69,15 @@ const actionSchema = Type.Union([
       minItems: 1,
       maxItems: 10,
       description:
-        "Selected continuations to inspect concurrently. Targets may span files; replace_many is suggested only when they share one file.",
+        "Read selected continuations concurrently. This action is read-only and never proposes a mutation batch.",
     }),
   }),
   Type.Object({
     action: Type.Literal("locate"),
-    scope: Type.String({ description: "Existing supported source file or directory scope" }),
+    scope: Type.String({
+      description:
+        "Supported source file or directory; locate resolves declaration/edit targets, not arbitrary text or conceptual behavior",
+    }),
     language: Type.Optional(StringEnum(supportedLanguageIds)),
     symbols: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
     terms: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
@@ -95,21 +98,11 @@ const actionSchema = Type.Union([
     source: Type.Optional(Type.String()),
   }),
   Type.Object({
-    action: Type.Literal("replace"),
+    action: Type.Literal("edit"),
     continuation: Type.Object({
-      token: Type.String({ description: "Continuation returned by Astrolabe" }),
+      token: Type.String({ description: "Continuation returned by locate, search, or inspect" }),
     }),
-    replacement: Type.String(),
-  }),
-  Type.Object({
-    action: Type.Literal("replace_many"),
-    targets: Type.Array(
-      Type.Object({
-        continuation: Type.Object({ token: Type.String() }),
-        replacement: Type.String(),
-      }),
-      { minItems: 1 },
-    ),
+    replacement: Type.String({ description: "Complete replacement text for the selected node" }),
   }),
   Type.Object({
     action: Type.Literal("rename"),
@@ -145,7 +138,7 @@ function includeSource(matches: readonly LocateMatch[]): boolean {
 function handleResponse(handles: HandleStore, handle: NodeHandle): SyntaxHandle | undefined {
   const token = handles.issueContinuation(handle.id);
   if (!token) return undefined;
-  const capabilities: ContinuationCapability[] = ["inspect", "source", "replace"];
+  const capabilities: ContinuationCapability[] = ["inspect", "source", "edit"];
   if (adapterForIdentity(handle.languageId, handle.grammarId)?.lsp) capabilities.push("rename");
   return {
     continuation: continuation(token),
@@ -192,11 +185,12 @@ async function dispatch(
       lsp,
     );
     if (matches.length === 0) {
-      return failure(
-        "locate",
-        "no_candidates",
-        "No declaration candidates matched. locate resolves declarations; use search for functions, calls, or imports, and use ordinary text retrieval for arbitrary literals.",
-      );
+      return {
+        ok: true,
+        action: "locate",
+        message: "no_match",
+        data: { candidateCount: 0, mode: "none", candidates: [] },
+      };
     }
     const includeTopSource = includeSource(matches);
     if (includeTopSource && matches[0]) handles.markSourceInspected(matches[0].handle.id);
@@ -236,7 +230,7 @@ async function dispatch(
         ? {
             next: [
               {
-                action: "replace" as const,
+                action: "edit" as const,
                 continuation: directCandidate.continuation,
                 replacement: "",
               },
@@ -314,25 +308,10 @@ async function dispatch(
       type: target.handle.type,
       source: target.output,
     }));
-    const firstPath = sources[0]?.path;
-    const samePath = Boolean(firstPath && sources.every((source) => source.path === firstPath));
     return {
       ok: true,
       action: "inspect_many",
       data: { sources },
-      ...(samePath
-        ? {
-            next: [
-              {
-                action: "replace_many" as const,
-                targets: sources.map((source) => ({
-                  continuation: source.continuation,
-                  replacement: "",
-                })),
-              },
-            ],
-          }
-        : {}),
     };
   }
 
@@ -406,7 +385,7 @@ async function dispatch(
           ? {
               next: [
                 {
-                  action: "replace" as const,
+                  action: "edit" as const,
                   continuation: responseHandles[0].continuation,
                   replacement: "",
                 },
@@ -436,70 +415,20 @@ async function dispatch(
     };
   }
 
-  if (request.action === "replace_many") {
-    const firstTarget = request.targets[0];
-    if (!firstTarget || !isContinuation(firstTarget.continuation)) {
-      return failure(
-        "replace_many",
-        "invalid_continuation",
-        "Pass every target continuation unchanged.",
-      );
-    }
-    const target = handles.resolveContinuation(firstTarget.continuation.token);
-    if (!target) {
-      return failure(
-        "replace_many",
-        "invalid_continuation",
-        "The continuation has expired; inspect source again.",
-      );
-    }
-    return withFileMutationQueue(resolve(cwd, target.path), async () => {
-      const result = await editManyContinuationDetailed(request, cwd, handles);
-      if (!result.message.startsWith("edited ")) {
-        return failure(
-          "replace_many",
-          result.message.split(":")[0] ?? "replace_failed",
-          result.message,
-          [{ action: "inspect", continuation: firstTarget.continuation, detail: "source" }],
-        );
-      }
-      const updated = result.details?.recommendedNextInspectionTarget
-        ? handles.get(result.details.recommendedNextInspectionTarget)
-        : undefined;
-      const nextHandle = updated ? handleResponse(handles, updated) : undefined;
-      return {
-        ok: true,
-        action: "replace_many" as const,
-        message: "ok",
-        ...(nextHandle
-          ? {
-              next: [
-                {
-                  action: "inspect" as const,
-                  continuation: nextHandle.continuation,
-                  detail: "source",
-                },
-              ],
-            }
-          : {}),
-      };
-    });
-  }
-
   if (!isContinuation(request.continuation)) {
-    return failure("replace", "invalid_continuation", "Pass the source continuation unchanged.");
+    return failure("edit", "invalid_continuation", "Pass the source continuation unchanged.");
   }
   const target = handles.resolveContinuation(request.continuation.token);
   if (!target)
     return failure(
-      "replace",
+      "edit",
       "invalid_continuation",
       "The continuation has expired; inspect source again.",
     );
   return withFileMutationQueue(resolve(cwd, target.path), async () => {
     const result = await editContinuationDetailed(request, cwd, handles);
     if (!result.message.startsWith("edited ")) {
-      return failure("replace", result.message.split(":")[0] ?? "replace_failed", result.message, [
+      return failure("edit", result.message.split(":")[0] ?? "edit_failed", result.message, [
         { action: "inspect", continuation: request.continuation, detail: "source" },
       ]);
     }
@@ -509,7 +438,7 @@ async function dispatch(
     const nextHandle = updated ? handleResponse(handles, updated) : undefined;
     return {
       ok: true,
-      action: "replace",
+      action: "edit",
       message: "ok",
       ...(nextHandle
         ? {

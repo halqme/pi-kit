@@ -7,7 +7,7 @@ import { clearFileCache, parseFile } from "../src/parser.ts";
 import { HandleStore } from "../src/node-handles.ts";
 import { edit, editContinuationDetailed } from "../src/edit.ts";
 
-test("replaces an inspected node and rejects stale content", async () => {
+test("replaces an inspected node and invalidates its handle", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tree-edit-"));
   const path = join(dir, "sample.ts");
   await writeFile(path, "function answer() { return 1; }\n");
@@ -28,10 +28,9 @@ test("replaces an inspected node and rejects stale content", async () => {
   );
   assert.match(await readFile(path, "utf8"), /return 2/);
   assert.equal((await parseFile(path)).parseMode, "incremental");
-  await writeFile(path, "function answer() { return 3; }\n");
-  assert.match(
-    await edit({ path, nodeId: handle.id, replacement: "return 4;" }, dir, handles),
-    /stale_node/,
+  await assert.rejects(
+    edit({ path, nodeId: handle.id, replacement: "return 4;" }, dir, handles),
+    /Unknown nodeId:/,
   );
   clearFileCache(path);
 });

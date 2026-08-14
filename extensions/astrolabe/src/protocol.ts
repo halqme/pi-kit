@@ -1,16 +1,9 @@
 import type { LanguageId } from "./language-profile.ts";
 import type { SyntaxSearchKind } from "./syntax-search.ts";
 
-export type SyntaxAction =
-  | "inspect"
-  | "inspect_many"
-  | "locate"
-  | "search"
-  | "replace"
-  | "replace_many"
-  | "rename";
+export type SyntaxAction = "inspect" | "inspect_many" | "locate" | "search" | "edit" | "rename";
 export type InspectDetail = "outline" | "source";
-export type ContinuationCapability = "inspect" | "source" | "replace" | "rename";
+export type ContinuationCapability = "inspect" | "source" | "edit" | "rename";
 
 /** Opaque, session-scoped reference. Pass this object unchanged to the next syntax action. */
 export interface Continuation {
@@ -49,18 +42,10 @@ export interface SearchRequest {
   source?: string;
 }
 
-export interface ReplaceRequest {
-  action: "replace";
+export interface EditRequest {
+  action: "edit";
   continuation: Continuation;
   replacement: string;
-}
-
-export interface ReplaceManyRequest {
-  action: "replace_many";
-  targets: Array<{
-    continuation: Continuation;
-    replacement: string;
-  }>;
 }
 
 export interface RenameRequest {
@@ -74,8 +59,7 @@ export type SyntaxRequest =
   | InspectManyRequest
   | LocateRequest
   | SearchRequest
-  | ReplaceRequest
-  | ReplaceManyRequest
+  | EditRequest
   | RenameRequest;
 
 export interface SyntaxHandle {

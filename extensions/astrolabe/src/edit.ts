@@ -112,10 +112,7 @@ async function editImpl(
   }
   const invalidatedHandles = handles
     .list(path)
-    .filter(
-      (handle) =>
-        handle.id !== old.id && handle.startIndex < endIndex && handle.endIndex > startIndex,
-    )
+    .filter((handle) => handle.startIndex < endIndex && handle.endIndex > startIndex)
     .map((handle) => handle.id);
   for (const id of invalidatedHandles) handles.delete(id);
 
