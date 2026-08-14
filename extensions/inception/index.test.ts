@@ -6,13 +6,19 @@ import { classifyTool, createTurnObservation, observeToolResult } from "./observ
 import { buildAgentStartPrompt } from "./prompts/agent-start.ts";
 import { buildTurnBoundaryPrompt } from "./prompts/turn-boundary.ts";
 
-test("agent-start prompt injects the repo-managed policy only when it is missing", () => {
-  const prompt = buildAgentStartPrompt();
-  assert.match(prompt, /Follow the user's explicit request/);
+test("agent-start prompt injects policy and project guidance only when needed", () => {
+  const prompt = buildAgentStartPrompt(process.cwd(), "extensions/inception/index.ts");
+  assert.match(prompt, /# Pi Kit Agent Policy/);
   assert.match(prompt, /YAGNI/);
+  assert.match(prompt, /Target language from the request: typescript/);
+  assert.match(prompt, /language: "typescript"/);
 
-  const loaded = buildAgentStartPrompt([{ content: prompt }]);
-  assert.equal(loaded, "");
+  const loaded = buildAgentStartPrompt(process.cwd(), "extensions/inception/index.ts", [
+    { content: prompt },
+  ]);
+  assert.doesNotMatch(loaded, /Follow the user's explicit request/);
+  assert.match(loaded, /Project context detected/);
+  assert.match(loaded, /language: "typescript"/);
 });
 
 test("tool classification distinguishes edits, checks, and async launches", () => {
@@ -57,7 +63,7 @@ test("turn-boundary prompt treats synchronous checks as evidence after mutation"
   assert.match(buildTurnBoundaryPrompt(observation) ?? "", /Checks passed/);
 });
 
-test("extension injects baseline in system prompt and one transient reminder after mutation", async () => {
+test("extension injects shared policy, project guidance, and one transient reminder", async () => {
   const handlers = new Map<string, (...args: any[]) => any>();
   const pi = {
     on(name: string, handler: (...args: any[]) => any) {
@@ -67,21 +73,23 @@ test("extension injects baseline in system prompt and one transient reminder aft
   inceptionExtension(pi);
 
   const before = await handlers.get("before_agent_start")?.({
-    prompt: "fix this",
+    prompt: "extensions/inception/index.ts を確認して",
     systemPrompt: "base",
   });
   assert.match(before.systemPrompt, /^base/);
   assert.match(before.systemPrompt, /# Pi Kit Agent Policy/);
-  assert.match(before.systemPrompt, /Follow the user's explicit request/);
+  assert.match(before.systemPrompt, /Target language from the request: typescript/);
 
   const alreadyLoaded = await handlers.get("before_agent_start")?.({
-    prompt: "inspect this",
+    prompt: "extensions/inception/index.ts を確認して",
     systemPrompt: "base",
     systemPromptOptions: {
+      cwd: process.cwd(),
       contextFiles: [{ path: "/repo/AGENTS.md", content: before.systemPrompt }],
     },
   });
-  assert.equal(alreadyLoaded, undefined);
+  assert.match(alreadyLoaded.systemPrompt, /Project context detected/);
+  assert.doesNotMatch(alreadyLoaded.systemPrompt, /# Pi Kit Agent Policy/);
 
   await handlers.get("tool_result")?.({
     toolName: "edit",

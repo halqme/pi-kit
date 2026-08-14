@@ -21,14 +21,14 @@
 - Do not silently revert, overwrite, or reshape a human change merely to match an earlier plan or simplify the implementation.
 - If a human change conflicts with the explicit current request, a project invariant, or safe execution and cannot be reconciled, explain the concrete conflict and ask the human before changing it.
 
-## Current stack
+## Priority skills
 
-- Use the repository's existing Bun, TypeScript, Oxfmt, Oxlint, and test commands; do not introduce another toolchain without evidence.
-- Use `bm25_search` to discover an unfamiliar responsibility or behavior before narrowing to exact symbols or literals.
-- For existing Deno, Go, JavaScript, Python, or TypeScript source, use `astrolabe` first: locate the target, inspect only the needed nodes, and replace or rename through its validated handles. Use `read` and ordinary edits for Markdown, configuration, new, generated, or unsupported files.
-- Use `agent_team` for read-only committee or adversarial review. Delegate implementation only when the workstream is independent and the parent retains scope and verification; coordinate child Pi, terminal, and intercom lifecycles explicitly.
-- Use `background_process` for detached non-interactive commands and `terminal` for interactive TTY work, control keys, or watches. Use bounded loops and approval-gated planning or runner workflows only when the task needs them.
-- Use the matching task skill when one exists, especially for implementation, test design, diagnosis, safe operation, delegation, verification, and completion assessment.
+- Read `implement-change` when modifying project artifacts, and `test-design` before changing or designing tests.
+- Read `verify-work` before every completion claim, then read `assess-task-completion` immediately before reporting completion.
+- Read `diagnose-problem` when an observed failure, regression, or unexpected result needs explanation.
+- Read `perform-safely` before destructive, externally visible, privileged, sensitive, or difficult-to-recover actions.
+- Read `delegate-task` and `coordinate-pi-execution` when handing work to another Pi or managing a child process, loop, or durable handle.
+- Use other task-specific skills only when their trigger applies; do not load unrelated workflows by default.
 
 ## Verification
 
