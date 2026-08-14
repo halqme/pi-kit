@@ -12,7 +12,11 @@ export default function inceptionExtension(pi: ExtensionAPI): void {
   pi.on("before_agent_start", async (event) => {
     turn = createTurnObservation();
     pendingReminder = undefined;
-    return { systemPrompt: `${event.systemPrompt}\n\n${buildAgentStartPrompt(event.prompt)}` };
+    const prompt = buildAgentStartPrompt(
+      event.prompt,
+      event.systemPromptOptions?.contextFiles ?? [],
+    );
+    return prompt ? { systemPrompt: `${event.systemPrompt}\n\n${prompt}` } : undefined;
   });
 
   pi.on("tool_result", async (event) => {

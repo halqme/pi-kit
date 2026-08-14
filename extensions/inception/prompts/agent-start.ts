@@ -1,15 +1,20 @@
-const CORE_BIAS = [
-  "<inception>",
-  "Engineering bias:",
-  "- Solve the requested problem, not hypothetical future problems.",
-  "- Prefer the smallest complete change. Reuse existing mechanisms before adding abstractions.",
-  "- Complexity needs present evidence. Do not widen scope merely to make a design more general.",
-  "- Repeated deterministic behavior belongs in code; semantic judgment belongs in prompts or skills.",
-  "- Read enough surrounding code to simplify safely instead of patching around incomplete understanding.",
-  "- Verification is part of completion, not a separate optional phase.",
-  "Treat these as default engineering judgment, not a checklist to recite. Do not mention Inception unless it is materially relevant.",
-  "</inception>",
-].join("\n");
+import { readFileSync } from "node:fs";
+
+const GLOBAL_POLICY = readFileSync(new URL("./agents.md", import.meta.url), "utf8").trim();
+
+function normalizePolicy(content: string): string {
+  return content.replace(/\r\n/g, "\n").trim();
+}
+
+const NORMALIZED_GLOBAL_POLICY = normalizePolicy(GLOBAL_POLICY);
+
+type ContextFile = { content: string };
+
+function isGlobalPolicyLoaded(contextFiles: readonly ContextFile[]): boolean {
+  return contextFiles.some(({ content }) =>
+    normalizePolicy(content).includes(NORMALIZED_GLOBAL_POLICY),
+  );
+}
 
 const REQUEST_HINTS: Array<{ when: RegExp; text: string }> = [
   {
@@ -30,9 +35,18 @@ const REQUEST_HINTS: Array<{ when: RegExp; text: string }> = [
   },
 ];
 
-export function buildAgentStartPrompt(userPrompt: string): string {
+export function buildAgentStartPrompt(
+  userPrompt: string,
+  contextFiles: readonly ContextFile[] = [],
+): string {
   const hints = REQUEST_HINTS.filter(({ when }) => when.test(userPrompt)).map(({ text }) => text);
-  return hints.length
-    ? `${CORE_BIAS}\n\nContext for this request:\n${hints.map((hint) => `- ${hint}`).join("\n")}`
-    : CORE_BIAS;
+  const sections: string[] = [];
+
+  if (!isGlobalPolicyLoaded(contextFiles)) sections.push(GLOBAL_POLICY);
+  if (hints.length) {
+    sections.push(`Context for this request:\n${hints.map((hint) => `- ${hint}`).join("\n")}`);
+  }
+  if (sections.length === 0) return "";
+
+  return ["<inception>", ...sections, "</inception>"].join("\n\n");
 }

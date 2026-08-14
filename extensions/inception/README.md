@@ -2,6 +2,12 @@
 
 Always-on engineering-bias reminders for Pi. Inception has no tool, slash command, mode switch, or user-facing state: loading the extension changes the agent's default judgment rather than adding another workflow the user must operate.
 
+## Shared policy
+
+`prompts/agents.md` is the repository-managed source of shared agent instructions. Inception injects its contents at `before_agent_start`, after Pi has assembled the system prompt and loaded its `AGENTS.md` context files. If the same policy is already present in a loaded context file, Inception avoids injecting a duplicate.
+
+The user-global `~/.pi/agent/AGENTS.md` should therefore contain only personal instructions, or be absent. Project-specific instructions remain in each project's own `AGENTS.md`.
+
 ## Injection model
 
 Inception uses two decision boundaries:

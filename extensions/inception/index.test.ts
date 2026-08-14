@@ -6,12 +6,18 @@ import { classifyTool, createTurnObservation, observeToolResult } from "./observ
 import { buildAgentStartPrompt } from "./prompts/agent-start.ts";
 import { buildTurnBoundaryPrompt } from "./prompts/turn-boundary.ts";
 
-test("agent-start prompt keeps core bias and adds request-specific guidance", () => {
+test("agent-start prompt injects repo-managed policy and request-specific guidance", () => {
   const prompt = buildAgentStartPrompt("この設計をリファクタしてバグも修正して");
-  assert.match(prompt, /smallest complete change/);
-  assert.match(prompt, /Repeated deterministic behavior belongs in code/);
+  assert.match(prompt, /Follow explicit user intent/);
+  assert.match(prompt, /Communicate with the user in Japanese/);
   assert.match(prompt, /preserve observable behavior/);
   assert.match(prompt, /causal mechanism/);
+
+  const loaded = buildAgentStartPrompt("この設計をリファクタしてバグも修正して", [
+    { content: prompt },
+  ]);
+  assert.doesNotMatch(loaded, /Follow explicit user intent/);
+  assert.match(loaded, /preserve observable behavior/);
 });
 
 test("tool classification distinguishes edits, checks, and async launches", () => {
@@ -69,6 +75,16 @@ test("extension injects baseline in system prompt and one transient reminder aft
   });
   assert.match(before.systemPrompt, /^base/);
   assert.match(before.systemPrompt, /<inception>/);
+  assert.match(before.systemPrompt, /Follow explicit user intent/);
+
+  const alreadyLoaded = await handlers.get("before_agent_start")?.({
+    prompt: "inspect this",
+    systemPrompt: "base",
+    systemPromptOptions: {
+      contextFiles: [{ path: "/repo/AGENTS.md", content: before.systemPrompt }],
+    },
+  });
+  assert.equal(alreadyLoaded, undefined);
 
   await handlers.get("tool_result")?.({
     toolName: "edit",
