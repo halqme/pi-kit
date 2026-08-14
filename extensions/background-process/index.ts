@@ -72,7 +72,7 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
         details: snapshot,
       },
       snapshot.phase === "unchecked"
-        ? { triggerTurn: true, deliverAs: ctx.isIdle() ? "nextTurn" : "followUp" }
+        ? { triggerTurn: true, deliverAs: "followUp" }
         : { triggerTurn: false, deliverAs: "nextTurn" },
     );
     if (snapshot.phase === "unchecked") await acknowledgeProcess(snapshot.taskDir);

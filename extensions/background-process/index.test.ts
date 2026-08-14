@@ -23,14 +23,14 @@ test("session restore notifies and acknowledges an unchecked process once", asyn
   }
 
   const events = new Map<string, (event: unknown, ctx: ExtensionContext) => Promise<unknown>>();
-  const messages: unknown[] = [];
+  const messages: Array<{ message: unknown; options: unknown }> = [];
   const pi = {
     registerTool() {},
     on(name: string, handler: (event: unknown, ctx: ExtensionContext) => Promise<unknown>) {
       events.set(name, handler);
     },
-    sendMessage(message: unknown) {
-      messages.push(message);
+    sendMessage(message: unknown, options: unknown) {
+      messages.push({ message, options });
     },
   } as unknown as ExtensionAPI;
   const ctx = {
@@ -47,6 +47,7 @@ test("session restore notifies and acknowledges an unchecked process once", asyn
   backgroundProcessExtension(pi);
   await events.get("session_start")?.({ type: "session_start", reason: "resume" }, ctx);
   assert.equal(messages.length, 1);
+  assert.deepEqual(messages[0]?.options, { triggerTurn: true, deliverAs: "followUp" });
   assert.equal((await inspectProcess(started.taskDir)).phase, "completed");
   await events.get("session_compact")?.({ type: "session_compact" }, ctx);
   assert.equal(messages.length, 1);
