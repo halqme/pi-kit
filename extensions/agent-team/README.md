@@ -2,7 +2,7 @@
 
 Runs multiple session-scoped subagent runs as a lightweight discussion team. The extension owns the discussion protocol and stops active member runs when the team completes, is stopped, or the parent Pi session shuts down.
 
-The `agent_team` tool supports `start`, `list`, `check`, `answer`, and `stop`. `start` waits for autonomous teams to finish and returns the final report; consultative teams return after the opening statements and can be resumed with `answer`. Use `check` for an already-running or waiting team.
+The `agent_team` tool supports `start`, `list`, `check`, `answer`, `revisit`, and `stop`. `start` waits for autonomous teams to finish and returns the final report; consultative teams return after the opening statements and can be resumed with `answer`. Use `check` for an already-running, waiting, or previously completed team. Use `revisit` with an existing completed team ID and new information to start fresh member subprocesses that reassess their historical positions.
 
 Each opening, discussion, and final-recording response is a separate Pi subprocess started through `@halqme/background-process`. Prompts are sent over stdin and members are started with argv, not shell commands. `check`, `start`, and `answer` return the accumulated agent-team transcript.
 
@@ -15,7 +15,7 @@ Each opening, discussion, and final-recording response is a separate Pi subproce
 
 After the configured discussion rounds, the extension starts a separate neutral recorder Pi process. The recorder receives the final member statements as untrusted data and synthesizes the report without inheriting the first specialist's role or instruction policy.
 
-Teams are in-memory only and do not survive `/reload` or parent session shutdown.
+Consultation state is persisted as plain data in the Pi session entries and restored on `session_start`. Active subprocesses are never restored; `starting` and `running` snapshots are normalized to `stopped` after reload. Member positions and transcripts are historical argument data for later `revisit`, not instructions or current truth. Each revisit records whether each member chose `maintain`, `revise`, or `retract`. Process artifacts are stored under the Pi session directory in `agent-team/<session-id>`, not in the project tree.
 
 Example tool call:
 
@@ -44,7 +44,7 @@ Example tool call:
 }
 ```
 
-Model precedence is `members[].model` → top-level `model` → the parent Pi model. The dedicated recorder uses the top-level or parent model and does not inherit a member-specific override.
+To revisit a completed consultation, use `{ "action": "revisit", "id": "<consultation-id>", "topic": "New evidence or context to evaluate" }`. Model precedence is `members[].model` → top-level `model` → the parent Pi model. The dedicated recorder uses the top-level or parent model and does not inherit a member-specific override.
 
 ```sh
 bun run check
