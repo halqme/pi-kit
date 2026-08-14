@@ -1,19 +1,25 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import test from "node:test";
 import { agentTeamTaskRoot, ensureAgentTeamTaskRoot } from "./pi-runner.ts";
 
-test("creates the agent-team task root with a gitignore", async () => {
-  const cwd = await mkdtemp(join(tmpdir(), "agent-team-"));
+test("creates the agent-team task root in session storage without project files", async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), "agent-team-project-"));
+  const sessionDir = await mkdtemp(join(tmpdir(), "agent-team-session-"));
   try {
-    const taskRoot = agentTeamTaskRoot(cwd, "session-1");
+    const taskRoot = agentTeamTaskRoot(sessionDir, "session-1");
     await ensureAgentTeamTaskRoot(taskRoot);
 
-    assert.equal(taskRoot, join(cwd, ".pi", "agent-team", "session-1"));
-    assert.equal(await readFile(join(dirname(taskRoot), ".gitignore"), "utf8"), "*");
+    assert.equal(taskRoot, join(sessionDir, "agent-team", "session-1"));
+    await access(taskRoot);
+    await assert.rejects(access(join(projectRoot, ".pi", "agent-team")), { code: "ENOENT" });
+    await assert.rejects(access(join(sessionDir, "agent-team", ".gitignore")), { code: "ENOENT" });
   } finally {
-    await rm(cwd, { recursive: true, force: true });
+    await Promise.all([
+      rm(projectRoot, { recursive: true, force: true }),
+      rm(sessionDir, { recursive: true, force: true }),
+    ]);
   }
 });

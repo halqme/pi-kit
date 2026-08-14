@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   acknowledgeProcess,
   inspectProcess,
@@ -74,9 +74,8 @@ export function createPiAgentFactory(options: PiRunnerOptions): AgentTeamAgentFa
 
 export async function ensureAgentTeamTaskRoot(taskRoot: string): Promise<void> {
   await mkdir(taskRoot, { recursive: true });
-  await writeFile(join(dirname(taskRoot), ".gitignore"), "*");
 }
 
-export function agentTeamTaskRoot(cwd: string, sessionId: string): string {
-  return join(cwd, ".pi", "agent-team", sessionId);
+export function agentTeamTaskRoot(sessionDir: string, sessionId: string): string {
+  return join(sessionDir, "agent-team", sessionId);
 }
