@@ -12,10 +12,10 @@ The user-global `~/.pi/agent/AGENTS.md` should therefore contain only personal i
 
 Inception uses two decision boundaries:
 
-- `before_agent_start`: appends a short engineering bias to the system prompt for the current request. `prompts/agent-start.ts` selects request-specific guidance for refactoring, design, debugging, or review work.
-- `tool_result` + `turn_end` + `context`: observes tool outcomes during a turn, builds at most one contextual reminder with `prompts/turn-boundary.ts`, then injects it as a hidden transient custom message before the next LLM call. Read-only turns produce no reminder.
+- `before_agent_start`: injects the repository-managed shared policy when Pi has not already loaded it from an `AGENTS.md` context file. `prompts/agent-start.ts` deliberately has no request-pattern matching.
+- `tool_result` + `turn_end` + `context`: observes tool outcomes during a turn, builds at most one contextual reminder with `prompts/turn-boundary.ts`, then injects it as a hidden transient custom message before the next LLM call. Mutation reminders also protect human-authored changes. Read-only turns produce no reminder.
 
-The turn-boundary reminder currently reacts to project mutations, failed tool/check results, repeated mutations, and synchronous verification after mutation. It is intentionally transient: `context` modification does not persist reminder messages into the session history.
+The turn-boundary reminder currently reacts to project mutations, failed tool/check results, repeated mutations, human-authored change boundaries, and synchronous verification after mutation. It is intentionally transient: `context` modification does not persist reminder messages into the session history.
 
 ## Prompt ownership
 
@@ -23,7 +23,7 @@ Injection mechanics and prompt content are separate:
 
 - `index.ts`: Pi lifecycle wiring and ephemeral per-turn state
 - `observation.ts`: tool-result classification and accumulated signals
-- `prompts/agent-start.ts`: prompt injected at agent start and its request-context selection
+- `prompts/agent-start.ts`: repository policy loading and duplicate detection at agent start
 - `prompts/turn-boundary.ts`: prompt injected after relevant tool activity and its context-dependent construction
 
 Keep prompt text with its injection timing. TypeScript is intentional: each prompt module can select or construct guidance from the context available at that boundary without coupling the prose to hook plumbing.

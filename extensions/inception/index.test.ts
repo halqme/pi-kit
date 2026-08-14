@@ -6,18 +6,13 @@ import { classifyTool, createTurnObservation, observeToolResult } from "./observ
 import { buildAgentStartPrompt } from "./prompts/agent-start.ts";
 import { buildTurnBoundaryPrompt } from "./prompts/turn-boundary.ts";
 
-test("agent-start prompt injects repo-managed policy and request-specific guidance", () => {
-  const prompt = buildAgentStartPrompt("この設計をリファクタしてバグも修正して");
-  assert.match(prompt, /Follow explicit user intent/);
-  assert.match(prompt, /Communicate with the user in Japanese/);
-  assert.match(prompt, /preserve observable behavior/);
-  assert.match(prompt, /causal mechanism/);
+test("agent-start prompt injects the repo-managed policy only when it is missing", () => {
+  const prompt = buildAgentStartPrompt();
+  assert.match(prompt, /Follow the user's explicit request/);
+  assert.match(prompt, /YAGNI/);
 
-  const loaded = buildAgentStartPrompt("この設計をリファクタしてバグも修正して", [
-    { content: prompt },
-  ]);
-  assert.doesNotMatch(loaded, /Follow explicit user intent/);
-  assert.match(loaded, /preserve observable behavior/);
+  const loaded = buildAgentStartPrompt([{ content: prompt }]);
+  assert.equal(loaded, "");
 });
 
 test("tool classification distinguishes edits, checks, and async launches", () => {
@@ -46,6 +41,8 @@ test("turn-boundary prompt reacts to mutations and failures", () => {
   const prompt = buildTurnBoundaryPrompt(observation) ?? "";
   assert.match(prompt, /failed/);
   assert.match(prompt, /Project state changed/);
+  assert.match(prompt, /human-authored/);
+  assert.match(prompt, /ask the human/);
   assert.doesNotMatch(prompt, /Checks passed/);
 });
 
@@ -74,8 +71,8 @@ test("extension injects baseline in system prompt and one transient reminder aft
     systemPrompt: "base",
   });
   assert.match(before.systemPrompt, /^base/);
-  assert.match(before.systemPrompt, /<inception>/);
-  assert.match(before.systemPrompt, /Follow explicit user intent/);
+  assert.match(before.systemPrompt, /# Pi Kit Agent Policy/);
+  assert.match(before.systemPrompt, /Follow the user's explicit request/);
 
   const alreadyLoaded = await handlers.get("before_agent_start")?.({
     prompt: "inspect this",

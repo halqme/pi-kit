@@ -11,10 +11,14 @@ export function buildTurnBoundaryPrompt(observation: TurnObservation): string | 
     );
   }
 
-  if (observation.mutations > 0)
+  if (observation.mutations > 0) {
     reminders.push(
-      "Project state changed. Re-read the affected behavior and resulting diff before continuing; remove incidental complexity, reuse existing mechanisms, and do not broaden scope beyond the requested outcome.",
+      "Project state changed. Re-read the affected behavior and resulting diff before continuing; distinguish your changes from human changes. Remove incidental complexity only from changes you own or changes explicitly in scope, reuse existing mechanisms, and do not broaden scope beyond the requested outcome.",
     );
+    reminders.push(
+      "A project change may be human-authored. Treat changes that predate your operation or are outside your tool call as human intent: preserve them when compatible with the request and safety constraints. If they conflict with the explicit request, a project invariant, or safe execution and cannot be reconciled, stop and ask the human instead of silently reverting or overwriting them.",
+    );
+  }
 
   if (observation.mutations >= 3)
     reminders.push(
