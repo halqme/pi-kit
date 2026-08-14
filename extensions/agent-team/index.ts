@@ -14,6 +14,7 @@ import {
   type AgentTeamSnapshot,
   type AgentTeamUpdate,
   formatAgentTeam,
+  type PersistedAgentTeam,
 } from "./team.ts";
 
 const TOOL_NAME = "agent_team";
@@ -22,7 +23,7 @@ const READ_ONLY_TOOL_NAMES = ["read", "grep", "find", "ls", "web_search", "web_f
 const READ_ONLY_TOOLS = new Set<string>(READ_ONLY_TOOL_NAMES);
 
 interface AgentTeamToolParams {
-  action: "start" | "list" | "check" | "answer" | "stop";
+  action: "start" | "list" | "check" | "answer" | "revisit" | "stop";
   id?: string;
   topic?: string;
   mode?: "committee" | "adversarial";
@@ -84,6 +85,49 @@ function summarizeTeams(teams: Map<string, AgentTeam>): AgentTeamSnapshot[] {
   return [...teams.values()].map((team) => team.snapshot());
 }
 
+const AGENT_TEAM_STATE_ENTRY = "agent-team-state";
+
+function appendTeamState(pi: ExtensionAPI, team: AgentTeam): void {
+  pi.appendEntry(AGENT_TEAM_STATE_ENTRY, team.persisted());
+}
+
+function createTeamAgentFactory(
+  ctx: ExtensionContext,
+  state: Pick<PersistedAgentTeam, "model" | "tools" | "timeoutMs"> | AgentTeamConfig,
+) {
+  return createPiAgentFactory({
+    cwd: ctx.cwd,
+    taskRoot: agentTeamTaskRoot(
+      ctx.sessionManager.getSessionDir(),
+      ctx.sessionManager.getSessionId(),
+    ),
+    ownerSessionId: ctx.sessionManager.getSessionId(),
+    ...(state.model !== undefined ? { model: state.model } : {}),
+    tools: (state.tools ?? []).filter((tool) => READ_ONLY_TOOLS.has(tool)),
+    timeoutMs: state.timeoutMs ?? 300_000,
+  });
+}
+
+function restoreTeams(ctx: ExtensionContext, teams: Map<string, AgentTeam>): void {
+  teams.clear();
+  const restored = new Map<string, AgentTeam>();
+  for (const entry of [...ctx.sessionManager.getEntries()].reverse()) {
+    if (!entry || typeof entry !== "object") continue;
+    const candidate = entry as { type?: unknown; customType?: unknown; data?: unknown };
+    if (candidate.type !== "custom" || candidate.customType !== AGENT_TEAM_STATE_ENTRY) continue;
+    const data = candidate.data;
+    if (!data || typeof data !== "object") continue;
+    const state = data as PersistedAgentTeam;
+    if (typeof state.id !== "string" || restored.has(state.id)) continue;
+    try {
+      restored.set(state.id, AgentTeam.fromPersisted(state, createTeamAgentFactory(ctx, state)));
+    } catch {
+      // Ignore malformed historical entries without affecting the live session.
+    }
+  }
+  for (const [id, team] of restored) teams.set(id, team);
+}
+
 function summarizeAgentTeamResult(snapshot: AgentTeamSnapshot): string {
   return formatAgentTeam(snapshot);
 }
@@ -118,6 +162,19 @@ function createLiveReporter(ctx: ExtensionContext, topic: string): AgentTeamUpda
   };
 }
 
+function createPersistingReporter(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+  team: AgentTeam,
+  topic: string,
+): AgentTeamUpdate {
+  const live = createLiveReporter(ctx, topic);
+  return async (update) => {
+    await live(update);
+    appendTeamState(pi, team);
+  };
+}
+
 export default function agentTeamExtension(pi: ExtensionAPI): void {
   const teams = new Map<string, AgentTeam>();
 
@@ -141,10 +198,13 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
         Type.Literal("list"),
         Type.Literal("check"),
         Type.Literal("answer"),
+        Type.Literal("revisit"),
         Type.Literal("stop"),
       ]),
       id: Type.Optional(Type.String({ description: "agent-team ID" })),
-      topic: Type.Optional(Type.String({ description: "Question or work item for a new team" })),
+      topic: Type.Optional(
+        Type.String({ description: "Question for start, or new information for revisit" }),
+      ),
       mode: Type.Optional(
         Type.Union([Type.Literal("committee"), Type.Literal("adversarial")], {
           description:
@@ -324,31 +384,40 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
             interaction: params.interaction ?? "autonomous",
             members,
             maxRounds: params.maxRounds ?? 1,
+            ...(defaultModel !== undefined ? { model: defaultModel } : {}),
+            tools,
+            timeoutMs,
           };
 
           const team = new AgentTeam(
             config,
-            createPiAgentFactory({
-              cwd: ctx.cwd,
-              taskRoot: agentTeamTaskRoot(ctx.cwd, ctx.sessionManager.getSessionId()),
-              ownerSessionId: ctx.sessionManager.getSessionId(),
-              ...(defaultModel !== undefined ? { model: defaultModel } : {}),
+            createTeamAgentFactory(ctx, {
+              ...config,
               tools,
-              timeoutMs,
             }),
           );
           teams.set(id, team);
+          appendTeamState(pi, team);
           updateStatus(ctx, teams);
 
           // Keep the tool call open until startup/consultation or autonomous
           // execution completes. The caller receives the result directly
           // instead of polling with sleep/check loops.
-          const snapshot = await team.start(signal, createLiveReporter(ctx, topic));
-          updateStatus(ctx, teams);
-          return {
-            content: [{ type: "text" as const, text: summarizeAgentTeamResult(snapshot) }],
-            details: snapshot,
-          };
+          try {
+            const snapshot = await team.start(
+              signal,
+              createPersistingReporter(pi, ctx, team, topic),
+            );
+            appendTeamState(pi, team);
+            updateStatus(ctx, teams);
+            return {
+              content: [{ type: "text" as const, text: summarizeAgentTeamResult(snapshot) }],
+              details: snapshot,
+            };
+          } catch (error) {
+            appendTeamState(pi, team);
+            throw error;
+          }
         }
 
         if (!params.id) throw new Error(`id is required for ${params.action}`);
@@ -365,19 +434,46 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
 
         if (params.action === "answer") {
           if (!params.answer?.trim()) throw new Error("answer is required for answer");
-          const snapshot = await team.answer(
-            params.answer,
-            signal,
-            createLiveReporter(ctx, team.snapshot().topic),
-          );
-          updateStatus(ctx, teams);
-          return {
-            content: [{ type: "text" as const, text: summarizeAgentTeamResult(snapshot) }],
-            details: snapshot,
-          };
+          try {
+            const snapshot = await team.answer(
+              params.answer,
+              signal,
+              createPersistingReporter(pi, ctx, team, team.snapshot().topic),
+            );
+            appendTeamState(pi, team);
+            updateStatus(ctx, teams);
+            return {
+              content: [{ type: "text" as const, text: summarizeAgentTeamResult(snapshot) }],
+              details: snapshot,
+            };
+          } catch (error) {
+            appendTeamState(pi, team);
+            throw error;
+          }
+        }
+
+        if (params.action === "revisit") {
+          if (!params.topic?.trim()) throw new Error("topic is required for revisit");
+          try {
+            const snapshot = await team.revisit(
+              params.topic,
+              signal,
+              createPersistingReporter(pi, ctx, team, team.snapshot().topic),
+            );
+            appendTeamState(pi, team);
+            updateStatus(ctx, teams);
+            return {
+              content: [{ type: "text" as const, text: summarizeAgentTeamResult(snapshot) }],
+              details: snapshot,
+            };
+          } catch (error) {
+            appendTeamState(pi, team);
+            throw error;
+          }
         }
 
         const snapshot = await team.stop();
+        appendTeamState(pi, team);
         updateStatus(ctx, teams);
         return {
           content: [{ type: "text" as const, text: `Stopped ${snapshot.id}` }],
@@ -391,10 +487,12 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("session_start", async (_event: unknown, ctx: ExtensionContext) => {
+    restoreTeams(ctx, teams);
     updateStatus(ctx, teams);
   });
   pi.on("session_shutdown", async (_event: unknown, ctx: ExtensionContext) => {
     await Promise.allSettled([...teams.values()].map((team) => team.stop()));
+    for (const team of teams.values()) appendTeamState(pi, team);
     teams.clear();
     ctx.ui.setStatus(STATUS_KEY, undefined);
   });
