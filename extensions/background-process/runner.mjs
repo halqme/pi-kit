@@ -1,5 +1,14 @@
 import { spawn } from "node:child_process";
-import { appendFile, open, readFile, rename, stat, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  link,
+  open,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -19,14 +28,27 @@ async function atomicWrite(name, value) {
 }
 
 async function writeExclusive(name, value) {
+  const target = join(taskDir, name);
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  let failure;
   try {
-    await writeFile(join(taskDir, name), `${JSON.stringify(value, null, 2)}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-    });
+    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   } catch (error) {
-    if (error.code !== "EEXIST") throw error;
+    failure = error;
   }
+  if (!failure) {
+    try {
+      await link(temporary, target);
+    } catch (error) {
+      if (error.code !== "EEXIST") failure = error;
+    }
+  }
+  try {
+    await unlink(temporary);
+  } catch (error) {
+    if (error.code !== "ENOENT" && !failure) failure = error;
+  }
+  if (failure) throw failure;
 }
 
 function createTailWriter(name) {
@@ -69,13 +91,17 @@ try {
     env: process.env,
     stdio: ["pipe", "pipe", "pipe"],
   });
+  const completion = new Promise((resolve) => {
+    child.once("error", (error) => resolve({ code: null, signal: null, error: String(error) }));
+    child.once("close", (code, signal) => resolve({ code, signal, error: undefined }));
+  });
+  child.stdout.on("data", (chunk) => stdout.write(chunk));
+  child.stderr.on("data", (chunk) => stderr.write(chunk));
   if (request.spec.stdin !== undefined) {
     child.stdin.end(request.spec.stdin);
   } else {
     child.stdin.end();
   }
-  child.stdout.on("data", (chunk) => stdout.write(chunk));
-  child.stderr.on("data", (chunk) => stderr.write(chunk));
 
   await atomicWrite("running.json", {
     supervisorPid: process.pid,
@@ -104,10 +130,7 @@ try {
     }, 5_000);
   }, STOP_POLL_MS);
 
-  const completed = await new Promise((resolve) => {
-    child.once("error", (error) => resolve({ code: null, signal: null, error: String(error) }));
-    child.once("close", (code, signal) => resolve({ code, signal, error: undefined }));
-  });
+  const completed = await completion;
   await Promise.all([stdout.flush(), stderr.flush()]);
   await writeExclusive("result.json", {
     outcome: stopped ? "stopped" : completed.code === 0 ? "success" : "failed",
