@@ -1,3 +1,9 @@
+import {
+  DEFAULT_AGENT_TEAM_THINKING,
+  isAgentTeamThinkingLevel,
+  type AgentTeamThinkingLevel,
+} from "./policy.ts";
+
 // 500ms stagger avoids concurrent API requests from multiple child Pi
 // processes hitting provider rate-limits (observed as HTTP 500 responses).
 const STAGGER_DELAY_MS = 500;
@@ -99,6 +105,12 @@ function normalizePersistedAgentTeam(value: unknown): PersistedAgentTeam | undef
       }
     }
   }
+  const memberErrors: Record<string, string> = {};
+  if (isRecord(value.memberErrors)) {
+    for (const [member, error] of Object.entries(value.memberErrors)) {
+      if (typeof error === "string") memberErrors[member] = error;
+    }
+  }
 
   const maxRounds =
     typeof value.maxRounds === "number" && Number.isFinite(value.maxRounds) ? value.maxRounds : 1;
@@ -109,6 +121,12 @@ function normalizePersistedAgentTeam(value: unknown): PersistedAgentTeam | undef
   const tools = Array.isArray(value.tools)
     ? value.tools.filter((tool): tool is string => typeof tool === "string")
     : [];
+  const thinking =
+    value.thinking === undefined
+      ? DEFAULT_AGENT_TEAM_THINKING
+      : isAgentTeamThinkingLevel(value.thinking)
+        ? value.thinking
+        : undefined;
   const state: PersistedAgentTeam = {
     schemaVersion: 1,
     id: value.id,
@@ -122,11 +140,13 @@ function normalizePersistedAgentTeam(value: unknown): PersistedAgentTeam | undef
     transcript,
     latest,
     positionContinuity,
+    ...(Object.keys(memberErrors).length > 0 ? { memberErrors } : {}),
     revisitCount:
       typeof value.revisitCount === "number" && Number.isFinite(value.revisitCount)
         ? value.revisitCount
         : 0,
     tools,
+    ...(thinking !== undefined ? { thinking } : {}),
   };
   if (typeof value.model === "string") state.model = value.model;
   if (typeof value.timeoutMs === "number" && Number.isFinite(value.timeoutMs)) {
@@ -188,6 +208,7 @@ export interface AgentTeamConfig {
   maxRounds: number;
   model?: string;
   tools?: string[];
+  thinking?: AgentTeamThinkingLevel;
   timeoutMs?: number;
 }
 
@@ -227,9 +248,11 @@ export interface AgentTeamSnapshot {
   transcript: AgentTeamStatement[];
   latest: Record<string, string>;
   positionContinuity: Record<string, AgentTeamPositionContinuity>;
+  memberErrors?: Record<string, string>;
   revisitCount: number;
   tools: string[];
   model?: string;
+  thinking?: AgentTeamThinkingLevel;
   timeoutMs?: number;
   consultation?: AgentTeamConsultation;
   finalAnswer?: string;
@@ -251,6 +274,19 @@ export interface AgentTeamStatementUpdate {
 
 export type AgentTeamUpdate = (update: string | AgentTeamStatementUpdate) => void | Promise<void>;
 
+type MemberAskResult = { success: true } | { success: false; error: string };
+
+type MemberAskSummary = {
+  successes: number;
+  failures: number;
+  errors: string[];
+};
+
+function formatMemberError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.length > 500 ? `${message.slice(0, 497)}...` : message;
+}
+
 export class AgentTeam {
   private status: AgentTeamStatus = "created";
   private stopRequested = false;
@@ -258,6 +294,7 @@ export class AgentTeam {
   private transcript: AgentTeamStatement[] = [];
   private latest = new Map<string, string>();
   private positionContinuity = new Map<string, AgentTeamPositionContinuity>();
+  private memberErrors = new Map<string, string>();
   private completedRounds = 0;
   private revisitCount = 0;
   private consultation: AgentTeamConsultation | undefined;
@@ -278,6 +315,7 @@ export class AgentTeam {
       this.transcript = initial.transcript?.map((statement) => ({ ...statement })) ?? [];
       this.latest = new Map(Object.entries(initial.latest ?? {}));
       this.positionContinuity = new Map(Object.entries(initial.positionContinuity ?? {}));
+      this.memberErrors = new Map(Object.entries(initial.memberErrors ?? {}));
       this.completedRounds = initial.completedRounds ?? 0;
       this.revisitCount = initial.revisitCount ?? 0;
       this.consultation = initial.consultation
@@ -397,6 +435,7 @@ export class AgentTeam {
     this.completedRounds = 0;
     this.revisitCount += 1;
     this.positionContinuity.clear();
+    this.memberErrors.clear();
     try {
       await onUpdate(`Starting revisit ${this.revisitCount}`);
       await this.createMemberAgents(signal);
@@ -442,9 +481,13 @@ export class AgentTeam {
       transcript: this.transcript.map((statement) => ({ ...statement })),
       latest: Object.fromEntries(this.latest),
       positionContinuity: Object.fromEntries(this.positionContinuity),
+      ...(this.memberErrors.size > 0
+        ? { memberErrors: Object.fromEntries(this.memberErrors) }
+        : {}),
       revisitCount: this.revisitCount,
       tools: [...(this.config.tools ?? [])],
       ...(this.config.model !== undefined ? { model: this.config.model } : {}),
+      ...(this.config.thinking !== undefined ? { thinking: this.config.thinking } : {}),
       ...(this.config.timeoutMs !== undefined ? { timeoutMs: this.config.timeoutMs } : {}),
       ...(this.consultation
         ? {
@@ -477,31 +520,112 @@ export class AgentTeam {
     if (this.stopRequested) return;
   }
 
+  private async collectMemberStatements(
+    phase: Exclude<AgentTeamStatement["phase"], "final">,
+    round: number,
+    promptFor: (agent: AgentTeamAgent) => string,
+    signal: AbortSignal | undefined,
+    onUpdate: AgentTeamUpdate,
+    onSuccess?: (agent: AgentTeamAgent, text: string) => void,
+  ): Promise<MemberAskSummary> {
+    const phaseLabel =
+      phase === "opening"
+        ? "independent opening statements"
+        : phase === "revisit"
+          ? "independent revisit assessments"
+          : "discussion statements";
+    await onUpdate(`Collecting ${phaseLabel}`);
+    const skippedErrors =
+      phase === "discussion"
+        ? this.agents
+            .filter((agent) => this.memberErrors.has(agent.member.name))
+            .map(
+              (agent) =>
+                `${agent.member.name}: ${this.memberErrors.get(agent.member.name) ?? "previous failure"}`,
+            )
+        : [];
+    const participants =
+      phase === "discussion"
+        ? this.agents.filter((agent) => !this.memberErrors.has(agent.member.name))
+        : this.agents;
+    if (skippedErrors.length > 0) {
+      await onUpdate(
+        `Skipping ${skippedErrors.length} member(s) after earlier failure; they will be retried on revisit`,
+      );
+    }
+    const tasks = participants.map(async (agent, i): Promise<MemberAskResult> => {
+      if (i > 0) await delay(STAGGER_DELAY_MS);
+      let text: string;
+      try {
+        text = await agent.ask(promptFor(agent), signal);
+      } catch (error) {
+        if (signal?.aborted || this.stopRequested) throw error;
+        const message = formatMemberError(error);
+        text = `(member '${agent.member.name}' failed: ${message})`;
+        this.memberErrors.set(agent.member.name, message);
+        this.latest.set(agent.member.name, text);
+        this.transcript.push({ member: agent.member.name, phase, round, text });
+        await onUpdate({
+          type: "statement",
+          phase,
+          round,
+          member: agent.member.name,
+          text,
+        });
+        return { success: false, error: message };
+      }
+
+      onSuccess?.(agent, text);
+      this.memberErrors.delete(agent.member.name);
+      this.latest.set(agent.member.name, text);
+      const positionContinuity =
+        phase === "revisit" ? this.positionContinuity.get(agent.member.name) : undefined;
+      this.transcript.push({
+        member: agent.member.name,
+        phase,
+        round,
+        text,
+        ...(positionContinuity ? { positionContinuity } : {}),
+      });
+      await onUpdate({
+        type: "statement",
+        phase,
+        round,
+        member: agent.member.name,
+        text,
+        ...(positionContinuity ? { positionContinuity } : {}),
+      });
+      return { success: true };
+    });
+
+    const settled = await Promise.allSettled(tasks);
+    const errors = [...skippedErrors];
+    let successes = 0;
+    for (const result of settled) {
+      if (result.status === "rejected") throw result.reason;
+      if (result.value.success) successes += 1;
+      else errors.push(result.value.error);
+    }
+    return { successes, failures: errors.length, errors };
+  }
+
   private async collectOpeningStatements(
     signal: AbortSignal | undefined,
     onUpdate: AgentTeamUpdate,
   ): Promise<void> {
-    await onUpdate("Collecting independent opening statements");
-    await Promise.all(
-      this.agents.map(async (agent, i) => {
-        if (i > 0) await delay(STAGGER_DELAY_MS);
-        const text = await agent.ask(buildOpeningPrompt(this.config, agent.member), signal);
-        this.latest.set(agent.member.name, text);
-        this.transcript.push({
-          member: agent.member.name,
-          phase: "opening",
-          round: 0,
-          text,
-        });
-        await onUpdate({
-          type: "statement",
-          phase: "opening",
-          round: 0,
-          member: agent.member.name,
-          text,
-        });
-      }),
+    const result = await this.collectMemberStatements(
+      "opening",
+      0,
+      (agent) => buildOpeningPrompt(this.config, agent.member),
+      signal,
+      onUpdate,
     );
+    if (result.successes === 0) {
+      throw new Error(`agent-team opening phase failed: ${result.errors.join("; ")}`);
+    }
+    if (result.failures > 0) {
+      await onUpdate(`agent-team opening phase continued with ${result.failures} failed member(s)`);
+    }
   }
 
   private async collectRevisitStatements(
@@ -510,49 +634,40 @@ export class AgentTeam {
     signal: AbortSignal | undefined,
     onUpdate: AgentTeamUpdate,
   ): Promise<void> {
-    await onUpdate("Collecting independent revisit assessments");
-    await Promise.all(
-      this.agents.map(async (agent, i) => {
-        if (i > 0) await delay(STAGGER_DELAY_MS);
+    const result = await this.collectMemberStatements(
+      "revisit",
+      this.revisitCount,
+      (agent) => {
         const peerPositions = this.config.members
           .filter((member) => member.name !== agent.member.name)
           .map((member) => ({
             member: member.name,
             position: previousPositions.get(member.name) ?? "(no previous position)",
           }));
-        const text = await agent.ask(
-          buildRevisitPrompt(
-            this.config,
-            agent.member,
-            previousPositions.get(agent.member.name) ?? "(no previous position)",
-            peerPositions,
-            update,
-            this.revisitCount,
-          ),
-          signal,
+        return buildRevisitPrompt(
+          this.config,
+          agent.member,
+          previousPositions.get(agent.member.name) ?? "(no previous position)",
+          peerPositions,
+          update,
+          this.revisitCount,
         );
+      },
+      signal,
+      onUpdate,
+      (agent, text) => {
         const positionContinuity = parsePositionContinuity(text);
-        this.latest.set(agent.member.name, text);
         if (positionContinuity) {
           this.positionContinuity.set(agent.member.name, positionContinuity);
         }
-        this.transcript.push({
-          member: agent.member.name,
-          phase: "revisit",
-          round: this.revisitCount,
-          text,
-          ...(positionContinuity ? { positionContinuity } : {}),
-        });
-        await onUpdate({
-          type: "statement",
-          phase: "revisit",
-          round: this.revisitCount,
-          member: agent.member.name,
-          text,
-          ...(positionContinuity ? { positionContinuity } : {}),
-        });
-      }),
+      },
     );
+    if (result.successes === 0) {
+      throw new Error(`agent-team revisit phase failed: ${result.errors.join("; ")}`);
+    }
+    if (result.failures > 0) {
+      await onUpdate(`agent-team revisit phase continued with ${result.failures} failed member(s)`);
+    }
   }
 
   private async finish(
@@ -570,30 +685,22 @@ export class AgentTeam {
         member: member.name,
         statement: this.latest.get(member.name) ?? "(no response)",
       }));
-      await Promise.all(
-        this.agents.map(async (agent, i) => {
-          if (i > 0) await delay(STAGGER_DELAY_MS);
-          const text = await agent.ask(
-            buildDiscussionPrompt(this.config, agent.member, peerStatements, round, userDirection),
-            signal,
-          );
-          if (this.stopRequested) return;
-          this.latest.set(agent.member.name, text);
-          this.transcript.push({
-            member: agent.member.name,
-            phase: "discussion",
-            round,
-            text,
-          });
-          await onUpdate({
-            type: "statement",
-            phase: "discussion",
-            round,
-            member: agent.member.name,
-            text,
-          });
-        }),
+      const result = await this.collectMemberStatements(
+        "discussion",
+        round,
+        (agent) =>
+          buildDiscussionPrompt(this.config, agent.member, peerStatements, round, userDirection),
+        signal,
+        onUpdate,
       );
+      if (result.successes === 0) {
+        throw new Error(`agent-team discussion phase failed: ${result.errors.join("; ")}`);
+      }
+      if (result.failures > 0) {
+        await onUpdate(
+          `agent-team discussion phase continued with ${result.failures} failed member(s)`,
+        );
+      }
       if (this.stopRequested) return;
       this.completedRounds = round;
     }
@@ -648,7 +755,15 @@ export class AgentTeam {
 
   private async stopAgents(): Promise<void> {
     const agents = this.agents.splice(0);
-    await Promise.allSettled(agents.map((agent) => agent.stop()));
+    const results = await Promise.allSettled(agents.map((agent) => agent.stop()));
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result?.status !== "rejected") continue;
+      const member = agents[i]?.member.name ?? "unknown";
+      const message = `stop failed: ${formatMemberError(result.reason)}`;
+      const previous = this.memberErrors.get(member);
+      this.memberErrors.set(member, previous ? `${previous}; ${message}` : message);
+    }
   }
 }
 
@@ -834,7 +949,15 @@ export function formatAgentTeam(snapshot: AgentTeamSnapshot): string {
         ),
       ].join("\n")
     : "";
+  const memberErrors = snapshot.memberErrors
+    ? [
+        "Member errors:",
+        ...Object.entries(snapshot.memberErrors).map(([member, error]) => `${member}: ${error}`),
+      ].join("\n")
+    : "";
   const result = snapshot.finalAnswer !== undefined ? `Final report:\n${snapshot.finalAnswer}` : "";
   const error = snapshot.error ? `Error: ${snapshot.error}` : "";
-  return [header, transcript, consultation, result, error].filter(Boolean).join("\n\n");
+  return [header, transcript, consultation, memberErrors, result, error]
+    .filter(Boolean)
+    .join("\n\n");
 }
