@@ -67,6 +67,19 @@
         "typescript": "catalog:",
       },
     },
+    "extensions/browser_inspector": {
+      "name": "@halqme/browser_inspector",
+      "dependencies": {
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "extensions/grill": {
       "name": "@halqme/grill",
       "dependencies": {
@@ -351,6 +364,8 @@
     "@halqme/background_process": ["@halqme/background_process@workspace:extensions/background_process"],
 
     "@halqme/bm25_search": ["@halqme/bm25_search@workspace:extensions/bm25_search"],
+
+    "@halqme/browser_inspector": ["@halqme/browser_inspector@workspace:extensions/browser_inspector"],
 
     "@halqme/grill": ["@halqme/grill@workspace:extensions/grill"],
 
