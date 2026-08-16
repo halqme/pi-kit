@@ -1,5 +1,6 @@
 import { atomicWriteJson } from "@halqme/background_process";
 import { agentTeamTaskRoot, createPiAgentFactory } from "./pi-runner.ts";
+import { AGENT_TEAM_TOOL_NAMES } from "./policy.ts";
 import {
   AgentTeam,
   type AgentTeamConfig,
@@ -43,7 +44,8 @@ async function main(): Promise<void> {
     taskRoot,
     ownerSessionId: request.sessionId,
     ...(request.config.model !== undefined ? { model: request.config.model } : {}),
-    tools: request.config.tools ?? [],
+    tools: request.config.tools ?? [...AGENT_TEAM_TOOL_NAMES],
+    ...(request.config.thinking !== undefined ? { thinking: request.config.thinking } : {}),
     timeoutMs: request.config.timeoutMs ?? 300_000,
   });
   const team = request.initial

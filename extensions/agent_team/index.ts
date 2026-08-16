@@ -22,11 +22,17 @@ import {
   type AgentTeamSnapshot,
   formatAgentTeam,
 } from "./team.ts";
+import {
+  AGENT_TEAM_THINKING_LEVELS,
+  AGENT_TEAM_TOOL_NAMES,
+  validateAgentTeamThinking,
+  validateAgentTeamTools,
+  type AgentTeamThinkingLevel,
+} from "./policy.ts";
 
 const TOOL_NAME = "agent_team";
 const STATUS_KEY = "agent-team";
-const READ_ONLY_TOOL_NAMES = ["read", "grep", "find", "ls", "web_search", "web_fetch"] as const;
-const READ_ONLY_TOOLS = new Set<string>(READ_ONLY_TOOL_NAMES);
+const READ_ONLY_TOOL_NAMES = AGENT_TEAM_TOOL_NAMES;
 
 interface AgentTeamToolParams {
   action: "start" | "list" | "check" | "answer" | "revisit" | "stop";
@@ -45,28 +51,23 @@ interface AgentTeamToolParams {
   }>;
   maxRounds?: number;
   answer?: string;
-  thinking?: string;
+  thinking?: AgentTeamThinkingLevel;
   tools?: string[];
   turnTimeoutMs?: number;
 }
 
-function selectTools(requested: string[] | undefined, available: Set<string>): string[] {
-  const unsupported = requested?.filter((tool) => !READ_ONLY_TOOLS.has(tool)) ?? [];
-  if (unsupported.length > 0) {
-    throw new Error(
-      `agent-team only accepts supported read-only tools (${READ_ONLY_TOOL_NAMES.join(", ")}); unsupported: ${unsupported.join(", ")}`,
-    );
-  }
-  return (requested ?? [...READ_ONLY_TOOL_NAMES]).filter((tool) => available.has(tool));
+function selectTools(requested: string[] | undefined): string[] {
+  return validateAgentTeamTools(requested);
 }
 
-async function resolveSkill(spec: string, cwd: string): Promise<string> {
+export async function resolveSkill(spec: string, cwd: string): Promise<string> {
   const value = spec.trim();
   if (!value) throw new Error("skill names and paths must not be empty");
   const candidates = isAbsolute(value)
     ? [value]
     : [
         resolve(cwd, value),
+        resolve(cwd, "skills", value, "SKILL.md"),
         resolve(cwd, ".pi/skills", value, "SKILL.md"),
         resolve(cwd, ".agents/skills", value, "SKILL.md"),
         join(homedir(), ".pi/agent/skills", value, "SKILL.md"),
@@ -84,7 +85,12 @@ async function resolveSkill(spec: string, cwd: string): Promise<string> {
 }
 
 async function resolveSkills(specs: string[] | undefined, cwd: string): Promise<string[]> {
-  return [...new Set(await Promise.all((specs ?? []).map((spec) => resolveSkill(spec, cwd))))];
+  const resolved: string[] = [];
+  for (const spec of specs ?? []) {
+    const skill = await resolveSkill(spec, cwd);
+    if (!resolved.includes(skill)) resolved.push(skill);
+  }
+  return resolved;
 }
 
 function summarizeAgentTeamResult(snapshot: AgentTeamSnapshot): string {
@@ -185,13 +191,13 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
       model: Type.Optional(
         Type.String({
           description:
-            "Default provider/model for all members. A member-level model overrides this value.",
+            "Explicit provider/model for all members. A member-level model overrides this; omitting it uses the child Pi's configured default and never inherits the parent session model.",
         }),
       ),
       skills: Type.Optional(
         Type.Array(Type.String(), {
           description:
-            "Skill names or SKILL.md paths to load for every member; automatic skill discovery remains enabled",
+            "Skill names or SKILL.md paths to load for every member; automatic child skill discovery is disabled",
         }),
       ),
       members: Type.Optional(
@@ -209,7 +215,7 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
             skills: Type.Optional(
               Type.Array(Type.String(), {
                 description:
-                  "Skill names or SKILL.md paths for this member; overrides team defaults",
+                  "Skill names or SKILL.md paths for this member; overrides team defaults and automatic discovery is disabled",
               }),
             ),
           }),
@@ -225,11 +231,18 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
         }),
       ),
       answer: Type.Optional(Type.String({ description: "User direction for a waiting team" })),
-      thinking: Type.Optional(Type.String({ description: "Thinking level for child Pi agents" })),
+      thinking: Type.Optional(
+        Type.Union(
+          AGENT_TEAM_THINKING_LEVELS.map((level) => Type.Literal(level)),
+          {
+            description: "Thinking level for child Pi agents; defaults to low.",
+          },
+        ),
+      ),
       tools: Type.Optional(
         Type.Array(StringEnum(READ_ONLY_TOOL_NAMES), {
           description:
-            "Optional allowlist of supported read-only tools for team members. Omit to use every supported read-only tool that is currently available.",
+            "Optional child-safe read-only tool allowlist. Omit for read, grep, find, and ls; an explicit empty list disables all child tools.",
         }),
       ),
       turnTimeoutMs: Type.Optional(
@@ -323,26 +336,21 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
           }
 
           const id = randomUUID();
-          const availableTools = new Set(pi.getAllTools().map((tool) => tool.name));
-          const tools = selectTools(params.tools, availableTools);
-          const parentModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
-          const defaultModel = params.model?.trim() || parentModel;
+          const tools = selectTools(params.tools);
+          const thinking = validateAgentTeamThinking(params.thinking);
           const timeoutMs = params.turnTimeoutMs ?? 300_000;
           const teamSkills = await resolveSkills(params.skills, ctx.cwd);
-          const members: AgentTeamMemberConfig[] = await Promise.all(
-            params.members.map(async (member) => {
-              const skills = await resolveSkills(member.skills ?? teamSkills, ctx.cwd);
-              return {
-                name: member.name.trim(),
-                role: member.role.trim(),
-                ...(member.instructionPolicy
-                  ? { instructionPolicy: member.instructionPolicy }
-                  : {}),
-                ...(member.model?.trim() ? { model: member.model.trim() } : {}),
-                ...(skills.length > 0 ? { skills } : {}),
-              };
-            }),
-          );
+          const members: AgentTeamMemberConfig[] = [];
+          for (const member of params.members) {
+            const skills = await resolveSkills(member.skills ?? teamSkills, ctx.cwd);
+            members.push({
+              name: member.name.trim(),
+              role: member.role.trim(),
+              ...(member.instructionPolicy ? { instructionPolicy: member.instructionPolicy } : {}),
+              ...(member.model?.trim() ? { model: member.model.trim() } : {}),
+              ...(skills.length > 0 ? { skills } : {}),
+            });
+          }
           const config: AgentTeamConfig = {
             id,
             topic,
@@ -350,8 +358,9 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
             interaction: params.interaction ?? "autonomous",
             members,
             maxRounds: params.maxRounds ?? 1,
-            ...(defaultModel !== undefined ? { model: defaultModel } : {}),
+            ...(params.model?.trim() ? { model: params.model.trim() } : {}),
             tools,
+            thinking,
             timeoutMs,
           };
 

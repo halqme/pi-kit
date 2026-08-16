@@ -13,6 +13,7 @@ import {
   type ProcessSnapshot,
 } from "@halqme/background_process";
 import { agentTeamTaskRoot, createPiAgentFactory } from "./pi-runner.ts";
+import { AGENT_TEAM_TOOL_NAMES } from "./policy.ts";
 import {
   AgentTeam,
   type AgentTeamConfig,
@@ -25,7 +26,6 @@ import {
 const AGENT_TEAM_STATE_ENTRY = "agent-team-state";
 const AGENT_TEAM_STATE_PREFIX = ".team-";
 const WORKER_PATH = fileURLToPath(new URL("./worker.ts", import.meta.url));
-const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls", "web_search", "web_fetch"]);
 
 interface PersistedAgentTeamRuntime {
   operationId: string;
@@ -78,7 +78,7 @@ function parseRuntime(value: unknown): PersistedAgentTeamRuntime | undefined {
 
 function createAgentFactory(
   ctx: ExtensionContext,
-  state: Pick<PersistedAgentTeam, "model" | "tools" | "timeoutMs"> | AgentTeamConfig,
+  state: Pick<PersistedAgentTeam, "model" | "tools" | "thinking" | "timeoutMs"> | AgentTeamConfig,
   cwd = ctx.cwd,
 ) {
   return createPiAgentFactory({
@@ -89,7 +89,8 @@ function createAgentFactory(
     ),
     ownerSessionId: ctx.sessionManager.getSessionId(),
     ...(state.model !== undefined ? { model: state.model } : {}),
-    tools: (state.tools ?? []).filter((tool) => READ_ONLY_TOOLS.has(tool)),
+    tools: state.tools ?? [...AGENT_TEAM_TOOL_NAMES],
+    ...(state.thinking !== undefined ? { thinking: state.thinking } : {}),
     timeoutMs: state.timeoutMs ?? 300_000,
   });
 }
@@ -111,6 +112,7 @@ function configFromSnapshot(snapshot: AgentTeamSnapshot): AgentTeamConfig {
     maxRounds: snapshot.maxRounds,
     ...(snapshot.model !== undefined ? { model: snapshot.model } : {}),
     tools: [...snapshot.tools],
+    ...(snapshot.thinking !== undefined ? { thinking: snapshot.thinking } : {}),
     ...(snapshot.timeoutMs !== undefined ? { timeoutMs: snapshot.timeoutMs } : {}),
   };
 }

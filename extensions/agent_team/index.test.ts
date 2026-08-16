@@ -32,22 +32,20 @@ test("agent-team propagates invalid start input as an execute error", async () =
   );
 });
 
-test("agent-team exposes its supported read-only tools in the tool schema", () => {
+test("agent-team exposes only child-safe read-only tools in the tool schema", () => {
   const tool = captureTool();
   const schema = JSON.stringify(tool.parameters);
-  for (const name of ["read", "grep", "find", "ls", "web_search", "web_fetch"]) {
+  for (const name of ["read", "grep", "find", "ls"]) {
     assert.match(schema, new RegExp(`"${name}"`));
   }
+  assert.doesNotMatch(schema, /"web_search"/);
+  assert.doesNotMatch(schema, /"web_fetch"/);
   assert.doesNotMatch(schema, /"bash"/);
   assert.doesNotMatch(schema, /"astrolabe"/);
 });
 
-test("agent-team reports the supported tool set when direct callers bypass schema validation", async () => {
-  const tool = captureTool({
-    getAllTools() {
-      return [{ name: "read" }, { name: "bash" }];
-    },
-  });
+test("agent-team rejects unsafe tools when direct callers bypass schema validation", async () => {
+  const tool = captureTool();
 
   await assert.rejects(
     () =>
@@ -66,6 +64,6 @@ test("agent-team reports the supported tool set when direct callers bypass schem
         undefined,
         { ui: { setStatus() {} } },
       ),
-    /supported read-only tools \(read, grep, find, ls, web_search, web_fetch\); unsupported: bash/,
+    /child-safe read-only tools \(read, grep, find, ls\); unsupported: bash/,
   );
 });
