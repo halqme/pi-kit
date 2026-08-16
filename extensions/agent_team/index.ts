@@ -5,16 +5,22 @@ import { isAbsolute, join, resolve } from "node:path";
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { agentTeamTaskRoot, createPiAgentFactory } from "./pi-runner.ts";
 import {
-  AgentTeam,
+  appendAgentTeamState,
+  createAgentTeamJob,
+  launchAgentTeamWorker,
+  refreshAgentTeamJobs,
+  restoreAgentTeamJobs,
+  stopAgentTeamJob,
+  summarizeAgentTeamJobs,
+  type AgentTeamJob,
+} from "./runtime.ts";
+import {
   type AgentTeamConfig,
   type AgentTeamInstructionPolicy,
   type AgentTeamMemberConfig,
   type AgentTeamSnapshot,
-  type AgentTeamUpdate,
   formatAgentTeam,
-  type PersistedAgentTeam,
 } from "./team.ts";
 
 const TOOL_NAME = "agent_team";
@@ -81,113 +87,70 @@ async function resolveSkills(specs: string[] | undefined, cwd: string): Promise<
   return [...new Set(await Promise.all((specs ?? []).map((spec) => resolveSkill(spec, cwd))))];
 }
 
-function summarizeTeams(teams: Map<string, AgentTeam>): AgentTeamSnapshot[] {
-  return [...teams.values()].map((team) => team.snapshot());
-}
-
-const AGENT_TEAM_STATE_ENTRY = "agent-team-state";
-
-function appendTeamState(pi: ExtensionAPI, team: AgentTeam): void {
-  pi.appendEntry(AGENT_TEAM_STATE_ENTRY, team.persisted());
-}
-
-function createTeamAgentFactory(
-  ctx: ExtensionContext,
-  state: Pick<PersistedAgentTeam, "model" | "tools" | "timeoutMs"> | AgentTeamConfig,
-) {
-  return createPiAgentFactory({
-    cwd: ctx.cwd,
-    taskRoot: agentTeamTaskRoot(
-      ctx.sessionManager.getSessionDir(),
-      ctx.sessionManager.getSessionId(),
-    ),
-    ownerSessionId: ctx.sessionManager.getSessionId(),
-    ...(state.model !== undefined ? { model: state.model } : {}),
-    tools: (state.tools ?? []).filter((tool) => READ_ONLY_TOOLS.has(tool)),
-    timeoutMs: state.timeoutMs ?? 300_000,
-  });
-}
-
-function restoreTeams(ctx: ExtensionContext, teams: Map<string, AgentTeam>): void {
-  teams.clear();
-  const restored = new Map<string, AgentTeam>();
-  for (const entry of [...ctx.sessionManager.getEntries()].reverse()) {
-    if (!entry || typeof entry !== "object") continue;
-    const candidate = entry as { type?: unknown; customType?: unknown; data?: unknown };
-    if (candidate.type !== "custom" || candidate.customType !== AGENT_TEAM_STATE_ENTRY) continue;
-    const data = candidate.data;
-    if (!data || typeof data !== "object") continue;
-    const state = data as PersistedAgentTeam;
-    if (typeof state.id !== "string" || restored.has(state.id)) continue;
-    try {
-      restored.set(state.id, AgentTeam.fromPersisted(state, createTeamAgentFactory(ctx, state)));
-    } catch {
-      // Ignore malformed historical entries without affecting the live session.
-    }
-  }
-  for (const [id, team] of restored) teams.set(id, team);
-}
-
 function summarizeAgentTeamResult(snapshot: AgentTeamSnapshot): string {
   return formatAgentTeam(snapshot);
 }
 
-function updateStatus(ctx: ExtensionContext, teams: Map<string, AgentTeam>): void {
-  const snapshots = summarizeTeams(teams);
-  const running = snapshots.filter(
-    (team) => team.status === "running" || team.status === "starting",
-  ).length;
-  const waiting = snapshots.filter((team) => team.status === "awaiting-user").length;
-  const failed = snapshots.filter((team) => team.status === "failed").length;
-  const status = [
-    running && `${running} running`,
-    waiting && `${waiting} awaiting user`,
-    failed && `${failed} failed`,
-  ]
-    .filter(Boolean)
-    .join(", ");
-  ctx.ui.setStatus(STATUS_KEY, status || undefined);
-}
+export default function agentTeamExtension(pi: ExtensionAPI): void {
+  const jobs = new Map<string, AgentTeamJob>();
+  let timer: NodeJS.Timeout | undefined;
+  let activeContext: ExtensionContext | undefined;
+  let refreshPromise: Promise<void> | undefined;
 
-function createLiveReporter(ctx: ExtensionContext, topic: string): AgentTeamUpdate {
-  return async (update) => {
-    if (typeof update === "string") {
-      ctx.ui.setStatus(STATUS_KEY, `agent-team [${topic}]: ${update}`);
+  function updateJobStatus(ctx: ExtensionContext): void {
+    const snapshots = summarizeAgentTeamJobs(jobs);
+    const running = snapshots.filter(
+      (team) => team.status === "running" || team.status === "starting",
+    ).length;
+    const waiting = snapshots.filter((team) => team.status === "awaiting-user").length;
+    const failed = snapshots.filter((team) => team.status === "failed").length;
+    const status = [
+      running && `${running} running`,
+      waiting && `${waiting} awaiting user`,
+      failed && `${failed} failed`,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    ctx.ui.setStatus(STATUS_KEY, status || undefined);
+  }
+
+  async function refresh(ctx: ExtensionContext, notify = false): Promise<void> {
+    if (refreshPromise) {
+      await refreshPromise;
       return;
     }
-    ctx.ui.setStatus(
-      STATUS_KEY,
-      `agent-team [${topic}]: ${update.member} (${update.phase}, round ${update.round})`,
-    );
-  };
-}
+    const current = (async () => {
+      await refreshAgentTeamJobs(pi, ctx, jobs, { notify });
+      updateJobStatus(ctx);
+    })();
+    refreshPromise = current;
+    try {
+      await current;
+    } finally {
+      if (refreshPromise === current) refreshPromise = undefined;
+    }
+  }
 
-function createPersistingReporter(
-  pi: ExtensionAPI,
-  ctx: ExtensionContext,
-  team: AgentTeam,
-  topic: string,
-): AgentTeamUpdate {
-  const live = createLiveReporter(ctx, topic);
-  return async (update) => {
-    await live(update);
-    appendTeamState(pi, team);
-  };
-}
-
-export default function agentTeamExtension(pi: ExtensionAPI): void {
-  const teams = new Map<string, AgentTeam>();
+  function startedText(snapshot: AgentTeamSnapshot): string {
+    return [
+      `Started agent-team ${snapshot.id} in the background.`,
+      `Use action check with id ${snapshot.id} for current progress; completion is delivered automatically.`,
+      "",
+      summarizeAgentTeamResult(snapshot),
+    ].join("\n");
+  }
 
   pi.registerTool({
     name: TOOL_NAME,
     label: "agent-team",
     description:
-      "Run a session-scoped, read-only team of Pi agents to support high-value human or parent-agent judgment through constructive committee discussion or focused adversarial review. Use agent_team sparingly: before a material design decision, when blocked by multiple plausible causes, or to review a large/high-impact change. Do not use it for routine or frequent reviews, simple checks, implementation work, or verification. Team results are advisory: agent_team does not mutate project state or establish verification. Consultative teams pause after independent opening statements and wait for user direction.",
+      "Start a session-scoped, read-only team of Pi agents as a durable background job to support high-value human or parent-agent judgment through constructive committee discussion or focused adversarial review. Use agent_team sparingly: before a material design decision, when blocked by multiple plausible causes, or to review a large/high-impact change. Do not use it for routine or frequent reviews, simple checks, implementation work, or verification. The start, answer, and revisit actions return immediately; use check for explicit progress and receive completion notifications automatically. Team results are advisory: agent_team does not mutate project state or establish verification. Consultative teams pause after independent opening statements and wait for user direction.",
     promptSnippet: "Choose constructive committee or adversarial review for a difficult question",
     promptGuidelines: [
-      "Use agent_team sparingly and only for high-value judgment: before a material design or architecture decision, when blocked by multiple plausible causes, or to review a large/high-impact change.",
+      "Use agent_team sparingly and only for high-value judgment: before a material design or architecture decision, when blocked and there are multiple plausible causes, or to review a large/high-impact change.",
       "Do not use agent_team for routine or frequent reviews, simple checks, normal implementation work, or verification.",
       "For frequent lightweight review requests, use background_process to start a detached non-interactive command such as `pi -ne 'please review ...'`; inspect its output when the process completes.",
+      "Start, answer, and revisit return a job ID immediately; do not wait or poll repeatedly. Completion is delivered automatically, and use check only when the user asks for current progress or output.",
       "Treat team output as advisory evidence for human or parent-agent judgment, not as an implementation or verification result.",
       "Choose committee mode for exploration, brainstorming, comparison, synthesis, or a balanced recommendation.",
       "Choose adversarial mode for critique, red-teaming, debugging competing explanations, or stress-testing a proposed decision; challenge claims and assumptions, not people.",
@@ -283,7 +246,7 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
       return new Text(text, 0, 0);
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
-      if (isPartial) return new Text(theme.fg("warning", "Running agent team..."), 0, 0);
+      if (isPartial) return new Text(theme.fg("warning", "Starting agent team..."), 0, 0);
       const content = result.content
         .filter((item) => item.type === "text")
         .map((item) => item.text ?? "")
@@ -320,7 +283,7 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
     async execute(
       _toolCallId: string,
       params: AgentTeamToolParams,
-      signal: AbortSignal,
+      _signal: AbortSignal,
       _onUpdate: unknown,
       ctx: ExtensionContext,
     ): Promise<{
@@ -329,7 +292,8 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
     }> {
       try {
         if (params.action === "list") {
-          const snapshots = summarizeTeams(teams);
+          await refresh(ctx);
+          const snapshots = summarizeAgentTeamJobs(jobs);
           return {
             content: [
               {
@@ -391,43 +355,32 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
             timeoutMs,
           };
 
-          const team = new AgentTeam(
-            config,
-            createTeamAgentFactory(ctx, {
-              ...config,
-              tools,
-            }),
-          );
-          teams.set(id, team);
-          appendTeamState(pi, team);
-          updateStatus(ctx, teams);
-
-          // Keep the tool call open until startup/consultation or autonomous
-          // execution completes. The caller receives the result directly
-          // instead of polling with sleep/check loops.
+          const job = createAgentTeamJob(ctx, config, { status: "starting" });
+          jobs.set(id, job);
+          appendAgentTeamState(pi, job);
+          updateJobStatus(ctx);
           try {
-            const snapshot = await team.start(
-              signal,
-              createPersistingReporter(pi, ctx, team, topic),
-            );
-            appendTeamState(pi, team);
-            updateStatus(ctx, teams);
+            await launchAgentTeamWorker(ctx, job, { action: "start" });
+            appendAgentTeamState(pi, job);
+            updateJobStatus(ctx);
+            const snapshot = job.team.snapshot();
             return {
-              content: [{ type: "text" as const, text: summarizeAgentTeamResult(snapshot) }],
+              content: [{ type: "text" as const, text: startedText(snapshot) }],
               details: snapshot,
             };
           } catch (error) {
-            appendTeamState(pi, team);
+            appendAgentTeamState(pi, job);
             throw error;
           }
         }
 
         if (!params.id) throw new Error(`id is required for ${params.action}`);
-        const team = teams.get(params.id);
-        if (!team) throw new Error(`Unknown agent-team: ${params.id}`);
+        const job = jobs.get(params.id);
+        if (!job) throw new Error(`Unknown agent-team: ${params.id}`);
 
         if (params.action === "check") {
-          const snapshot = team.snapshot();
+          await refresh(ctx);
+          const snapshot = job.team.snapshot();
           return {
             content: [{ type: "text" as const, text: summarizeAgentTeamResult(snapshot) }],
             details: snapshot,
@@ -436,66 +389,100 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
 
         if (params.action === "answer") {
           if (!params.answer?.trim()) throw new Error("answer is required for answer");
+          await refresh(ctx);
+          if (job.team.snapshot().status !== "awaiting-user") {
+            throw new Error("agent-team is not waiting for user direction");
+          }
           try {
-            const snapshot = await team.answer(
-              params.answer,
-              signal,
-              createPersistingReporter(pi, ctx, team, team.snapshot().topic),
-            );
-            appendTeamState(pi, team);
-            updateStatus(ctx, teams);
+            await launchAgentTeamWorker(ctx, job, { action: "answer", answer: params.answer });
+            appendAgentTeamState(pi, job);
+            updateJobStatus(ctx);
+            const snapshot = job.team.snapshot();
             return {
-              content: [{ type: "text" as const, text: summarizeAgentTeamResult(snapshot) }],
+              content: [{ type: "text" as const, text: startedText(snapshot) }],
               details: snapshot,
             };
           } catch (error) {
-            appendTeamState(pi, team);
+            appendAgentTeamState(pi, job);
             throw error;
           }
         }
 
         if (params.action === "revisit") {
           if (!params.topic?.trim()) throw new Error("topic is required for revisit");
+          await refresh(ctx);
+          if (job.team.snapshot().status !== "completed") {
+            throw new Error("only a completed agent-team can be revisited");
+          }
           try {
-            const snapshot = await team.revisit(
-              params.topic,
-              signal,
-              createPersistingReporter(pi, ctx, team, team.snapshot().topic),
-            );
-            appendTeamState(pi, team);
-            updateStatus(ctx, teams);
+            await launchAgentTeamWorker(ctx, job, { action: "revisit", topic: params.topic });
+            appendAgentTeamState(pi, job);
+            updateJobStatus(ctx);
+            const snapshot = job.team.snapshot();
             return {
-              content: [{ type: "text" as const, text: summarizeAgentTeamResult(snapshot) }],
+              content: [{ type: "text" as const, text: startedText(snapshot) }],
               details: snapshot,
             };
           } catch (error) {
-            appendTeamState(pi, team);
+            appendAgentTeamState(pi, job);
             throw error;
           }
         }
 
-        const snapshot = await team.stop();
-        appendTeamState(pi, team);
-        updateStatus(ctx, teams);
+        await refresh(ctx);
+        const snapshot = await stopAgentTeamJob(ctx, job);
+        appendAgentTeamState(pi, job);
+        updateJobStatus(ctx);
         return {
           content: [{ type: "text" as const, text: `Stopped ${snapshot.id}` }],
           details: snapshot,
         };
       } catch (error) {
-        updateStatus(ctx, teams);
+        updateJobStatus(ctx);
         throw error;
       }
     },
   });
 
+  pi.registerMessageRenderer?.("agent-team-status", (message, { expanded }, theme) => {
+    const body =
+      typeof message.content === "string"
+        ? message.content
+        : message.content
+            .filter((item) => item.type === "text")
+            .map((item) => item.text ?? "")
+            .join("\n");
+    const details = message.details as AgentTeamSnapshot | undefined;
+    let text = body;
+    if (!expanded && details) {
+      text = `${details.id} [${details.mode}:${details.status}] ${details.completedRounds}/${details.maxRounds} round(s)`;
+      if (details.finalAnswer) text += `\n${details.finalAnswer}`;
+      if (details.error) text += `\nError: ${details.error}`;
+    }
+    if (expanded && details) text += `\n\n${JSON.stringify(details, null, 2)}`;
+    return new Text(theme.fg(details?.status === "failed" ? "error" : "toolOutput", text), 0, 0);
+  });
+
   pi.on("session_start", async (_event: unknown, ctx: ExtensionContext) => {
-    restoreTeams(ctx, teams);
-    updateStatus(ctx, teams);
+    activeContext = ctx;
+    restoreAgentTeamJobs(ctx, jobs);
+    if (timer) clearInterval(timer);
+    await refresh(ctx, true);
+    timer = setInterval(() => {
+      if (activeContext) void refresh(activeContext, true).catch(() => undefined);
+    }, 2_000);
+    timer.unref();
+  });
+  pi.on("session_compact", async (_event: unknown, ctx: ExtensionContext) => {
+    await refresh(ctx, true);
   });
   pi.on("session_shutdown", async (_event: unknown, ctx: ExtensionContext) => {
-    await Promise.allSettled([...teams.values()].map((team) => team.stop()));
-    for (const team of teams.values()) appendTeamState(pi, team);
-    teams.clear();
+    if (timer) clearInterval(timer);
+    timer = undefined;
+    await refresh(ctx);
+    for (const job of jobs.values()) appendAgentTeamState(pi, job);
+    jobs.clear();
+    activeContext = undefined;
     ctx.ui.setStatus(STATUS_KEY, undefined);
   });
 }

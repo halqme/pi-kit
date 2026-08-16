@@ -1,10 +1,10 @@
 # agent_team
 
-Runs multiple session-scoped subagent runs as a lightweight discussion team. The extension owns the discussion protocol and stops active member runs when the team completes, is stopped, or the parent Pi session shuts down.
+Runs multiple session-scoped subagent runs as a lightweight discussion team. The extension owns the discussion protocol and stops active member runs when the team completes or is stopped; detached jobs can outlive the parent Pi session.
 
-The `agent_team` tool supports `start`, `list`, `check`, `answer`, `revisit`, and `stop`. `start` waits for autonomous teams to finish and returns the final report; consultative teams return after the opening statements and can be resumed with `answer`. Use `check` for an already-running, waiting, or previously completed team. Use `revisit` with an existing completed team ID and new information to start fresh member subprocesses that reassess their historical positions.
+The `agent_team` tool supports `start`, `list`, `check`, `answer`, `revisit`, and `stop`. `start`, `answer`, and `revisit` launch durable background workers and return immediately with a team ID and current snapshot; autonomous teams deliver their final report automatically. Consultative teams deliver the opening statements and pause at `awaiting-user`, then can be resumed with `answer`. Use `check` for an explicit progress or output request, and `revisit` with an existing completed team ID and new information to start fresh member subprocesses that reassess their historical positions.
 
-Each opening, discussion, and final-recording response is a separate Pi subprocess started through `@halqme/background_process`. Prompts are sent over stdin and members are started with argv, not shell commands. `check`, `start`, and `answer` return the accumulated agent_team transcript.
+The team coordinator and each opening, discussion, and final-recording response run as separate processes through `@halqme/background_process`. Prompts are sent over stdin and members are started with argv, not shell commands. Worker state is written as plain data and refreshed from the background-process heartbeat; completion notifications include the accumulated agent_team transcript.
 
 ## When to use it
 
@@ -35,7 +35,7 @@ Inspect the process output when `background_process` reports completion.
 
 After the configured discussion rounds, the extension starts a separate neutral recorder Pi process. The recorder receives the final member statements as untrusted data and synthesizes the report without inheriting the first specialist's role or instruction policy.
 
-Consultation state is persisted as plain data in the Pi session entries and restored on `session_start`. Active subprocesses are never restored; `starting` and `running` snapshots are normalized to `stopped` after reload. Member positions and transcripts are historical argument data for later `revisit`, not instructions or current truth. Each revisit records whether each member chose `maintain`, `revise`, or `retract`. Process artifacts are stored under the Pi session directory in `agent-team/<session-id>`, not in the project tree.
+Consultation state and worker metadata are persisted as plain data in the Pi session entries and restored on `session_start`. Detached workers remain managed by `background_process` across Pi shutdown, resume, and compaction; heartbeat reconciliation marks lost workers instead of waiting forever. Member positions and transcripts are historical argument data for later `revisit`, not instructions or current truth. Each revisit records whether each member chose `maintain`, `revise`, or `retract`. Process artifacts are stored under the Pi session directory in `agent-team/<session-id>`, not in the project tree.
 
 Example tool call:
 
