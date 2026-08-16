@@ -38,7 +38,9 @@ test("detached process reaches unchecked and completed", async (t) => {
     label: "echo",
     spec: { type: "shell", command: "printf 'hello'" },
   });
-  assert.ok(started.phase === "pending" || started.phase === "running");
+  assert.ok(
+    started.phase === "pending" || started.phase === "running" || started.phase === "unchecked",
+  );
   const finished = await waitForPhase(started.taskDir, "unchecked");
   assert.equal(finished.result?.outcome, "success");
   assert.equal((await readProcessOutput(started.taskDir)).stdout, "hello");

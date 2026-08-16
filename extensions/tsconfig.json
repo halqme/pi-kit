@@ -3,6 +3,7 @@
     "allowImportingTsExtensions": true,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
+    "incremental": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmit": true,
