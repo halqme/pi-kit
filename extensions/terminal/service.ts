@@ -20,17 +20,8 @@ export class TerminalSessionService {
 
   async create(command: string, cwd: string): Promise<TerminalSession> {
     const session = `pi-terminal-${randomUUID()}`;
-    let created = false;
-    try {
-      await this.runTmux(["new-session", "-d", "-s", session, "-c", cwd]);
-      created = true;
-      await this.runTmux(["send-keys", "-t", session, "-l", command]);
-      await this.runTmux(["send-keys", "-t", session, "Enter"]);
-      return { session, cwd };
-    } catch (error) {
-      if (created) await this.runTmux(["kill-session", "-t", session]).catch(() => {});
-      throw error;
-    }
+    await this.runTmux(["new-session", "-d", "-s", session, "-c", cwd, command]);
+    return { session, cwd };
   }
 
   async isAlive(session: string): Promise<boolean> {
