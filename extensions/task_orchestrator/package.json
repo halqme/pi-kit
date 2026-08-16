@@ -1,0 +1,22 @@
+{
+  "name": "@halqme/task-orchestrator",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun run typecheck && bun test --parallel",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "dev": "pi -e ./index.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "catalog:",
+    "@earendil-works/pi-coding-agent": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
