@@ -2,37 +2,28 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TerminalSessionService } from "./service.ts";
 
-test("creates a tmux session in the requested cwd and starts the command", async () => {
+test("creates a process-bound tmux session in the requested cwd", async () => {
   const calls: string[][] = [];
   const service = new TerminalSessionService(async (args) => {
     calls.push(args);
   });
 
-  const created = await service.create("pi --name queen 'do work'", "/tmp/task-worktree");
+  const command = "pi --name queen 'do work'";
+  const created = await service.create(command, "/tmp/task-worktree");
 
   assert.equal(created.cwd, "/tmp/task-worktree");
   assert.equal(created.session.startsWith("pi-terminal-"), true);
   assert.deepEqual(calls, [
-    ["new-session", "-d", "-s", created.session, "-c", "/tmp/task-worktree"],
-    ["send-keys", "-t", created.session, "-l", "pi --name queen 'do work'"],
-    ["send-keys", "-t", created.session, "Enter"],
+    ["new-session", "-d", "-s", created.session, "-c", "/tmp/task-worktree", command],
   ]);
 });
 
-test("removes a partially created session when command injection fails", async () => {
-  const calls: string[][] = [];
-  let call = 0;
-  const service = new TerminalSessionService(async (args) => {
-    calls.push(args);
-    call++;
-    if (call === 2) throw new Error("send failed");
+test("propagates session creation failure", async () => {
+  const service = new TerminalSessionService(async () => {
+    throw new Error("create failed");
   });
 
-  await assert.rejects(service.create("pi", "/tmp/task-worktree"), /send failed/);
-
-  const session = calls[0]?.[4];
-  assert.equal(session?.startsWith("pi-terminal-"), true);
-  assert.deepEqual(calls.at(-1), ["kill-session", "-t", session!]);
+  await assert.rejects(service.create("pi", "/tmp/task-worktree"), /create failed/);
 });
 
 test("reports liveness and closes by tmux session id", async () => {
