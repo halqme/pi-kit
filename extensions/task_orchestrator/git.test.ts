@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { GitWorktreeManager } from "./git.ts";
 
@@ -18,11 +20,12 @@ test("uses argument-based git worktree operations without stash, clean, or force
       return responses.shift()!;
     },
   });
+  const worktreePath = join(tmpdir(), "pi-task-runtime-test-worktree");
 
   assert.equal(await manager.repoRoot("/repo/subdir"), "/repo");
   assert.equal(await manager.head("/repo"), "abc123");
   assert.equal(await manager.status("/repo"), "");
-  await manager.create("/repo", "/tasks/task-test", "pi/task/task-test", "abc123");
+  await manager.create("/repo", worktreePath, "pi/task/task-test", "abc123");
 
   assert.deepEqual(calls, [
     { command: "git", args: ["rev-parse", "--show-toplevel"], cwd: "/repo/subdir" },
@@ -30,7 +33,7 @@ test("uses argument-based git worktree operations without stash, clean, or force
     { command: "git", args: ["status", "--porcelain"], cwd: "/repo" },
     {
       command: "git",
-      args: ["worktree", "add", "-b", "pi/task/task-test", "/tasks/task-test", "abc123"],
+      args: ["worktree", "add", "-b", "pi/task/task-test", worktreePath, "abc123"],
       cwd: "/repo",
     },
   ]);
