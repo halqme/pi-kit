@@ -6,6 +6,26 @@ The `agent_team` tool supports `start`, `list`, `check`, `answer`, `revisit`, an
 
 Each opening, discussion, and final-recording response is a separate Pi subprocess started through `@halqme/background-process`. Prompts are sent over stdin and members are started with argv, not shell commands. `check`, `start`, and `answer` return the accumulated agent-team transcript.
 
+## When to use it
+
+`agent-team` is intentionally a low-frequency, high-value tool. Use it only:
+
+- before making a material design or architecture decision;
+- when blocked and there are multiple plausible causes;
+- to review a large or high-impact change.
+
+Do not use it for routine or frequent reviews, simple checks, implementation work, or verification. For frequent lightweight reviews, start a detached command with `background_process`, for example:
+
+```json
+{
+  "action": "start",
+  "command": "pi -ne 'please review ...'",
+  "label": "review"
+}
+```
+
+Inspect the process output when `background_process` reports completion.
+
 - `mode: "committee"` asks specialists to develop a shared recommendation while preserving material dissent.
 - `mode: "adversarial"` asks members to cross-examine claims, evidence, assumptions, and failure modes. Adversarial behavior is directed at arguments, not people.
 - `interaction: "consultative"` remains available for callers that explicitly want a pause after independent opening statements; the normal default is autonomous.

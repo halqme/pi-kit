@@ -182,10 +182,12 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
     name: TOOL_NAME,
     label: "agent-team",
     description:
-      "Run a session-scoped, read-only team of Pi agents to support human or parent-agent judgment through constructive committee discussion or focused adversarial review. Use committee mode to explore, compare, synthesize, or make a recommendation; use adversarial mode to challenge claims, designs, risks, or evidence. Team results are advisory: agent_team does not mutate project state or establish verification. Consultative teams pause after independent opening statements and wait for user direction.",
+      "Run a session-scoped, read-only team of Pi agents to support high-value human or parent-agent judgment through constructive committee discussion or focused adversarial review. Use agent_team sparingly: before a material design decision, when blocked by multiple plausible causes, or to review a large/high-impact change. Do not use it for routine or frequent reviews, simple checks, implementation work, or verification. Team results are advisory: agent_team does not mutate project state or establish verification. Consultative teams pause after independent opening statements and wait for user direction.",
     promptSnippet: "Choose constructive committee or adversarial review for a difficult question",
     promptGuidelines: [
-      "Use agent_team for contested decisions, high-risk reviews, or work that benefits from independent perspectives.",
+      "Use agent_team sparingly and only for high-value judgment: before a material design or architecture decision, when blocked by multiple plausible causes, or to review a large/high-impact change.",
+      "Do not use agent_team for routine or frequent reviews, simple checks, normal implementation work, or verification.",
+      "For frequent lightweight review requests, use background_process to start a detached non-interactive command such as `pi -ne 'please review ...'`; inspect its output when the process completes.",
       "Treat team output as advisory evidence for human or parent-agent judgment, not as an implementation or verification result.",
       "Choose committee mode for exploration, brainstorming, comparison, synthesis, or a balanced recommendation.",
       "Choose adversarial mode for critique, red-teaming, debugging competing explanations, or stress-testing a proposed decision; challenge claims and assumptions, not people.",

@@ -15,6 +15,16 @@ Select the smallest execution shape that matches the work. A detached process, a
 
 Prefer a child when separate context, autonomous execution, or independently verifiable workstreams will preserve the parent’s attention or improve throughput. Do not delegate an unresolved product decision or a conflicting shared mutation: keep the decision with the parent, resolve ownership, and then delegate the self-contained work. When the user asks to split or delegate, load `delegate-task` and follow its handoff and acceptance protocol rather than defaulting to direct execution.
 
+### Deliberative review versus routine review
+
+Use `agent_team` sparingly as a low-frequency, high-value deliberation point only:
+
+- before making a material design or architecture decision;
+- when blocked with multiple plausible causes;
+- when reviewing a large or high-impact change.
+
+Do not spend an agent team on routine or frequent reviews, simple checks, implementation work, or verification. For those lightweight reviews, use `background_process` to start a detached non-interactive command such as `pi -ne 'please review ...'`, then inspect its output when completion is reported.
+
 ## Terminal-hosted child Pi operation
 
 Use a terminal-hosted child Pi when the parent has resolved the implementation contract but wants a child agent to execute it autonomously while retaining interactive lifecycle control.

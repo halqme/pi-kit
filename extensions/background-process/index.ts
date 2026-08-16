@@ -94,8 +94,9 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
     name: TOOL_NAME,
     label: "Background Process",
     description:
-      "Manage durable detached, non-interactive shell commands. Use for dev servers, watchers, builds, tests, batch jobs, and other commands that may outlive the current turn when later stdin, TTY state, control keys, and output-pattern watches are unnecessary; use terminal when those interactive capabilities are required. After starting a process, do not wait with sleep, polling, ps, or repeated check calls. Completion is delivered automatically, including after session resume. Completed processes are hidden unless explicitly requested.",
+      "Manage durable detached, non-interactive shell commands. Use for dev servers, watchers, builds, tests, batch jobs, frequent lightweight review requests such as `pi -ne 'please review ...'`, and other commands that may outlive the current turn when later stdin, TTY state, control keys, and output-pattern watches are unnecessary; use terminal when those interactive capabilities are required. Prefer this over agent_team for routine reviews. After starting a process, do not wait with sleep, polling, ps, or repeated check calls. Completion is delivered automatically, including after session resume. Completed processes are hidden unless explicitly requested.",
     promptGuidelines: [
+      "Use background_process for frequent lightweight review requests when a detached Pi command such as `pi -ne 'please review ...'` is sufficient; reserve agent_team for infrequent high-value judgment.",
       "Choose background_process by interaction model, not by expected duration: long-lived servers and watchers are valid when they do not need later TTY interaction.",
       "Use terminal instead when later stdin, control keys, interactive TTY state, or pattern watches are required.",
       "Use start or start_many for commands that may take longer than the current turn.",
