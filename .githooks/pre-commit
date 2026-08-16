@@ -2,7 +2,6 @@
 set -eu
 
 repository_root=$(git rev-parse --show-toplevel)
-cd "$repository_root/extensions"
 
-bun run format
-bun run lint
+bun run format:check
+bun run check
