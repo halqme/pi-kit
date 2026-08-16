@@ -1,5 +1,9 @@
-import { readdirSync } from "node:fs";
 import { extname } from "node:path";
+import { adapter as denoAdapter } from "../languages/deno/config.ts";
+import { adapter as goAdapter } from "../languages/go/config.ts";
+import { adapter as javascriptAdapter } from "../languages/javascript/config.ts";
+import { adapter as pythonAdapter } from "../languages/python/config.ts";
+import { adapter as typescriptAdapter } from "../languages/typescript/config.ts";
 
 export type LanguageId = string;
 
@@ -35,24 +39,13 @@ export interface LanguageAdapter {
   importantNodeTypes: ReadonlySet<string>;
 }
 
-const languageDirectories = readdirSync(new URL("../languages/", import.meta.url), {
-  withFileTypes: true,
-})
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
-  .sort();
-
-const adapters: readonly LanguageAdapter[] = await Promise.all(
-  languageDirectories.map(async (language) => {
-    const module = (await import(`../languages/${language}/config.ts`)) as {
-      adapter?: LanguageAdapter;
-    };
-    if (!module.adapter) {
-      throw new Error(`Invalid language adapter: ${language}/config.ts must export adapter.`);
-    }
-    return module.adapter;
-  }),
-);
+const adapters: readonly LanguageAdapter[] = [
+  denoAdapter,
+  goAdapter,
+  javascriptAdapter,
+  pythonAdapter,
+  typescriptAdapter,
+];
 const adaptersById = new Map(adapters.map((adapter) => [adapter.id, adapter]));
 export const supportedLanguageIds = adapters.map((adapter) => adapter.id) as [string, ...string[]];
 export const supportedLanguageDescription = supportedLanguageIds.join(", ");

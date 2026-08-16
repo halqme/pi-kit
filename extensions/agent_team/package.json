@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "bun run typecheck && bun test",
+    "check": "bun run typecheck && bun test --parallel",
     "typecheck": "tsc --noEmit",
     "test": "node --test",
     "dev": "pi -e ./index.ts",

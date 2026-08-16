@@ -100,7 +100,7 @@ languages/
     └── queries.ts
 ```
 
-対応言語は`languages/*/config.ts`から起動時に読み込みます。TSXとアダプターのない言語は`unsupported_language`です。Tree-sitter WASMとParserは初回利用時に読み込み、言語IDと文法IDごとに再利用します。
+対応言語は`language-profile.ts`のレジストリから、各`languages/*/config.ts`を起動時に読み込みます。新しい言語を追加するときはレジストリにも登録してください。TSXとアダプターのない言語は`unsupported_language`です。Tree-sitter WASMとParserは初回利用時に読み込み、言語IDと文法IDごとに再利用します。
 
 ## 適用範囲
 

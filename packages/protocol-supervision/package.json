@@ -6,7 +6,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "check": "bun run typecheck && bun test",
+    "check": "bun run typecheck && bun test --parallel",
     "typecheck": "tsc --noEmit",
     "test": "node --test"
   },
