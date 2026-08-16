@@ -5,7 +5,7 @@ type ExecResult = { stdout: string; stderr: string; code: number; killed: boolea
 
 describe("GitWorktreeManager", () => {
   test("uses argument-based git worktree operations without stash, clean, or force", async () => {
-    const calls: Array<{ command: string; args: string[]; cwd?: string }> = [];
+    const calls: Array<{ command: string; args: string[]; cwd: string | undefined }> = [];
     const responses: ExecResult[] = [
       { stdout: "/repo\n", stderr: "", code: 0, killed: false },
       { stdout: "abc123\n", stderr: "", code: 0, killed: false },
