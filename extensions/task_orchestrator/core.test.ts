@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { afterEach, test } from "node:test";
 import {
   TaskRuntime,
   TaskStore,
@@ -96,117 +97,114 @@ async function fixture() {
   return { root, repoRoot, worktrees, queens, store, runtime };
 }
 
-describe("TaskRuntime", () => {
-  test("submits a clean repository into a dedicated worktree and Queen", async () => {
-    const { repoRoot, runtime, worktrees, queens, store } = await fixture();
+test("submits a clean repository into a dedicated worktree and Queen", async () => {
+  const { repoRoot, runtime, worktrees, queens, store } = await fixture();
 
-    const task = await runtime.submit("Implement the requested change", repoRoot);
+  const task = await runtime.submit("Implement the requested change", repoRoot);
 
-    expect(task).toMatchObject({
-      id: "task-test",
-      request: "Implement the requested change",
+  assert.equal(task.id, "task-test");
+  assert.equal(task.request, "Implement the requested change");
+  assert.equal(task.repoRoot, resolve(repoRoot));
+  assert.equal(task.branch, "pi/task/task-test");
+  assert.equal(task.baseSha, "abc123");
+  assert.equal(task.queenSession, "queen-1");
+  assert.equal(task.status, "running");
+  assert.deepEqual(worktrees.created, [
+    {
       repoRoot: resolve(repoRoot),
+      path: resolve(task.worktreePath),
       branch: "pi/task/task-test",
       baseSha: "abc123",
-      queenSession: "queen-1",
-      status: "running",
-    });
-    expect(worktrees.created).toEqual([
-      {
-        repoRoot: resolve(repoRoot),
-        path: resolve(task.worktreePath),
-        branch: "pi/task/task-test",
-        baseSha: "abc123",
-      },
-    ]);
-    expect(queens.launched).toEqual([
-      { taskId: "task-test", worktreePath: task.worktreePath, mode: "start" },
-    ]);
-    expect(await store.get("task-test")).toEqual(task);
+    },
+  ]);
+  assert.deepEqual(queens.launched, [
+    { taskId: "task-test", worktreePath: task.worktreePath, mode: "start" },
+  ]);
+  assert.deepEqual(await store.get("task-test"), task);
+});
+
+test("refuses submit when the source worktree is dirty", async () => {
+  const { repoRoot, runtime, worktrees } = await fixture();
+  worktrees.dirty.set(resolve(repoRoot), " M src/index.ts");
+
+  await assert.rejects(runtime.submit("Change it", repoRoot), /Source worktree is dirty/);
+  assert.equal(worktrees.created.length, 0);
+});
+
+test("refuses nested top-level submit from a managed task worktree", async () => {
+  const { repoRoot, runtime, worktrees } = await fixture();
+  const task = await runtime.submit("First task", repoRoot);
+  worktrees.dirty.set(resolve(task.worktreePath), "");
+
+  await assert.rejects(
+    runtime.submit("Nested task", task.worktreePath),
+    /Cannot submit a nested task from managed worktree task-test/,
+  );
+});
+
+test("marks a running task stopped when its Queen is gone", async () => {
+  const { repoRoot, runtime, queens, worktrees, store } = await fixture();
+  const task = await runtime.submit("Change it", repoRoot);
+  queens.alive.set(task.queenSession!, false);
+  worktrees.dirty.set(resolve(task.worktreePath), " M src/index.ts");
+
+  const status = await runtime.status(task.id);
+
+  assert.equal(status.queenAlive, false);
+  assert.equal(status.dirty, true);
+  assert.equal(status.task.status, "stopped");
+  assert.equal((await store.get(task.id)).status, "stopped");
+});
+
+test("resumes a stopped task in the same worktree", async () => {
+  const { repoRoot, runtime, queens } = await fixture();
+  const task = await runtime.submit("Change it", repoRoot);
+  queens.alive.set(task.queenSession!, false);
+  await runtime.status(task.id);
+
+  const resumed = await runtime.resume(task.id);
+
+  assert.equal(resumed.worktreePath, task.worktreePath);
+  assert.equal(resumed.queenSession, "queen-2");
+  assert.equal(resumed.status, "running");
+  assert.deepEqual(queens.launched.at(-1), {
+    taskId: task.id,
+    worktreePath: task.worktreePath,
+    mode: "resume",
   });
+});
 
-  test("refuses submit when the source worktree is dirty", async () => {
-    const { repoRoot, runtime, worktrees } = await fixture();
-    worktrees.dirty.set(resolve(repoRoot), " M src/index.ts");
+test("allows complete only from the task's own worktree", async () => {
+  const { repoRoot, runtime } = await fixture();
+  const task = await runtime.submit("Change it", repoRoot);
 
-    await expect(runtime.submit("Change it", repoRoot)).rejects.toThrow("Source worktree is dirty");
-    expect(worktrees.created).toHaveLength(0);
+  await assert.rejects(runtime.complete(task.id, repoRoot), /only be completed from its own worktree/);
+  assert.equal((await runtime.complete(task.id, task.worktreePath)).status, "completed");
+});
+
+test("keeps dirty worktrees during cleanup", async () => {
+  const { repoRoot, runtime, worktrees } = await fixture();
+  const task = await runtime.submit("Change it", repoRoot);
+  await runtime.complete(task.id, task.worktreePath);
+  worktrees.dirty.set(resolve(task.worktreePath), " M src/index.ts");
+
+  await assert.rejects(runtime.cleanup(task.id), /Task worktree is dirty; keeping it/);
+  assert.equal(worktrees.existing.has(resolve(task.worktreePath)), true);
+});
+
+test("cleans a completed clean worktree while retaining its task branch", async () => {
+  const { repoRoot, runtime, worktrees, queens, store } = await fixture();
+  const task = await runtime.submit("Change it", repoRoot);
+  await runtime.complete(task.id, task.worktreePath);
+
+  const cleaned = await runtime.cleanup(task.id);
+
+  assert.deepEqual(cleaned, {
+    taskId: task.id,
+    branch: "pi/task/task-test",
+    status: "cleaned",
   });
-
-  test("refuses nested top-level submit from a managed task worktree", async () => {
-    const { repoRoot, runtime, worktrees } = await fixture();
-    const task = await runtime.submit("First task", repoRoot);
-    worktrees.dirty.set(resolve(task.worktreePath), "");
-
-    await expect(runtime.submit("Nested task", task.worktreePath)).rejects.toThrow(
-      "Cannot submit a nested task from managed worktree task-test",
-    );
-  });
-
-  test("marks a running task stopped when its Queen is gone", async () => {
-    const { repoRoot, runtime, queens, worktrees, store } = await fixture();
-    const task = await runtime.submit("Change it", repoRoot);
-    queens.alive.set(task.queenSession!, false);
-    worktrees.dirty.set(resolve(task.worktreePath), " M src/index.ts");
-
-    const status = await runtime.status(task.id);
-
-    expect(status.queenAlive).toBe(false);
-    expect(status.dirty).toBe(true);
-    expect(status.task.status).toBe("stopped");
-    expect((await store.get(task.id)).status).toBe("stopped");
-  });
-
-  test("resumes a stopped task in the same worktree", async () => {
-    const { repoRoot, runtime, queens } = await fixture();
-    const task = await runtime.submit("Change it", repoRoot);
-    queens.alive.set(task.queenSession!, false);
-    await runtime.status(task.id);
-
-    const resumed = await runtime.resume(task.id);
-
-    expect(resumed.worktreePath).toBe(task.worktreePath);
-    expect(resumed.queenSession).toBe("queen-2");
-    expect(resumed.status).toBe("running");
-    expect(queens.launched.at(-1)).toEqual({
-      taskId: task.id,
-      worktreePath: task.worktreePath,
-      mode: "resume",
-    });
-  });
-
-  test("allows complete only from the task's own worktree", async () => {
-    const { repoRoot, runtime } = await fixture();
-    const task = await runtime.submit("Change it", repoRoot);
-
-    await expect(runtime.complete(task.id, repoRoot)).rejects.toThrow("only be completed from its own worktree");
-    expect((await runtime.complete(task.id, task.worktreePath)).status).toBe("completed");
-  });
-
-  test("keeps dirty worktrees during cleanup", async () => {
-    const { repoRoot, runtime, worktrees } = await fixture();
-    const task = await runtime.submit("Change it", repoRoot);
-    await runtime.complete(task.id, task.worktreePath);
-    worktrees.dirty.set(resolve(task.worktreePath), " M src/index.ts");
-
-    await expect(runtime.cleanup(task.id)).rejects.toThrow("Task worktree is dirty; keeping it");
-    expect(worktrees.existing.has(resolve(task.worktreePath))).toBe(true);
-  });
-
-  test("cleans a completed clean worktree while retaining its task branch", async () => {
-    const { repoRoot, runtime, worktrees, queens, store } = await fixture();
-    const task = await runtime.submit("Change it", repoRoot);
-    await runtime.complete(task.id, task.worktreePath);
-
-    const cleaned = await runtime.cleanup(task.id);
-
-    expect(cleaned).toEqual({
-      taskId: task.id,
-      branch: "pi/task/task-test",
-      status: "cleaned",
-    });
-    expect(worktrees.removed).toEqual([resolve(task.worktreePath)]);
-    expect(queens.closed).toEqual([task.queenSession]);
-    await expect(store.get(task.id)).rejects.toThrow();
-  });
+  assert.deepEqual(worktrees.removed, [resolve(task.worktreePath)]);
+  assert.deepEqual(queens.closed, [task.queenSession]);
+  await assert.rejects(store.get(task.id));
 });
