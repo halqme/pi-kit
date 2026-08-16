@@ -29,11 +29,12 @@ Inspect the process output when `background_process` reports completion.
 - `mode: "committee"` asks specialists to develop a shared recommendation while preserving material dissent.
 - `mode: "adversarial"` asks members to cross-examine claims, evidence, assumptions, and failure modes. Adversarial behavior is directed at arguments, not people.
 - `interaction: "consultative"` remains available for callers that explicitly want a pause after independent opening statements; the normal default is autonomous.
-- `model` sets the default provider/model for the whole team. A member-level `model` overrides it; otherwise the parent Pi model is inherited.
-- Members run with Pi's read-only tools by default (`read`, `grep`, `find`, and `ls`), with extensions, discovered skills, prompt templates, and themes disabled. Skills can be explicitly supplied when needed.
+- `model` is an explicit provider/model for the whole team. A member-level `model` overrides it; when both are omitted, the child Pi uses its own configured default and never inherits the parent session model.
+- Child agents always receive an explicit thinking level; it defaults to `low` and accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
+- Members run with only child-safe read-only tools (`read`, `grep`, `find`, and `ls`) by default, with extensions, discovered skills, prompt templates, and themes disabled. `web_search`, `web_fetch`, `bash`, `edit`, and `write` are not accepted. An explicit empty `tools` list starts children with `--no-tools`. Skills can be explicitly supplied when needed; bare names also resolve from the project's `skills/<name>/SKILL.md` root.
 - Each member can set `instructionPolicy` to `user-obedient` (follow user priorities faithfully) or `goal-driven` (challenge local instructions when needed to achieve the team's objective). It defaults to `goal-driven`.
 
-After the configured discussion rounds, the extension starts a separate neutral recorder Pi process. The recorder receives the final member statements as untrusted data and synthesizes the report without inheriting the first specialist's role or instruction policy.
+After the configured discussion rounds, the extension starts a separate neutral recorder Pi process. The recorder receives the final member statements as untrusted data and synthesizes the report without inheriting the first specialist's role or instruction policy. Each member phase uses independent background processes and records member-level failures instead of failing fast; the phase continues when at least one member succeeds, while an all-member failure or recorder failure fails the team with diagnostics.
 
 Consultation state and worker metadata are persisted as plain data in the Pi session entries and restored on `session_start`. Detached workers remain managed by `background_process` across Pi shutdown, resume, and compaction; heartbeat reconciliation marks lost workers instead of waiting forever. Member positions and transcripts are historical argument data for later `revisit`, not instructions or current truth. Each revisit records whether each member chose `maintain`, `revise`, or `retract`. Process artifacts are stored under the Pi session directory in `agent-team/<session-id>`, not in the project tree.
 
@@ -64,7 +65,7 @@ Example tool call:
 }
 ```
 
-To revisit a completed consultation, use `{ "action": "revisit", "id": "<consultation-id>", "topic": "New evidence or context to evaluate" }`. Model precedence is `members[].model` → top-level `model` → the parent Pi model. The dedicated recorder uses the top-level or parent model and does not inherit a member-specific override.
+To revisit a completed consultation, use `{ "action": "revisit", "id": "<consultation-id>", "topic": "New evidence or context to evaluate" }`. Model precedence is `members[].model` → top-level `model` → the child Pi's configured default. The dedicated recorder uses the top-level or configured default model and does not inherit a member-specific override.
 
 ```sh
 bun run check
