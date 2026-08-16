@@ -186,6 +186,17 @@
         "typescript": "catalog:",
       },
     },
+    "extensions/task_orchestrator": {
+      "name": "@halqme/task-orchestrator",
+      "dependencies": {
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "extensions/terminal": {
       "name": "@halqme/terminal",
       "dependencies": {
@@ -388,6 +399,8 @@
     "@halqme/runner": ["@halqme/runner@workspace:extensions/runner"],
 
     "@halqme/statusline": ["@halqme/statusline@workspace:extensions/statusline"],
+
+    "@halqme/task-orchestrator": ["@halqme/task-orchestrator@workspace:extensions/task_orchestrator"],
 
     "@halqme/terminal": ["@halqme/terminal@workspace:extensions/terminal"],
 
