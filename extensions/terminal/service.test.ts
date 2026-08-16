@@ -11,7 +11,7 @@ describe("TerminalSessionService", () => {
     const created = await service.create("pi --name queen 'do work'", "/tmp/task-worktree");
 
     expect(created.cwd).toBe("/tmp/task-worktree");
-    expect(created.session).toStartWith("pi-terminal-");
+    expect(created.session.startsWith("pi-terminal-")).toBe(true);
     expect(calls).toEqual([
       ["new-session", "-d", "-s", created.session, "-c", "/tmp/task-worktree"],
       ["send-keys", "-t", created.session, "-l", "pi --name queen 'do work'"],
@@ -31,7 +31,7 @@ describe("TerminalSessionService", () => {
     await expect(service.create("pi", "/tmp/task-worktree")).rejects.toThrow("send failed");
 
     const session = calls[0]?.[4];
-    expect(session).toStartWith("pi-terminal-");
+    expect(session?.startsWith("pi-terminal-")).toBe(true);
     expect(calls.at(-1)).toEqual(["kill-session", "-t", session!]);
   });
 
