@@ -46,7 +46,7 @@ Additional standalone packages live under `packages/`. See each package's docume
 - Prompt templates live under `prompts/`.
 - Themes live under `themes/`.
 
-`agent-team` runs its discussion members as isolated Pi subprocesses through the bundled `background-process` extension.
+`agent_team` runs its discussion members as isolated Pi subprocesses through the bundled `background_process` extension.
 
 ## Development
 
@@ -73,11 +73,11 @@ bun run test
 To work on a single extension, use its package name:
 
 ```sh
-bun --filter @halqme/agent-team dev
-bun --filter @halqme/agent-team smoke
+bun --filter @halqme/agent_team dev
+bun --filter @halqme/agent_team smoke
 ```
 
-Replace `@halqme/agent-team` with the target package name. After changing an extension already loaded by Pi, run `/reload` in the Pi session.
+Replace `@halqme/agent_team` with the target package name. After changing an extension already loaded by Pi, run `/reload` in the Pi session.
 
 ## Repository layout
 

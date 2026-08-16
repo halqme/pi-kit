@@ -12,13 +12,13 @@
         "oxlint": "latest",
       },
     },
-    "extensions/agent-team": {
-      "name": "@halqme/agent-team",
+    "extensions/agent_team": {
+      "name": "@halqme/agent_team",
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@earendil-works/pi-tui": "catalog:",
-        "@halqme/background-process": "workspace:*",
+        "@halqme/background_process": "workspace:*",
       },
       "devDependencies": {
         "@earendil-works/pi-agent-core": "catalog:",
@@ -43,8 +43,8 @@
         "typescript": "catalog:",
       },
     },
-    "extensions/background-process": {
-      "name": "@halqme/background-process",
+    "extensions/background_process": {
+      "name": "@halqme/background_process",
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
@@ -55,8 +55,8 @@
         "typescript": "catalog:",
       },
     },
-    "extensions/bm25-search": {
-      "name": "@halqme/bm25-search",
+    "extensions/bm25_search": {
+      "name": "@halqme/bm25_search",
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
@@ -136,8 +136,8 @@
         "typescript": "catalog:",
       },
     },
-    "extensions/session-metrics": {
-      "name": "@halqme/pi-session-metrics-extension",
+    "extensions/session_metrics": {
+      "name": "@halqme/pi_session_metrics_extension",
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
@@ -344,13 +344,13 @@
 
     "@google/genai": ["@google/genai@1.52.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-gwSvbpiN/17O9TbsqSsE/OzZcpv5Fo4RQjdngGgogtuB9RsyJ8ZHhX5KjHj1bp5N9snN2eK8LDGXSaWW2hof8Q=="],
 
-    "@halqme/agent-team": ["@halqme/agent-team@workspace:extensions/agent-team"],
+    "@halqme/agent_team": ["@halqme/agent_team@workspace:extensions/agent_team"],
 
     "@halqme/astrolabe": ["@halqme/astrolabe@workspace:extensions/astrolabe"],
 
-    "@halqme/background-process": ["@halqme/background-process@workspace:extensions/background-process"],
+    "@halqme/background_process": ["@halqme/background_process@workspace:extensions/background_process"],
 
-    "@halqme/bm25-search": ["@halqme/bm25-search@workspace:extensions/bm25-search"],
+    "@halqme/bm25_search": ["@halqme/bm25_search@workspace:extensions/bm25_search"],
 
     "@halqme/grill": ["@halqme/grill@workspace:extensions/grill"],
 
@@ -360,7 +360,7 @@
 
     "@halqme/pi-session-metrics": ["@halqme/pi-session-metrics@workspace:packages/session-metrics"],
 
-    "@halqme/pi-session-metrics-extension": ["@halqme/pi-session-metrics-extension@workspace:extensions/session-metrics"],
+    "@halqme/pi_session_metrics_extension": ["@halqme/pi_session_metrics_extension@workspace:extensions/session_metrics"],
 
     "@halqme/plan": ["@halqme/plan@workspace:extensions/plan"],
 

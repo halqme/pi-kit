@@ -1,14 +1,11 @@
 {
-  "name": "@halqme/background-process",
+  "name": "@halqme/bm25_search",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./core.ts"
-  },
   "scripts": {
-    "check": "bun run typecheck && bun run test",
+    "check": "bun run typecheck && bun test",
     "typecheck": "tsc --noEmit",
-    "test": "node --test",
+    "test": "bun test",
     "dev": "pi -e ./index.ts",
     "smoke": "pi -e ./index.ts --list-models __extension_smoke__"
   },

@@ -1,9 +1,12 @@
 {
-  "name": "@halqme/agent-team",
+  "name": "@halqme/background_process",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./core.ts"
+  },
   "scripts": {
-    "check": "bun run typecheck && bun test",
+    "check": "bun run typecheck && bun run test",
     "typecheck": "tsc --noEmit",
     "test": "node --test",
     "dev": "pi -e ./index.ts",
@@ -12,11 +15,9 @@
   "dependencies": {
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
-    "@earendil-works/pi-tui": "catalog:",
-    "@halqme/background-process": "workspace:*"
+    "@earendil-works/pi-tui": "catalog:"
   },
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   },

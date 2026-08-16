@@ -64,7 +64,7 @@
     },
     {
       "id": 7,
-      "prompt": "親と子Piを同じworktreeで並列実行中。子は extensions/agent-team/ だけ担当している。親が extensions/background-process/index.ts を編集した直後、子のterminalに `Local resources changed: extensions/background-process/index.ts` と出た。担当外変更なので子を止めるべき？",
+      "prompt": "親と子Piを同じworktreeで並列実行中。子は extensions/agent_team/ だけ担当している。親が extensions/background_process/index.ts を編集した直後、子のterminalに `Local resources changed: extensions/background_process/index.ts` と出た。担当外変更なので子を止めるべき？",
       "expected_output": "The agent does not infer write provenance from a shared-workspace change notification. It keeps the worker running unless the write can actually be attributed to it, and serializes or isolates writers when attribution is required but unavailable.",
       "assertions": [
         "The response distinguishes observation of a shared filesystem change from evidence that the child caused the change.",

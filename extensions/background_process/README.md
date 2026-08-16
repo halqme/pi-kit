@@ -1,4 +1,4 @@
-# background-process
+# background_process
 
 Runs shell commands in detached supervisor processes and records their state outside the conversational context. Jobs survive Pi shutdown, resume, reload, and compaction.
 

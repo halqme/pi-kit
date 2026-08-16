@@ -6,7 +6,7 @@ import {
   readProcessOutput,
   requestProcessStop,
   startBackgroundProcess,
-} from "@halqme/background-process";
+} from "@halqme/background_process";
 import type { AgentTeamAgent, AgentTeamAgentFactory, AgentTeamMemberConfig } from "./team.ts";
 
 const POLL_MS = 100;

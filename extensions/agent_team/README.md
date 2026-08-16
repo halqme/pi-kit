@@ -1,14 +1,14 @@
-# agent-team
+# agent_team
 
 Runs multiple session-scoped subagent runs as a lightweight discussion team. The extension owns the discussion protocol and stops active member runs when the team completes, is stopped, or the parent Pi session shuts down.
 
 The `agent_team` tool supports `start`, `list`, `check`, `answer`, `revisit`, and `stop`. `start` waits for autonomous teams to finish and returns the final report; consultative teams return after the opening statements and can be resumed with `answer`. Use `check` for an already-running, waiting, or previously completed team. Use `revisit` with an existing completed team ID and new information to start fresh member subprocesses that reassess their historical positions.
 
-Each opening, discussion, and final-recording response is a separate Pi subprocess started through `@halqme/background-process`. Prompts are sent over stdin and members are started with argv, not shell commands. `check`, `start`, and `answer` return the accumulated agent-team transcript.
+Each opening, discussion, and final-recording response is a separate Pi subprocess started through `@halqme/background_process`. Prompts are sent over stdin and members are started with argv, not shell commands. `check`, `start`, and `answer` return the accumulated agent_team transcript.
 
 ## When to use it
 
-`agent-team` is intentionally a low-frequency, high-value tool. Use it only:
+`agent_team` is intentionally a low-frequency, high-value tool. Use it only:
 
 - before making a material design or architecture decision;
 - when blocked and there are multiple plausible causes;
