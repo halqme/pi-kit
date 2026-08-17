@@ -601,10 +601,11 @@ class BrowserRuntime {
       }
       case "inspect": {
         const nodes = await this.nodesForTarget(command.target);
-        return {
-          matches: await Promise.all(nodes.slice(0, 20).map((nodeId) => this.inspectNode(nodeId))),
-          total: nodes.length,
-        };
+        const matches: unknown[] = [];
+        for (const nodeId of nodes.slice(0, 20)) {
+          matches.push(await this.inspectNode(nodeId));
+        }
+        return { matches, total: nodes.length };
       }
       case "styles":
         return this.styles(command);

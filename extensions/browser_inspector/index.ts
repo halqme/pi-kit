@@ -10,7 +10,9 @@ const TOOL_NAME = "browser_inspector";
 
 const TargetSchema = Type.Union([
   Type.Object({ ref: Type.String({ description: "Element ref returned by inspect" }) }),
-  Type.Object({ selector: Type.String({ description: "CSS selector" }) }),
+  Type.Object({
+    selector: Type.String({ description: "CSS selector nested under target" }),
+  }),
   Type.Object({
     point: Type.Object({
       x: Type.Number({ description: "Viewport x coordinate" }),
@@ -27,7 +29,11 @@ export function setBrowserHostFactoryForTests(factory?: () => BrowserHost): void
 
 function required<T>(value: T | undefined, name: string, action: string): T {
   if (value === undefined || value === null || value === "") {
-    throw new Error(`${name} is required for ${action}`);
+    const hint =
+      name === "target"
+        ? ' Pass target as { selector: "..." }, { ref: "e4" }, or { point: { x, y } }.'
+        : "";
+    throw new Error(`${name} is required for ${action}.${hint}`);
   }
   return value;
 }
@@ -126,13 +132,14 @@ export default function browserInspectorExtension(pi: ExtensionAPI): void {
     name: TOOL_NAME,
     label: "Browser Inspector",
     description:
-      "Inspect and interact with a running web UI through an isolated headless Chrome managed by a Bun.WebView sidecar. Use after web UI changes and when runtime DOM, computed CSS, layout, console, network, or rendered output matters. Prefer inspect/styles/network/console over inferring browser behavior from source files or generated CSS. Element refs are short-lived and become stale after navigation. Use terminal or background_process for servers and non-browser commands.",
+      "Inspect and interact with a running web UI through an isolated headless Chrome managed by a Bun.WebView sidecar. Use after web UI changes and when runtime DOM, computed CSS, layout, console, network, or rendered output matters. Prefer inspect/styles/network/console over inferring browser behavior from source files or generated CSS. Element refs are short-lived and become stale after navigation. For inspect and styles, target is required and must be nested as { selector: ... }, { ref: ... }, or { point: ... }. Use terminal for servers whose readiness or startup/failure output must gate browser checks; use background_process only when no readiness observation is needed.",
     promptGuidelines: [
       "For visual or layout changes, verify the rendered browser state before claiming completion when the browser is available.",
       "Use inspect to resolve a selector or viewport point to element refs, then reuse those refs for styles, screenshots, and interactions until navigation invalidates them.",
+      'For inspect and styles, pass target as { selector: "..." }, { ref: "e4" }, or { point: { x, y } }; do not pass selector directly.',
       "Use styles when classes or CSS rules appear correct but the rendered result is wrong; it reports computed values, matched declarations, and unresolved custom properties.",
       "Use network and console cursors to inspect only new runtime events during short edit/reload loops.",
-      "Do not use browser_inspector to manage dev servers; use terminal or background_process for process lifecycle.",
+      "Do not use browser_inspector to manage dev servers; use terminal when browser checks depend on readiness or startup/failure output, and use background_process only when no readiness observation is needed.",
     ],
     parameters: Type.Object({
       action: Type.Union([

@@ -98,6 +98,10 @@ test("browser_inspector validates action-specific required fields before startin
   await assert.rejects(() =>
     tool.execute("bad", { action: "open" }, undefined, undefined, { cwd: "/tmp" }),
   );
+  await assert.rejects(
+    () => tool.execute("bad-inspect", { action: "inspect" }, undefined, undefined, { cwd: "/tmp" }),
+    /target is required for inspect\. Pass target as/,
+  );
   assert.equal(starts, 0);
   setBrowserHostFactoryForTests();
 });

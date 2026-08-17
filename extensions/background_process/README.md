@@ -14,9 +14,9 @@ For frequent lightweight review requests, start a detached Pi command here rathe
 
 `start_many` reports successfully started processes and per-item launch failures separately. Each process remains independently inspectable and stoppable by its returned ID.
 
-Choose this tool for detached non-interactive processes, including long-lived development servers and watchers, when later stdin, TTY state, control keys, or output-pattern watches are unnecessary. Expected lifetime is not the boundary: use `terminal` instead when the process needs interactive TTY control or pattern-based wakeups.
+Choose this tool for detached non-interactive processes, including long-lived development servers and watchers, when later stdin, TTY state, control keys, output-pattern watches, or startup-readiness observation are unnecessary. If a next step depends on seeing the server become ready or fail, use `terminal` with a readiness/failure watch instead. Expected lifetime is not the boundary: use `terminal` when the process needs interactive TTY control or pattern-based wakeups.
 
-After starting a long-running process, end the turn instead of using `sleep`, polling, `ps`, or repeated `check` calls. Completion is automatically delivered as a follow-up turn; if the session was interrupted, an unchecked completion is delivered when the session resumes. Completion notifications are acknowledged automatically after delivery.
+After starting a long-running process, do not use `sleep`, polling, `ps`, or repeated `check` calls to wait for completion. A running server reports completion only after it exits, so completion notification is not a readiness signal. When no readiness observation is needed, end the turn and let the completion notification arrive later; notifications are delivered automatically, including after session resume. If startup gates the next step, choose `terminal` before starting the process.
 
 Phases are `pending`, `running`, `unchecked`, and `completed`. Exit disposition is stored separately as `success`, `failed`, `stopped`, or `lost`.
 

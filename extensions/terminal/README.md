@@ -29,4 +29,4 @@ session reload時はterminal登録とruntime snapshotを復元したあと、即
 {"action":"read","name":"server","lines":100}
 ```
 
-監視は各自のwatch IDで独立しています。TTYのworkspaceとpaneはtmuxが保持し、terminalの登録情報とruntime stateはPiセッションへ記録されるため、拡張reload後も再発見できます。TTY、後続stdin、control key、pattern watchが不要な非対話型プロセスには`background_process`を使ってください。
+監視は各自のwatch IDで独立しています。TTYのworkspaceとpaneはtmuxが保持し、terminalの登録情報とruntime stateはPiセッションへ記録されるため、拡張reload後も再発見できます。Dev Serverの起動完了を出力で確認してから次へ進む場合は、`terminal`でreadiness/failureの`watch`を登録してください。TTY、後続stdin、control key、pattern watchが不要な非対話型プロセスには`background_process`を使ってください。
