@@ -15,7 +15,8 @@ description: Implement, modify, refactor, or remove code, configuration, tests, 
 5. Update tests and documentation when the externally observable behavior, contract, or operating procedure changes.
 6. Run the narrowest relevant checks first, then broader checks proportionate to risk. Inspect full failures, warnings, skipped cases, and truncation; fix causes rather than suppressing signals. Record actual results and use new evidence to resolve material uncertainty rather than repeating unchanged actions.
 7. Review the resulting diff for scope, accidental changes, stale comments, secrets, missing coverage, inconsistent style, type-system escapes, abnormal defensive code, and obvious performance or resource regressions.
-8. Before claiming the work is finished, apply `assess-task-completion` to evaluate the requested outcome against the actual resulting state and evidence.
+8. When applicable repository instructions make committing the default and the user has not prohibited it, use `git-workflow` after verification to commit the logically related changes. Do not push, merge, rebase, alter branches or tags, or open a pull request unless separately requested.
+9. Before claiming the work is finished, apply `assess-task-completion` to evaluate the requested outcome against the actual resulting state and evidence.
 
 Stop and ask before a choice that materially changes product behavior, public interfaces, data, dependencies, or external state and cannot be resolved from project evidence.
 
