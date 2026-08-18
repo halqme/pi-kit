@@ -10,6 +10,15 @@ test("browser_inspector registers a snake_case tool and forwards commands to one
     async request(command) {
       commands.push(command);
       if (command.action === "screenshot") return { path: command.outputPath };
+      if (command.action === "snapshot") {
+        return {
+          title: "Demo",
+          text: 'RootWebArea "Demo"\n  e1 button "Save"',
+          shown: 2,
+          total: 2,
+          truncated: false,
+        };
+      }
       return { action: command.action };
     },
     async dispose() {
@@ -39,9 +48,28 @@ test("browser_inspector registers a snake_case tool and forwards commands to one
     undefined,
     ctx,
   );
+  const snapshot = await tool.execute(
+    "snapshot-1",
+    { action: "snapshot", depth: 12, maxNodes: 120 },
+    undefined,
+    undefined,
+    ctx,
+  );
   await tool.execute(
     "styles-1",
     { action: "styles", target: { selector: ".composer" }, properties: ["padding-left"] },
+    undefined,
+    undefined,
+    ctx,
+  );
+  await tool.execute(
+    "refresh-1",
+    {
+      action: "refresh",
+      target: { selector: ".composer" },
+      levels: ["error"],
+      failedOnly: false,
+    },
     undefined,
     undefined,
     ctx,
@@ -59,14 +87,22 @@ test("browser_inspector registers a snake_case tool and forwards commands to one
     url: "http://localhost:8787",
     viewport: { width: 1280, height: 720 },
   });
-  assert.deepEqual(commands[1], {
+  assert.deepEqual(commands[1], { action: "snapshot", depth: 12, maxNodes: 120 });
+  assert.match(snapshot.content[0].text, /^Snapshot 2\/2: Demo\n/);
+  assert.deepEqual(commands[2], {
     action: "styles",
     target: { selector: ".composer" },
     properties: ["padding-left"],
   });
-  assert.equal(commands[2]?.action, "screenshot");
+  assert.deepEqual(commands[3], {
+    action: "refresh",
+    target: { selector: ".composer" },
+    levels: ["error"],
+    failedOnly: false,
+  });
+  assert.equal(commands[4]?.action, "screenshot");
   assert.match(
-    (commands[2] as Extract<BrowserCommand, { action: "screenshot" }>).outputPath,
+    (commands[4] as Extract<BrowserCommand, { action: "screenshot" }>).outputPath,
     /pi-kit-browser-inspector/,
   );
   assert.match(screenshot.content[0].text, /^Screenshot: /);
@@ -97,6 +133,17 @@ test("browser_inspector validates action-specific required fields before startin
   extension(pi);
   await assert.rejects(() =>
     tool.execute("bad", { action: "open" }, undefined, undefined, { cwd: "/tmp" }),
+  );
+  await assert.rejects(
+    () =>
+      tool.execute(
+        "stale",
+        { action: "refresh", target: { ref: "e1" } },
+        undefined,
+        undefined,
+        { cwd: "/tmp" },
+      ),
+    /cannot reuse an element ref across reload/,
   );
   assert.equal(starts, 0);
   setBrowserHostFactoryForTests();
