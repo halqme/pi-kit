@@ -4,15 +4,18 @@ import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { BrowserHostClient } from "./client.ts";
-import type { BrowserCommand, BrowserHost, BrowserTarget } from "./protocol.ts";
+import type {
+  BrowserCommand,
+  BrowserHost,
+  BrowserTarget,
+  StableBrowserTarget,
+} from "./protocol.ts";
 
 const TOOL_NAME = "browser_inspector";
 
 const TargetSchema = Type.Union([
-  Type.Object({ ref: Type.String({ description: "Element ref returned by inspect" }) }),
-  Type.Object({
-    selector: Type.String({ description: "CSS selector nested under target" }),
-  }),
+  Type.Object({ ref: Type.String({ description: "Element ref returned by inspect or snapshot" }) }),
+  Type.Object({ selector: Type.String({ description: "CSS selector" }) }),
   Type.Object({
     point: Type.Object({
       x: Type.Number({ description: "Viewport x coordinate" }),
@@ -42,6 +45,17 @@ function target(value: BrowserTarget | undefined, action: string): BrowserTarget
   return required(value, "target", action);
 }
 
+function stableTarget(
+  value: BrowserTarget | undefined,
+  action: string,
+): StableBrowserTarget | undefined {
+  if (!value) return undefined;
+  if ("ref" in value) {
+    throw new Error(`${action} cannot reuse an element ref across reload; use a selector or point`);
+  }
+  return value;
+}
+
 function screenshotPath(cwd: string, requested: string | undefined, toolCallId: string): string {
   if (requested) return resolve(cwd, requested);
   const id = toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -54,6 +68,8 @@ function buildCommand(
     url?: string;
     viewport?: { width: number; height: number };
     target?: BrowserTarget;
+    depth?: number;
+    maxNodes?: number;
     properties?: string[];
     preset?: "layout" | "typography" | "paint" | "all";
     operation?: "click" | "type" | "press" | "scroll" | "resize" | "reload" | "back" | "forward";
@@ -79,6 +95,12 @@ function buildCommand(
         action: "open",
         url: required(params.url, "url", "open"),
         ...(params.viewport ? { viewport: params.viewport } : {}),
+      };
+    case "snapshot":
+      return {
+        action: "snapshot",
+        ...(params.depth !== undefined ? { depth: params.depth } : {}),
+        ...(params.maxNodes !== undefined ? { maxNodes: params.maxNodes } : {}),
       };
     case "inspect":
       return { action: "inspect", target: target(params.target, "inspect") };
@@ -107,6 +129,15 @@ function buildCommand(
         ...(params.width !== undefined ? { width: params.width } : {}),
         ...(params.height !== undefined ? { height: params.height } : {}),
       };
+    case "refresh": {
+      const refreshTarget = stableTarget(params.target, "refresh");
+      return {
+        action: "refresh",
+        ...(refreshTarget ? { target: refreshTarget } : {}),
+        ...(params.levels ? { levels: params.levels } : {}),
+        ...(params.failedOnly !== undefined ? { failedOnly: params.failedOnly } : {}),
+      };
+    }
     case "console":
       return {
         action: "console",
@@ -124,6 +155,26 @@ function buildCommand(
   }
 }
 
+function snapshotText(result: unknown): string | undefined {
+  if (!result || typeof result !== "object" || !("text" in result)) return undefined;
+  const snapshot = result as {
+    text?: unknown;
+    shown?: unknown;
+    total?: unknown;
+    truncated?: unknown;
+    title?: unknown;
+    url?: unknown;
+  };
+  const text = typeof snapshot.text === "string" ? snapshot.text : "";
+  const location = String(snapshot.title || snapshot.url || "page");
+  const count =
+    typeof snapshot.shown === "number" && typeof snapshot.total === "number"
+      ? `${snapshot.shown}/${snapshot.total}`
+      : "?";
+  const header = `Snapshot ${count}${snapshot.truncated ? " (truncated)" : ""}: ${location}`;
+  return text ? `${header}\n${text}` : header;
+}
+
 export default function browserInspectorExtension(pi: ExtensionAPI): void {
   let host: BrowserHost | undefined;
   const getHost = (): BrowserHost => (host ??= hostFactory());
@@ -132,23 +183,26 @@ export default function browserInspectorExtension(pi: ExtensionAPI): void {
     name: TOOL_NAME,
     label: "Browser Inspector",
     description:
-      "Inspect and interact with a running web UI through an isolated headless Chrome managed by a Bun.WebView sidecar. Use after web UI changes and when runtime DOM, computed CSS, layout, console, network, or rendered output matters. Prefer inspect/styles/network/console over inferring browser behavior from source files or generated CSS. Element refs are short-lived and become stale after navigation. For inspect and styles, target is required and must be nested as { selector: ... }, { ref: ... }, or { point: ... }. Use terminal for servers whose readiness or startup/failure output must gate browser checks; use background_process only when no readiness observation is needed.",
+      "Inspect and interact with a running web UI through an isolated headless Chrome managed by a Bun.WebView sidecar. Use after web UI changes and when runtime DOM, computed CSS, layout, console, network, or rendered output matters. Prefer targeted inspect/styles calls; use snapshot only to discover an unfamiliar page, and refresh for the common reload-observe loop. Element refs are short-lived and become stale after navigation. Use terminal or background_process for servers and non-browser commands.",
     promptGuidelines: [
       "For visual or layout changes, verify the rendered browser state before claiming completion when the browser is available.",
       "Use inspect to resolve a selector or viewport point to element refs, then reuse those refs for styles, screenshots, and interactions until navigation invalidates them.",
-      'For inspect and styles, pass target as { selector: "..." }, { ref: "e4" }, or { point: { x, y } }; do not pass selector directly.',
+      "Use snapshot as a discovery fallback when you do not yet know what selector or control to inspect. Its compact accessibility tree is capped by maxNodes; lines beginning with eN contain reusable element refs.",
       "Use styles when classes or CSS rules appear correct but the rendered result is wrong; it reports computed values, matched declarations, and unresolved custom properties.",
-      "Use network and console cursors to inspect only new runtime events during short edit/reload loops.",
-      "Do not use browser_inspector to manage dev servers; use terminal when browser checks depend on readiness or startup/failure output, and use background_process only when no readiness observation is needed.",
+      "Use refresh after an edit when you need reload plus post-reload console/network deltas and an optional selector/point inspection in one round trip. refresh cannot accept an element ref because reload invalidates refs; failedOnly defaults to true for its network result.",
+      "Use network and console cursors when you need explicit incremental event control outside refresh.",
+      "Do not use browser_inspector to manage dev servers; use terminal or background_process for process lifecycle.",
     ],
     parameters: Type.Object({
       action: Type.Union([
         Type.Literal("probe"),
         Type.Literal("open"),
+        Type.Literal("snapshot"),
         Type.Literal("inspect"),
         Type.Literal("styles"),
         Type.Literal("screenshot"),
         Type.Literal("interact"),
+        Type.Literal("refresh"),
         Type.Literal("console"),
         Type.Literal("network"),
         Type.Literal("close"),
@@ -161,6 +215,12 @@ export default function browserInspectorExtension(pi: ExtensionAPI): void {
         }),
       ),
       target: Type.Optional(TargetSchema),
+      depth: Type.Optional(
+        Type.Number({ minimum: 1, maximum: 64, description: "Maximum accessibility-tree depth for snapshot" }),
+      ),
+      maxNodes: Type.Optional(
+        Type.Number({ minimum: 1, maximum: 1000, description: "Maximum compact snapshot lines; defaults to 200" }),
+      ),
       properties: Type.Optional(
         Type.Array(Type.String(), { description: "CSS properties for styles" }),
       ),
@@ -239,7 +299,9 @@ export default function browserInspectorExtension(pi: ExtensionAPI): void {
       const text =
         command.action === "screenshot" && result && typeof result === "object" && "path" in result
           ? `Screenshot: ${String((result as { path: unknown }).path)}`
-          : JSON.stringify(result, null, 2);
+          : command.action === "snapshot"
+            ? (snapshotText(result) ?? JSON.stringify(result, null, 2))
+            : JSON.stringify(result, null, 2);
       return {
         content: [{ type: "text" as const, text }],
         details: result,

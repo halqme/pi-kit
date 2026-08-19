@@ -8,10 +8,12 @@ The Pi extension itself runs on Node.js. Browser work is delegated over a JSONL 
 
 - `probe` checks that the Bun sidecar and Chrome backend can start and reports browser/runtime capabilities.
 - `open` opens a URL in a fresh isolated page. The default viewport is 1440x900.
+- `snapshot` returns a compact accessibility-tree view for discovery when the caller does not yet know which selector or control matters. Ignored/generic boilerplate and duplicate inline text are removed, accessible text is bounded, and output defaults to at most 200 lines. Reusable element refs are emitted when an accessibility node maps cleanly to a DOM element.
 - `inspect` resolves a CSS selector, viewport point, or existing element ref and returns DOM attributes, text, visibility/focus/enabled state, and its rendered box. At most 20 matches are materialized per call.
 - `styles` reports computed CSS together with matched declarations and custom properties referenced without fallbacks. The default `layout` preset keeps responses focused; `typography`, `paint`, `all`, or an explicit property list are available.
 - `screenshot` captures the viewport or one target to PNG. Without `path`, the Node extension allocates a temporary file outside the project.
 - `interact` supports `click`, `type`, `press`, `scroll`, `resize`, `reload`, `back`, and `forward` for reproducing UI states before inspection.
+- `refresh` performs the common edit-check loop in one round trip: it records the current console/network cursors, reloads through `Bun.WebView`, then returns only post-reload console entries, post-reload network entries, and an optional selector/point inspection. Network output defaults to failures and HTTP errors only. Because reload invalidates element refs, `refresh.target` deliberately rejects refs.
 - `console` and `network` expose cursor-based event buffers so repeated checks can request only events newer than a previous result.
 - `close` destroys the current page. The Bun sidecar itself is disposed when the Pi session shuts down.
 
@@ -29,7 +31,9 @@ Open the page, inspect a target, then reuse the returned ref:
 
 ## Element refs
 
-`inspect` returns opaque refs such as `e4`. Reuse them for `styles`, `screenshot`, or `interact` rather than repeatedly reconstructing fragile selectors. Refs belong to one document generation and are deliberately invalidated by navigation or reload. If a framework replaces a DOM node, the old ref also fails instead of silently resolving to a different element.
+`inspect` and `snapshot` return opaque refs such as `e4`. Reuse them for `styles`, `screenshot`, or `interact` rather than repeatedly reconstructing fragile selectors. Refs belong to one document generation and are deliberately invalidated by navigation or reload. If a framework replaces a DOM node, the old ref also fails instead of silently resolving to a different element.
+
+`snapshot` is a discovery fallback, not the default observation path. Once a useful selector or ref is known, prefer `inspect` and `styles` so the model receives only the local state needed for the task.
 
 ## CSS diagnosis
 
@@ -37,6 +41,6 @@ Open the page, inspect a target, then reuse the returned ref:
 
 ## Boundaries
 
-Raw CDP is intentionally not part of the Pi tool API. The Bun host uses CDP internally for DOM, CSS, Page, Runtime, and Network observations while exposing stable, task-level operations to the model. Add a structured browser action when a recurring observation is missing instead of teaching callers to assemble protocol commands themselves.
+Raw CDP is intentionally not part of the Pi tool API. The Bun host uses CDP internally for DOM, CSS, Accessibility, Page, Runtime, and Network observations while exposing stable, task-level operations to the model. Add a structured browser action when a recurring observation is missing instead of teaching callers to assemble protocol commands themselves.
 
 `Bun.WebView` is experimental, so the JSONL host boundary also isolates Pi from Bun API churn. The browser tool should not manage dev servers or other long-running commands; use `terminal` when browser checks depend on readiness or startup/failure output, and use `background_process` only when no readiness observation is needed.

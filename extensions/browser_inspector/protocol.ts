@@ -3,6 +3,8 @@ export type BrowserTarget =
   | { selector: string }
   | { point: { x: number; y: number } };
 
+export type StableBrowserTarget = Exclude<BrowserTarget, { ref: string }>;
+
 export type StylePreset = "layout" | "typography" | "paint" | "all";
 
 export type BrowserCommand =
@@ -12,6 +14,7 @@ export type BrowserCommand =
       url: string;
       viewport?: { width: number; height: number };
     }
+  | { action: "snapshot"; depth?: number; maxNodes?: number }
   | { action: "inspect"; target: BrowserTarget }
   | {
       action: "styles";
@@ -30,6 +33,12 @@ export type BrowserCommand =
       dy?: number;
       width?: number;
       height?: number;
+    }
+  | {
+      action: "refresh";
+      target?: StableBrowserTarget;
+      levels?: string[];
+      failedOnly?: boolean;
     }
   | { action: "console"; cursor?: number; levels?: string[] }
   | { action: "network"; cursor?: number; failedOnly?: boolean }

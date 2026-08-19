@@ -8,6 +8,11 @@ import type {
   HostResponse,
   StylePreset,
 } from "./protocol.ts";
+import {
+  compactAccessibilityTree,
+  snapshotRefEligible,
+  type AccessibilityNode,
+} from "./snapshot.ts";
 
 interface ElementRef {
   nodeId: number;
@@ -365,6 +370,14 @@ class BrowserRuntime {
     };
   }
 
+  private async inspect(target: BrowserTarget): Promise<unknown> {
+    const nodes = await this.nodesForTarget(target);
+    return {
+      matches: await Promise.all(nodes.slice(0, 20).map((nodeId) => this.inspectNode(nodeId))),
+      total: nodes.length,
+    };
+  }
+
   private styleSelection(
     properties: string[] | undefined,
     preset: StylePreset | undefined,
@@ -560,6 +573,64 @@ class BrowserRuntime {
     }
   }
 
+  private consoleSince(cursor: number, levels?: string[]): { entries: ConsoleEntry[]; nextCursor: number } {
+    const selected = levels ? new Set(levels) : undefined;
+    const entries = this.consoleEntries.filter(
+      (entry) => entry.cursor > cursor && (!selected || selected.has(entry.level)),
+    );
+    return { entries, nextCursor: this.nextConsoleCursor - 1 };
+  }
+
+  private networkSince(cursor: number, failedOnly = false): { entries: NetworkEntry[]; nextCursor: number } {
+    const entries = this.networkEntries.filter(
+      (entry) =>
+        entry.cursor > cursor && (!failedOnly || entry.failed || (entry.status ?? 0) >= 400),
+    );
+    return { entries, nextCursor: this.nextNetworkCursor - 1 };
+  }
+
+  private async snapshot(
+    command: Extract<BrowserCommand, { action: "snapshot" }>,
+  ): Promise<unknown> {
+    const view = this.requireView();
+    const result = await this.cdp<{ nodes: AccessibilityNode[] }>(
+      "Accessibility.getFullAXTree",
+      command.depth === undefined ? undefined : { depth: command.depth },
+    );
+    const candidates = result.nodes.filter(snapshotRefEligible);
+    const backendNodeIds = [...new Set(candidates.map((node) => node.backendDOMNodeId!))];
+    const refsByBackendId = new Map<number, string>();
+    if (backendNodeIds.length) {
+      const pushed = await this.cdp<{ nodeIds: number[] }>("DOM.pushNodesByBackendIdsToFrontend", {
+        backendNodeIds,
+      });
+      for (let index = 0; index < backendNodeIds.length; index += 1) {
+        const nodeId = pushed.nodeIds[index];
+        if (nodeId) refsByBackendId.set(backendNodeIds[index]!, this.refFor(nodeId));
+      }
+    }
+    return {
+      url: view.url,
+      title: view.title,
+      ...compactAccessibilityTree(result.nodes, refsByBackendId, command.maxNodes ?? 200),
+    };
+  }
+
+  private async refresh(
+    command: Extract<BrowserCommand, { action: "refresh" }>,
+  ): Promise<unknown> {
+    const view = this.requireView();
+    const consoleCursor = this.nextConsoleCursor - 1;
+    const networkCursor = this.nextNetworkCursor - 1;
+    await view.reload();
+    return {
+      page: { url: view.url, title: view.title, generation: this.generation },
+      console: this.consoleSince(consoleCursor, command.levels),
+      network: this.networkSince(networkCursor, command.failedOnly ?? true),
+      ...(command.target ? { inspect: await this.inspect(command.target) } : {}),
+    };
+  }
+
   async dispatch(command: BrowserCommand): Promise<unknown> {
     switch (command.action) {
       case "probe": {
@@ -586,6 +657,8 @@ class BrowserRuntime {
             screenshots: true,
             console: true,
             network: true,
+            accessibilitySnapshot: true,
+            refreshBundle: true,
           },
         };
       }
@@ -599,14 +672,10 @@ class BrowserRuntime {
           generation: this.generation,
         };
       }
-      case "inspect": {
-        const nodes = await this.nodesForTarget(command.target);
-        const matches: unknown[] = [];
-        for (const nodeId of nodes.slice(0, 20)) {
-          matches.push(await this.inspectNode(nodeId));
-        }
-        return { matches, total: nodes.length };
-      }
+      case "snapshot":
+        return this.snapshot(command);
+      case "inspect":
+        return this.inspect(command.target);
       case "styles":
         return this.styles(command);
       case "screenshot": {
@@ -659,23 +728,12 @@ class BrowserRuntime {
       }
       case "interact":
         return this.interact(command);
-      case "console": {
-        const cursor = command.cursor ?? 0;
-        const levels = command.levels ? new Set(command.levels) : undefined;
-        const entries = this.consoleEntries.filter(
-          (entry) => entry.cursor > cursor && (!levels || levels.has(entry.level)),
-        );
-        return { entries, nextCursor: this.nextConsoleCursor - 1 };
-      }
-      case "network": {
-        const cursor = command.cursor ?? 0;
-        const entries = this.networkEntries.filter(
-          (entry) =>
-            entry.cursor > cursor &&
-            (!command.failedOnly || entry.failed || (entry.status ?? 0) >= 400),
-        );
-        return { entries, nextCursor: this.nextNetworkCursor - 1 };
-      }
+      case "refresh":
+        return this.refresh(command);
+      case "console":
+        return this.consoleSince(command.cursor ?? 0, command.levels);
+      case "network":
+        return this.networkSince(command.cursor ?? 0, command.failedOnly ?? false);
       case "close":
         this.view?.close();
         this.view = undefined;
