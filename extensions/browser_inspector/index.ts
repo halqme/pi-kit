@@ -216,10 +216,18 @@ export default function browserInspectorExtension(pi: ExtensionAPI): void {
       ),
       target: Type.Optional(TargetSchema),
       depth: Type.Optional(
-        Type.Number({ minimum: 1, maximum: 64, description: "Maximum accessibility-tree depth for snapshot" }),
+        Type.Number({
+          minimum: 1,
+          maximum: 64,
+          description: "Maximum accessibility-tree depth for snapshot",
+        }),
       ),
       maxNodes: Type.Optional(
-        Type.Number({ minimum: 1, maximum: 1000, description: "Maximum compact snapshot lines; defaults to 200" }),
+        Type.Number({
+          minimum: 1,
+          maximum: 1000,
+          description: "Maximum compact snapshot lines; defaults to 200",
+        }),
       ),
       properties: Type.Optional(
         Type.Array(Type.String(), { description: "CSS properties for styles" }),

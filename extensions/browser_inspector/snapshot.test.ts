@@ -54,11 +54,14 @@ const nodes: AccessibilityNode[] = [
 ];
 
 test("compactAccessibilityTree removes boilerplate while preserving useful refs and state", () => {
-  const result = compactAccessibilityTree(nodes, new Map([[30, "e1"], [60, "e2"]]));
-  assert.equal(
-    result.text,
-    'RootWebArea "Demo"\n  e1 button "Save" [disabled]\n  e2 link "Docs"',
+  const result = compactAccessibilityTree(
+    nodes,
+    new Map([
+      [30, "e1"],
+      [60, "e2"],
+    ]),
   );
+  assert.equal(result.text, 'RootWebArea "Demo"\n  e1 button "Save" [disabled]\n  e2 link "Docs"');
   assert.deepEqual(
     { shown: result.shown, total: result.total, truncated: result.truncated },
     { shown: 3, total: 3, truncated: false },
@@ -68,7 +71,14 @@ test("compactAccessibilityTree removes boilerplate while preserving useful refs 
 });
 
 test("compactAccessibilityTree caps output without hiding that the tree was truncated", () => {
-  const result = compactAccessibilityTree(nodes, new Map([[30, "e1"], [60, "e2"]]), 2);
+  const result = compactAccessibilityTree(
+    nodes,
+    new Map([
+      [30, "e1"],
+      [60, "e2"],
+    ]),
+    2,
+  );
   assert.equal(result.shown, 2);
   assert.equal(result.total, 3);
   assert.equal(result.truncated, true);

@@ -136,13 +136,9 @@ test("browser_inspector validates action-specific required fields before startin
   );
   await assert.rejects(
     () =>
-      tool.execute(
-        "stale",
-        { action: "refresh", target: { ref: "e1" } },
-        undefined,
-        undefined,
-        { cwd: "/tmp" },
-      ),
+      tool.execute("stale", { action: "refresh", target: { ref: "e1" } }, undefined, undefined, {
+        cwd: "/tmp",
+      }),
     /cannot reuse an element ref across reload/,
   );
   assert.equal(starts, 0);

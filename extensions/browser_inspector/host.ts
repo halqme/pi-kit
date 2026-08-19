@@ -573,7 +573,10 @@ class BrowserRuntime {
     }
   }
 
-  private consoleSince(cursor: number, levels?: string[]): { entries: ConsoleEntry[]; nextCursor: number } {
+  private consoleSince(
+    cursor: number,
+    levels?: string[],
+  ): { entries: ConsoleEntry[]; nextCursor: number } {
     const selected = levels ? new Set(levels) : undefined;
     const entries = this.consoleEntries.filter(
       (entry) => entry.cursor > cursor && (!selected || selected.has(entry.level)),
@@ -581,7 +584,10 @@ class BrowserRuntime {
     return { entries, nextCursor: this.nextConsoleCursor - 1 };
   }
 
-  private networkSince(cursor: number, failedOnly = false): { entries: NetworkEntry[]; nextCursor: number } {
+  private networkSince(
+    cursor: number,
+    failedOnly = false,
+  ): { entries: NetworkEntry[]; nextCursor: number } {
     const entries = this.networkEntries.filter(
       (entry) =>
         entry.cursor > cursor && (!failedOnly || entry.failed || (entry.status ?? 0) >= 400),
@@ -616,9 +622,7 @@ class BrowserRuntime {
     };
   }
 
-  private async refresh(
-    command: Extract<BrowserCommand, { action: "refresh" }>,
-  ): Promise<unknown> {
+  private async refresh(command: Extract<BrowserCommand, { action: "refresh" }>): Promise<unknown> {
     const view = this.requireView();
     const consoleCursor = this.nextConsoleCursor - 1;
     const networkCursor = this.nextNetworkCursor - 1;

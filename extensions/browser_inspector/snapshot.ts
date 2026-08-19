@@ -56,7 +56,10 @@ function stateTokens(node: AccessibilityNode): string[] {
     const value = scalar(property.value);
     if (!value) continue;
     if (value === "true") result.push(property.name);
-    else if (value !== "false" || ["checked", "expanded", "pressed", "selected"].includes(property.name)) {
+    else if (
+      value !== "false" ||
+      ["checked", "expanded", "pressed", "selected"].includes(property.name)
+    ) {
       result.push(`${property.name}=${value}`);
     }
   }
@@ -70,7 +73,12 @@ function shouldEmit(node: AccessibilityNode, parent: AccessibilityNode | undefin
   const value = compactText(scalar(node.value));
   const states = stateTokens(node);
   if (!role && !name && !value && states.length === 0) return false;
-  if (["generic", "none", "presentation"].includes(role) && !name && !value && states.length === 0) {
+  if (
+    ["generic", "none", "presentation"].includes(role) &&
+    !name &&
+    !value &&
+    states.length === 0
+  ) {
     return false;
   }
   if (role === "inlinetextbox" || role === "linebreak") return false;
@@ -112,7 +120,11 @@ export function compactAccessibilityTree(
   const lines: string[] = [];
   let total = 0;
 
-  const visit = (node: AccessibilityNode, depth: number, emittedParent?: AccessibilityNode): void => {
+  const visit = (
+    node: AccessibilityNode,
+    depth: number,
+    emittedParent?: AccessibilityNode,
+  ): void => {
     const emit = shouldEmit(node, emittedParent);
     const nextParent = emit ? node : emittedParent;
     const childDepth = emit ? depth + 1 : depth;
@@ -124,7 +136,9 @@ export function compactAccessibilityTree(
         const name = compactText(scalar(node.name));
         const value = compactText(scalar(node.value));
         const ref =
-          node.backendDOMNodeId === undefined ? undefined : refsByBackendId.get(node.backendDOMNodeId);
+          node.backendDOMNodeId === undefined
+            ? undefined
+            : refsByBackendId.get(node.backendDOMNodeId);
         const parts = [ref, role].filter(Boolean) as string[];
         if (name) parts.push(JSON.stringify(name));
         if (value && value !== name) parts.push(`value=${JSON.stringify(value)}`);
