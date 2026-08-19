@@ -103,10 +103,19 @@ test("start_many starts independent commands and reports each process", async (t
   assert.match(String(result.content[0]?.text), /readiness\/failure watch/);
   assert.equal(result.details.started.length, 2);
   assert.deepEqual(result.details.failed, []);
-  for (const process of result.details.started) {
-    const snapshot = await inspectProcess(process.taskDir);
-    assert.ok(snapshot.request.label === "one" || snapshot.request.label === "two");
-  }
+  await Promise.all(
+    result.details.started.map(async (process) => {
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const snapshot = await inspectProcess(process.taskDir);
+        if (snapshot.phase === "unchecked") {
+          assert.ok(snapshot.request.label === "one" || snapshot.request.label === "two");
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.fail(`Timed out waiting for ${process.taskDir} to complete`);
+    }),
+  );
 
   await assert.rejects(
     () =>
