@@ -12,7 +12,7 @@ For frequent lightweight review requests, start a detached Pi command here rathe
 - `check`: show status plus bounded stdout/stderr tails without acknowledging the result. Use it for explicit progress or output requests, not to wait for completion.
 - `stop`: request TERM followed by KILL after a grace period.
 
-`start_many` reports successfully started processes and per-item launch failures separately. Each process remains independently inspectable and stoppable by its returned ID.
+`start_many` validates and launches each item independently, so a blank command or launch failure does not prevent valid items from starting. A non-empty batch returns a structured result with `details.status` set to `started`, `partial`, or `failed`, plus `details.started` and `details.failed` (each failure includes its zero-based `index` and `error`). The same status and per-item failures are included in the text result, so callers should not retry the whole batch just because one item failed. Each started process remains independently inspectable and stoppable by its returned ID.
 
 Choose this tool for detached non-interactive processes, including long-lived development servers and watchers, when later stdin, TTY state, control keys, output-pattern watches, or startup-readiness observation are unnecessary. If a next step depends on seeing the server become ready or fail, use `terminal` with a readiness/failure watch instead. Expected lifetime is not the boundary: use `terminal` when the process needs interactive TTY control or pattern-based wakeups.
 

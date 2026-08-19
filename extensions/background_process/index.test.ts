@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { inspectProcess, startBackgroundProcess } from "./core.ts";
+import { inspectProcess, listProcesses, startBackgroundProcess } from "./core.ts";
 import backgroundProcessExtension from "./index.ts";
 
 test("session restore notifies and acknowledges an unchecked process once", async (t) => {
@@ -54,10 +54,10 @@ test("session restore notifies and acknowledges an unchecked process once", asyn
   await events.get("session_shutdown")?.({ type: "session_shutdown", reason: "quit" }, ctx);
 });
 
-test("start_many starts independent commands and reports each process", async (t) => {
+test("start_many reports mixed failures without requiring a retry", async (t) => {
   const sessionDir = await mkdtemp(join(tmpdir(), "pi-background-session-"));
   t.after(() => rm(sessionDir, { recursive: true, force: true }));
-  join(sessionDir, "session.background-process");
+  const root = join(sessionDir, "session.background-process");
   let tool: { execute: (...args: unknown[]) => Promise<unknown> } | undefined;
   const pi = {
     registerTool(candidate: { execute: (...args: unknown[]) => Promise<unknown> }) {
@@ -86,6 +86,7 @@ test("start_many starts independent commands and reports each process", async (t
       action: "start_many",
       processes: [
         { command: "printf one", label: "one" },
+        { command: "   ", label: "invalid" },
         { command: "printf two", label: "two" },
       ],
     },
@@ -94,20 +95,36 @@ test("start_many starts independent commands and reports each process", async (t
     ctx,
   )) as {
     content: Array<{ text?: string }>;
-    details: { started: Array<{ taskDir: string }>; failed: unknown[] };
+    details: {
+      status: "started" | "partial" | "failed";
+      started: Array<{ taskDir: string }>;
+      failed: Array<{ index: number; error: string }>;
+    };
     isError?: boolean;
   };
 
   assert.equal(result.isError, undefined);
+  assert.equal(result.details.status, "partial");
+  assert.match(String(result.content[0]?.text), /Batch status: partial/);
   assert.match(String(result.content[0]?.text), /Launch acknowledged/);
-  assert.match(String(result.content[0]?.text), /readiness\/failure watch/);
+  assert.match(String(result.content[0]?.text), /Failed 1 process/);
+  assert.match(String(result.content[0]?.text), /1: .*command is required/);
   assert.equal(result.details.started.length, 2);
-  assert.deepEqual(result.details.failed, []);
+  assert.equal(result.details.failed.length, 1);
+  assert.equal(result.details.failed[0]?.index, 1);
+  assert.match(result.details.failed[0]?.error ?? "", /command is required/);
+
+  const launched = await listProcesses(root, { includeCompleted: true });
+  assert.equal(launched.length, 2);
+  assert.deepEqual(
+    new Set(launched.map((process) => process.request.label)),
+    new Set(["one", "two"]),
+  );
   await Promise.all(
     result.details.started.map(async (process) => {
       for (let attempt = 0; attempt < 200; attempt += 1) {
         const snapshot = await inspectProcess(process.taskDir);
-        if (snapshot.phase === "unchecked") {
+        if (snapshot.phase === "unchecked" || snapshot.phase === "completed") {
           assert.ok(snapshot.request.label === "one" || snapshot.request.label === "two");
           return;
         }
@@ -117,15 +134,23 @@ test("start_many starts independent commands and reports each process", async (t
     }),
   );
 
-  await assert.rejects(
-    () =>
-      registeredTool.execute(
-        "tool-call",
-        { action: "start_many", processes: [{ command: "   " }] },
-        undefined,
-        undefined,
-        ctx,
-      ),
-    /every process command is required/,
-  );
+  const invalid = (await registeredTool.execute(
+    "tool-call",
+    { action: "start_many", processes: [{ command: "   " }] },
+    undefined,
+    undefined,
+    ctx,
+  )) as {
+    content: Array<{ text?: string }>;
+    details: {
+      status: "started" | "partial" | "failed";
+      started: unknown[];
+      failed: Array<{ index: number; error: string }>;
+    };
+  };
+  assert.equal(invalid.details.status, "failed");
+  assert.match(String(invalid.content[0]?.text), /Batch status: failed/);
+  assert.deepEqual(invalid.details.started, []);
+  assert.equal(invalid.details.failed[0]?.index, 0);
+  assert.equal((await listProcesses(root, { includeCompleted: true })).length, 2);
 });

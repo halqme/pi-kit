@@ -199,19 +199,19 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
       if (params.action === "start_many") {
         const processes = params.processes;
         if (!processes?.length) throw new Error("processes is required and must not be empty");
-        if (processes.some((process) => !process.command.trim())) {
-          throw new Error("every process command is required");
-        }
         const results = await Promise.allSettled(
-          processes.map((process) =>
-            startBackgroundProcess({
+          processes.map(async (process) => {
+            if (typeof process.command !== "string" || !process.command.trim()) {
+              throw new Error("command is required");
+            }
+            return startBackgroundProcess({
               taskRoot: root,
               ownerSessionId: ctx.sessionManager.getSessionId(),
               cwd: resolve(ctx.cwd, process.cwd ?? "."),
               spec: { type: "shell", command: process.command },
               ...(process.label ? { label: process.label } : {}),
-            }),
-          ),
+            });
+          }),
         );
         const started = results.flatMap((result) =>
           result.status === "fulfilled" ? [result.value] : [],
@@ -221,7 +221,10 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
         );
         for (const snapshot of started) announced.set(snapshot.request.id, snapshot.phase);
         await poll(ctx);
+        const status: "started" | "partial" | "failed" =
+          failed.length === 0 ? "started" : started.length === 0 ? "failed" : "partial";
         const text = [
+          `Batch status: ${status}.`,
           started.length
             ? `Started ${started.length} process(es):\n${started.map(describe).join("\n")}`
             : "No processes started.",
@@ -234,10 +237,9 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
         ]
           .filter(Boolean)
           .join("\n\n");
-        if (failed.length) throw new Error(text);
         return {
           content: [{ type: "text" as const, text }],
-          details: { started, failed },
+          details: { status, started, failed },
         };
       }
       if (params.action === "list") {
