@@ -1,5 +1,5 @@
 import { createMetrics, mergeMetrics } from "./analyze.ts";
-import type { MetricsReport, MetricSummary } from "./types.ts";
+import type { MetricsReport, MetricSummary, SourceDiagnostic } from "./types.ts";
 
 export type QueryView =
   | "overview"
@@ -97,6 +97,7 @@ export type SelectionData =
 export interface SelectionResult {
   query: MetricsQuery;
   data: SelectionData;
+  source?: SourceDiagnostic;
 }
 
 function validSince(since?: string): string | undefined {
@@ -286,69 +287,64 @@ export function selectReport(
   };
   const metrics = selectedMetrics(report, since);
   const frequencyLimit = Math.min(limit ?? 10, 10);
+  const result = (data: SelectionData): SelectionResult => ({
+    query,
+    ...(report.source ? { source: report.source } : {}),
+    data,
+  });
 
   if (view === "overview") {
-    return {
-      query,
-      data: {
-        kind: view,
-        metrics,
-        tools: rows(overviewToolEntries(report, metrics), frequencyLimit),
-        skills: rows(overviewSkillEntries(report, metrics), frequencyLimit),
-        models: rows(overviewModelEntries(metrics), frequencyLimit),
-        monthlyActivity: rows(monthlyActivityEntries(report, since), limit),
-        dailyActivity: rows(dailyActivityEntries(report, since), limit),
-      },
-    };
+    return result({
+      kind: view,
+      metrics,
+      tools: rows(overviewToolEntries(report, metrics), frequencyLimit),
+      skills: rows(overviewSkillEntries(report, metrics), frequencyLimit),
+      models: rows(overviewModelEntries(metrics), frequencyLimit),
+      monthlyActivity: rows(monthlyActivityEntries(report, since), limit),
+      dailyActivity: rows(dailyActivityEntries(report, since), limit),
+    });
   }
-  if (view === "summary") return { query, data: { kind: "summary", metrics } };
-  if (view === "all") return { query, data: { kind: view, report } };
+  if (view === "summary") return result({ kind: "summary", metrics });
+  if (view === "all") return result({ kind: view, report });
   if (view === "logical-operations")
-    return { query, data: { kind: view, metrics: metrics.logicalOperations } };
+    return result({ kind: view, metrics: metrics.logicalOperations });
   if (view === "daily" || view === "weekly" || view === "monthly") {
-    return {
-      query,
-      data: {
-        kind: "period",
-        period: view,
-        rows: rows(
-          periodEntries(report, view, since).map(([period, values]) => ({
-            period,
-            metrics: values,
-          })),
-          limit,
-        ),
-      },
-    };
+    return result({
+      kind: "period",
+      period: view,
+      rows: rows(
+        periodEntries(report, view, since).map(([period, values]) => ({
+          period,
+          metrics: values,
+        })),
+        limit,
+      ),
+    });
   }
   if (view === "monthly-activity") {
-    return {
-      query,
-      data: { kind: view, rows: rows(monthlyActivityEntries(report, since), limit) },
-    };
+    return result({
+      kind: view,
+      rows: rows(monthlyActivityEntries(report, since), limit),
+    });
   }
   if (view === "projects") {
-    return {
-      query,
-      data: {
-        kind: view,
-        rows: rows(
-          Object.entries(report.projects)
-            .sort(
-              ([leftName, left], [rightName, right]) =>
-                right.tokens.total - left.tokens.total || leftName.localeCompare(rightName),
-            )
-            .map(([project, values]) => ({ project, metrics: values })),
-          limit,
-        ),
-      },
-    };
+    return result({
+      kind: view,
+      rows: rows(
+        Object.entries(report.projects)
+          .sort(
+            ([leftName, left], [rightName, right]) =>
+              right.tokens.total - left.tokens.total || leftName.localeCompare(rightName),
+          )
+          .map(([project, values]) => ({ project, metrics: values })),
+        limit,
+      ),
+    });
   }
-  if (view === "models")
-    return { query, data: { kind: view, rows: rows(modelEntries(metrics), limit) } };
+  if (view === "models") return result({ kind: view, rows: rows(modelEntries(metrics), limit) });
   if (view === "skills")
-    return { query, data: { kind: view, rows: rows(skillEntries(report, metrics), limit) } };
+    return result({ kind: view, rows: rows(skillEntries(report, metrics), limit) });
   if (view === "tools")
-    return { query, data: { kind: view, rows: rows(toolEntries(report, metrics), limit) } };
-  return { query, data: { kind: view, rows: rows(actionEntries(report, metrics), limit) } };
+    return result({ kind: view, rows: rows(toolEntries(report, metrics), limit) });
+  return result({ kind: view, rows: rows(actionEntries(report, metrics), limit) });
 }

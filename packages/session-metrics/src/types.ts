@@ -62,6 +62,13 @@ export interface ResourceMetrics {
   diagnostics: string[];
 }
 
+export interface SourceDiagnostic {
+  path: string;
+  status: "missing" | "error";
+  code: string;
+  message: string;
+}
+
 export interface MetricSummary {
   sessions: number;
   messages: number;
@@ -100,4 +107,5 @@ export interface MetricsReport extends MetricSummary {
   monthly: Record<string, MetricSummary>;
   projects: Record<string, MetricSummary>;
   resources?: ResourceMetrics;
+  source?: SourceDiagnostic;
 }

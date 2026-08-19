@@ -39,6 +39,7 @@ export type {
   LogicalOperationMetrics,
   SkillMetrics,
   SkillResourceMetrics,
+  SourceDiagnostic,
   ToolMetrics,
   ToolResourceMetrics,
   UsageTotals,

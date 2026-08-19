@@ -20,7 +20,22 @@ function validateSince(since?: string): void {
 export async function buildReport(sessionsPath: string, since?: string): Promise<MetricsReport> {
   validateSince(since);
   const sessions: SessionMetrics[] = [];
-  for (const path of await sessionFiles(sessionsPath)) sessions.push(await analyzeFile(path));
+  try {
+    for (const path of await sessionFiles(sessionsPath)) sessions.push(await analyzeFile(path));
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error && typeof error.code === "string"
+        ? error.code
+        : "UNKNOWN";
+    const report = createReport();
+    report.source = {
+      path: sessionsPath,
+      status: code === "ENOENT" ? "missing" : "error",
+      code,
+      message: error instanceof Error ? error.message : String(error),
+    };
+    return report;
+  }
   const selected = sessions
     .filter((session) => !since || (session.timestamp ?? "") >= since)
     .sort((left, right) => (right.timestamp ?? "").localeCompare(left.timestamp ?? ""));

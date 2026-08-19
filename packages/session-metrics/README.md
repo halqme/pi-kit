@@ -19,6 +19,8 @@ session-metrics --logical-operations
 
 既定の入力は `~/.pi/agent/sessions` です。単一JSONLファイルまたはディレクトリを指定でき、ディレクトリはsymlinkを辿らず再帰的に読み取ります。JSONLはstream処理し、壊れた行は `invalidLines` として数えつつ残りのsessionを解析します。
 
+入力pathが存在しない、または読み取り中にエラーになった場合は、処理を失敗させず、空のreportと`source`診断を返します。`status` は、存在しない入力なら `missing`、それ以外の読み取りエラーなら `error` です。診断には入力path、エラーコード、メッセージが含まれます。存在する空ディレクトリは正常な空入力なので `source` 診断を持たず、欠落した入力と区別できます。`since` の形式が不正な場合は、これまでどおりエラーを返します。
+
 ## 構造
 
 ### Session facts
