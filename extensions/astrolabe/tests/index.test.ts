@@ -19,6 +19,7 @@ interface SyntaxResponse {
   data?: {
     outline?: string;
     source?: string;
+    status?: "complete" | "partial" | "failed";
     matchCount?: number;
     candidateCount?: number;
     mode?: "source" | "cards" | "none";
@@ -35,6 +36,13 @@ interface SyntaxResponse {
       path: string;
       type: string;
       source: string;
+    }>;
+    errors?: Array<{
+      index: number;
+      continuation: { token: string };
+      code: string;
+      message: string;
+      next?: Array<Record<string, unknown>>;
     }>;
   };
   handles?: Array<{ continuation: { token: string }; capabilities: string[] }>;
@@ -369,4 +377,102 @@ test("source request without a target returns a directly executable recovery act
   const recoveredResponse = responseOf(recovered);
   assert.equal(recoveredResponse.ok, true);
   assert.match(recoveredResponse.outline ?? "", /answer/);
+});
+
+test("inspect_many preserves valid sources when one continuation is invalid", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
+  await writeFile(join(dir, "sample.ts"), "function answer() { return 1; }\n");
+  const tool = setup(dir);
+  const outlined = responseOf(
+    await call(tool, dir, { action: "inspect", path: "sample.ts", detail: "outline" }),
+  );
+  const valid = outlined.next?.[0] as { continuation?: { token: string } } | undefined;
+  assert.ok(valid?.continuation);
+
+  const inspected = responseOf(
+    await call(tool, dir, {
+      action: "inspect_many",
+      targets: [
+        { continuation: valid.continuation },
+        { continuation: { token: "missing-inspect-many-continuation" } },
+      ],
+    }),
+  );
+  assert.equal(inspected.ok, true);
+  assert.equal(inspected.data?.status, "partial");
+  assert.equal(inspected.data?.sources?.length, 1);
+  assert.match(inspected.data?.sources?.[0]?.source ?? "", /function answer/);
+  assert.equal(inspected.data?.errors?.length, 1);
+  assert.equal(inspected.data?.errors?.[0]?.index, 1);
+  assert.equal(inspected.data?.errors?.[0]?.code, "invalid_continuation");
+  assert.match(inspected.data?.errors?.[0]?.message ?? "", /expired/);
+
+  const recovered = responseOf(
+    await call(tool, dir, {
+      action: "inspect_many",
+      targets: [{ continuation: valid.continuation }],
+    }),
+  );
+  assert.equal(recovered.ok, true);
+  assert.equal(recovered.data?.status, "complete");
+  assert.equal(recovered.data?.sources?.length, 1);
+});
+
+test("inspect_many keeps all-invalid batches actionable", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
+  const tool = setup(dir);
+  const failed = await callFailure(tool, dir, {
+    action: "inspect_many",
+    targets: [{ continuation: { token: "missing-inspect-many-continuation" } }],
+  });
+  assert.equal(failed.error?.code, "invalid_continuation");
+  assert.equal(failed.data?.status, "failed");
+  assert.equal(failed.data?.sources?.length, 0);
+  assert.equal(failed.data?.errors?.length, 1);
+  assert.equal(failed.data?.errors?.[0]?.index, 0);
+});
+
+test("inspect_many returns stale-target recovery alongside valid sources", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "astrolabe-index-"));
+  const firstPath = join(dir, "first.ts");
+  await writeFile(firstPath, "function first() { return 1; }\n");
+  await writeFile(join(dir, "second.ts"), "function second() { return 2; }\n");
+  const tool = setup(dir);
+  const firstOutline = responseOf(
+    await call(tool, dir, { action: "inspect", path: "first.ts", detail: "outline" }),
+  );
+  const secondOutline = responseOf(
+    await call(tool, dir, { action: "inspect", path: "second.ts", detail: "outline" }),
+  );
+  const first = firstOutline.next?.[0] as { continuation?: { token: string } } | undefined;
+  const second = secondOutline.next?.[0] as { continuation?: { token: string } } | undefined;
+  assert.ok(first?.continuation);
+  assert.ok(second?.continuation);
+  await writeFile(firstPath, "function first() { return 99; }\n");
+
+  const inspected = responseOf(
+    await call(tool, dir, {
+      action: "inspect_many",
+      targets: [
+        { continuation: first.continuation },
+        { continuation: second.continuation },
+      ],
+    }),
+  );
+  assert.equal(inspected.ok, true);
+  assert.equal(inspected.data?.status, "partial");
+  assert.equal(inspected.data?.sources?.length, 1);
+  assert.match(inspected.data?.sources?.[0]?.source ?? "", /function second/);
+  const stale = inspected.data?.errors?.[0];
+  assert.equal(stale?.index, 0);
+  assert.equal(stale?.code, "stale_node");
+  assert.equal(await readFile(firstPath, "utf8"), "function first() { return 99; }\n");
+  const recovery = stale?.next?.[0];
+  assert.equal(recovery?.action, "inspect");
+  assert.equal(recovery?.detail, "outline");
+  assert.match(String(recovery?.path), /first\.ts$/);
+
+  const recovered = responseOf(await call(tool, dir, recovery ?? {}));
+  assert.equal(recovered.ok, true);
+  assert.match(recovered.outline ?? "", /first/);
 });

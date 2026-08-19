@@ -12,7 +12,8 @@ Astrolabeがコードで強制するのは、continuationの有効性、対象�
 - `search`は対応言語の関数・呼出し・importを構文形状で探す補助探索です。正確な識別子や構文上の対象が分かっているときに使います。
 - `bm25_search`は、対象ファイルやシンボルがまだ分からず、「設定読み込みの失敗処理」のような概念・責務・挙動から関連箇所を探すために使います。BM25の結果にはAstrolabeのcontinuationは付きません。
 - `inspect`は`path`でoutlineを取得するか、continuationで選んだ構文ノードのsourceを取得します。
-- `inspect_many`は複数continuationをファイルをまたいで並列にsourceまで取得する、読み取り専用のbatchです。mutation actionは提案しません。
+- `inspect_many`は複数continuationをファイルをまたいで並列にsourceまで取得する、読み取り専用のbatchです。mutation actionは提案しません。通常は`data.status: "complete"`と`data.sources`、空の`data.errors`を返します。
+- 一部のcontinuationがinvalidまたはstaleでも、少なくとも1件を読めれば`ok: true`の`data.status: "partial"`として、読めた`data.sources`と対象ごとの`data.errors`を返します。各errorには対象の`index`、元の`continuation`、`code`、`message`が入り、実行可能な復旧要求がある場合は`next`に含まれます。staleなノードを推測で選び直すことはなく、復旧時は現在のoutlineを取り直します。1件も読めない場合は`data.status: "failed"`の明示的な失敗となり、同じ対象別エラーと復旧要求を返します。
 - `edit`は有効なcontinuationと完全な`replacement`を受け、現在のsource hash、ノード型・範囲・親文脈を再検証してから保存します。成功後は古い対象を使い回さず、返された`next`から再inspectします。
 - `rename`は宣言continuationと`newName`を受け、LSPの`textDocument/rename`に意味論的なWorkspaceEditを生成させます。AstrolabeはWorkspaceEditを即適用せず、対象ファイルのstaleness、範囲重複、対応言語、置換後の構文を検証してからcommitします。
 

@@ -271,47 +271,103 @@ async function dispatch(
         "Provide at least one target.",
       );
     }
-    const resolved = request.targets.map((target) => ({
+    const resolved = request.targets.map((target, index) => ({
+      index,
       continuation: target.continuation,
       handle: isContinuation(target.continuation)
         ? handles.resolveContinuation(target.continuation.token)
         : undefined,
     }));
-    if (resolved.some((target) => !target.handle)) {
-      return failure(
-        "inspect_many",
-        "invalid_continuation",
-        "Every continuation must be valid and unexpired.",
-      );
-    }
-
     const inspected = await Promise.all(
       resolved.map(async (target) => {
-        const handle = target.handle!;
-        const output = await inspect(
-          { path: handle.path, nodeId: handle.id, view: "source" },
-          cwd,
-          handles,
-        );
-        return { continuation: target.continuation, handle, output };
+        const handle = target.handle;
+        if (!isContinuation(target.continuation)) {
+          return {
+            kind: "error" as const,
+            index: target.index,
+            continuation: target.continuation,
+            code: "invalid_continuation",
+            message: "The continuation must be passed unchanged.",
+          };
+        }
+        if (!handle) {
+          return {
+            kind: "error" as const,
+            index: target.index,
+            continuation: target.continuation,
+            code: "invalid_continuation",
+            message: "The continuation has expired; search or outline again.",
+          };
+        }
+        try {
+          const output = await inspect(
+            { path: handle.path, nodeId: handle.id, view: "source" },
+            cwd,
+            handles,
+          );
+          if (output.startsWith("stale_node:")) {
+            return {
+              kind: "error" as const,
+              index: target.index,
+              continuation: target.continuation,
+              code: "stale_node",
+              message: output,
+              next: [outlineRequest(handle.path, undefined)],
+            };
+          }
+          return {
+            kind: "source" as const,
+            source: {
+              continuation: target.continuation,
+              path: handle.path,
+              type: handle.type,
+              source: output,
+            },
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const code = /^([a-z][a-z0-9_]*):/.exec(message)?.[1] ?? "inspect_failed";
+          return {
+            kind: "error" as const,
+            index: target.index,
+            continuation: target.continuation,
+            code,
+            message,
+            next: [outlineRequest(handle.path, undefined)],
+          };
+        }
       }),
     );
-    const stale = inspected.find((target) => target.output.startsWith("stale_node:"));
-    if (stale) {
-      return failure("inspect_many", "stale_node", stale.output, [
-        { action: "inspect", continuation: stale.continuation, detail: "source" },
-      ]);
+    const sources = inspected.flatMap((target) => (target.kind === "source" ? [target.source] : []));
+    const errors = inspected.flatMap((target) => (target.kind === "error" ? [target] : []));
+    if (sources.length === 0) {
+      const allInvalid = errors.every((error) => error.code === "invalid_continuation");
+      const allStale = errors.every((error) => error.code === "stale_node");
+      const code = allInvalid
+        ? "invalid_continuation"
+        : allStale
+          ? "stale_node"
+          : "inspect_many_failed";
+      const message = allInvalid
+        ? "Every continuation must be valid and unexpired."
+        : allStale
+          ? (errors[0]?.message ?? "Every target is stale; inspect the current outline again.")
+          : "No target could be inspected; use each target error's recovery action and retry.";
+      const failed = failure(
+        "inspect_many",
+        code,
+        message,
+        errors.flatMap((error) => error.next ?? []),
+      );
+      return {
+        ...failed,
+        data: { status: "failed", sources, errors },
+      };
     }
-    const sources = inspected.map((target) => ({
-      continuation: target.continuation,
-      path: target.handle.path,
-      type: target.handle.type,
-      source: target.output,
-    }));
     return {
       ok: true,
       action: "inspect_many",
-      data: { sources },
+      data: { status: errors.length > 0 ? "partial" : "complete", sources, errors },
     };
   }
 
