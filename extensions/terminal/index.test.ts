@@ -23,15 +23,17 @@ test("unknown and out-of-range exit codes become null", () => {
   assert.equal(parseExitCode("unknown"), null);
 });
 
-test("public tool rejects concurrent calls and rolls back failed create", async () => {
+test("public tool reports busy and unknown terminals and rolls back failed create", async () => {
   const sent: unknown[] = [];
   const killed: string[] = [];
+  const tmuxCalls: string[][] = [];
   let failSend = false;
   let now = 0;
   const originalSetInterval = globalThis.setInterval;
   (globalThis as any).setInterval = () => ({}) as any;
   const runtime = {
     async tmux(args: string[]) {
+      tmuxCalls.push(args);
       if (args[0] === "new-session") return "";
       if (args[0] === "kill-session") {
         killed.push(args[args.indexOf("-t") + 1]!);
@@ -77,6 +79,47 @@ test("public tool rejects concurrent calls and rolls back failed create", async 
     ctx,
   );
   assert.equal(created.details.status, "started");
+  const keyResult = await registered.execute(
+    "keys",
+    { action: "send", name: "x", keys: ["Tab", "C-l", "Left", "Right"] },
+    undefined,
+    undefined,
+    ctx,
+  );
+  assert.equal(keyResult.details.status, "accepted");
+  assert.deepEqual(tmuxCalls.at(-1), [
+    "send-keys",
+    "-t",
+    created.details.session,
+    "Tab",
+    "C-l",
+    "Left",
+    "Right",
+  ]);
+  await assert.rejects(() =>
+    registered.execute(
+      "text-and-keys",
+      { action: "send", name: "x", text: "later", keys: ["Enter"] },
+      undefined,
+      undefined,
+      ctx,
+    ),
+  );
+  const beforeUnknown = tmuxCalls.length;
+  const unknown = await registered.execute(
+    "unknown",
+    { action: "read", name: "stale" },
+    undefined,
+    undefined,
+    ctx,
+  );
+  assert.deepEqual(unknown.details, {
+    status: "not_found",
+    reason: "unknown_terminal",
+    name: "stale",
+    availableNames: ["x"],
+  });
+  assert.equal(tmuxCalls.length, beforeUnknown);
   const first = await registered.execute(
     "2",
     { action: "call", name: "x", command: "sleep 1" },
@@ -85,15 +128,21 @@ test("public tool rejects concurrent calls and rolls back failed create", async 
     ctx,
   );
   assert.equal(first.details.status, "accepted");
-  await assert.rejects(() =>
-    registered.execute(
-      "3",
-      { action: "call", name: "x", command: "echo later" },
-      undefined,
-      undefined,
-      ctx,
-    ),
+  const beforeBusy = tmuxCalls.length;
+  const busy = await registered.execute(
+    "3",
+    { action: "call", name: "x", command: "echo later" },
+    undefined,
+    undefined,
+    ctx,
   );
+  assert.deepEqual(busy.details, {
+    status: "busy",
+    reason: "pending_call",
+    name: "x",
+    callId: first.details.callId,
+  });
+  assert.equal(tmuxCalls.length, beforeBusy);
   now = 1_000_000;
   await runTerminalPollForTests();
   assert.equal(sent.length, 1);

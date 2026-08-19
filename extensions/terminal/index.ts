@@ -393,11 +393,29 @@ export default function terminalExtension(pi: ExtensionAPI): void {
         Type.Array(
           Type.Union([
             Type.Literal("Enter"),
+            Type.Literal("Tab"),
             Type.Literal("C-c"),
             Type.Literal("C-d"),
+            Type.Literal("C-l"),
+            Type.Literal("C-a"),
+            Type.Literal("C-e"),
+            Type.Literal("C-f"),
+            Type.Literal("C-b"),
+            Type.Literal("C-n"),
+            Type.Literal("C-p"),
+            Type.Literal("C-u"),
+            Type.Literal("C-k"),
+            Type.Literal("C-w"),
+            Type.Literal("C-r"),
+            Type.Literal("C-z"),
             Type.Literal("Escape"),
+            Type.Literal("BSpace"),
             Type.Literal("Up"),
             Type.Literal("Down"),
+            Type.Literal("Left"),
+            Type.Literal("Right"),
+            Type.Literal("Home"),
+            Type.Literal("End"),
           ]),
         ),
       ),
@@ -520,7 +538,13 @@ export default function terminalExtension(pi: ExtensionAPI): void {
         }
         if (!params.name?.trim()) throw new Error(`name is required for ${params.action}`);
         const terminal = terminals.get(params.name);
-        if (!terminal) throw new Error(`Unknown terminal: ${params.name}`);
+        if (!terminal)
+          return result({
+            status: "not_found",
+            reason: "unknown_terminal",
+            name: params.name,
+            availableNames: [...terminals.keys()].sort(),
+          });
         if (params.action === "send") {
           if (params.text === undefined && !params.keys?.length)
             throw new Error("text or keys is required");
@@ -548,12 +572,16 @@ export default function terminalExtension(pi: ExtensionAPI): void {
           });
         if (params.action === "call") {
           if (!params.command?.trim()) throw new Error("command is required");
-          if (
-            [...calls.values()].some(
-              (call) => call.name === terminal.name && call.state === "pending",
-            )
-          )
-            throw new Error(`Terminal already has a pending call: ${terminal.name}`);
+          const pendingCall = [...calls.values()].find(
+            (call) => call.name === terminal.name && call.state === "pending",
+          );
+          if (pendingCall)
+            return result({
+              status: "busy",
+              reason: "pending_call",
+              name: terminal.name,
+              callId: pendingCall.id,
+            });
           const id = randomUUID();
           const start = `__PI_CALL_${id}_START__`;
           const end = `__PI_CALL_${id}_END__`;
