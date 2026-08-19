@@ -232,9 +232,11 @@ test("file and total-byte limits are enforced without reading an unbounded corpu
   });
 });
 
-test("invalid queries and missing targets reject through the tool execute contract", async () => {
+test("invalid queries reject and missing targets do not hide successful roots", async () => {
   await withTempDirectory(async (root) => {
     const tool = registeredTool();
+    await mkdir(join(root, "tests"), { recursive: true });
+    await writeFile(join(root, "tests", "example.test.ts"), "BM25 test target\n");
 
     await assert.rejects(
       () =>
@@ -242,17 +244,19 @@ test("invalid queries and missing targets reject through the tool execute contra
       /query must not be empty/,
     );
 
-    await assert.rejects(
-      () =>
-        tool.execute(
-          "2",
-          { query: "BM25", paths: ["missing"] },
-          new AbortController().signal,
-          undefined,
-          { cwd: root },
-        ),
-      /Unable to access search path/,
+    const response = await tool.execute(
+      "2",
+      { query: "BM25", paths: ["tests", "spec"] },
+      new AbortController().signal,
+      undefined,
+      { cwd: root },
     );
+    assert.equal(response.details.results[0]?.path, "tests/example.test.ts");
+    assert.equal(response.details.pathErrors.length, 1);
+    assert.equal(response.details.pathErrors[0]?.path, join(root, "spec"));
+    assert.match(response.details.pathErrors[0]?.message ?? "", /Unable to access search path/);
+    assert.match(response.content[0]?.text ?? "", /Search path issues/);
+    assert.match(response.content[0]?.text ?? "", /spec/);
   });
 });
 

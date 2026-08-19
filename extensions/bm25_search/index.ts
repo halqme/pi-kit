@@ -105,6 +105,11 @@ export interface SearchResult {
   snippets: SearchSnippet[];
 }
 
+export interface SearchPathError {
+  path: string;
+  message: string;
+}
+
 export interface SearchDetails {
   query: string;
   roots: string[];
@@ -121,6 +126,7 @@ export interface SearchDetails {
   };
   stats: SearchStats;
   results: SearchResult[];
+  pathErrors: SearchPathError[];
 }
 
 interface SearchFile {
@@ -466,7 +472,11 @@ async function scanTextFiles(
   maxFileBytes: number,
   maxTotalBytes: number,
   signal: AbortSignal,
-): Promise<{ files: SearchFile[]; stats: SearchStats }> {
+): Promise<{
+  files: SearchFile[];
+  stats: SearchStats;
+  pathErrors: SearchPathError[];
+}> {
   const state: ScanState = {
     files: new Map(),
     seenFiles: new Set(),
@@ -492,34 +502,40 @@ async function scanTextFiles(
       truncated: false,
     },
   };
+  const pathErrors: SearchPathError[] = [];
 
   for (const root of roots) {
     checkAborted(signal);
-    let metadata;
     try {
-      metadata = await lstat(root);
-    } catch (error) {
-      throw new Error(`Unable to access search path '${root}': ${errorText(error)}`);
-    }
+      let metadata;
+      try {
+        metadata = await lstat(root);
+      } catch (error) {
+        throw new Error(`Unable to access search path '${root}': ${errorText(error)}`);
+      }
 
-    const displayRoot = relativeDisplayPath(base, root);
-    if (isInsideIgnoredDirectory(displayRoot)) {
-      state.stats.skippedDirectories++;
-      continue;
-    }
-
-    if (metadata.isDirectory()) {
-      const rules = await inheritedIgnoreRules(base, root, false);
-      if (shouldIgnore(displayRoot, true, rules)) {
-        state.stats.skippedIgnored++;
+      const displayRoot = relativeDisplayPath(base, root);
+      if (isInsideIgnoredDirectory(displayRoot)) {
+        state.stats.skippedDirectories++;
         continue;
       }
-      await visitDirectory(root, rules, state);
-    } else if (metadata.isFile()) {
-      const rules = await inheritedIgnoreRules(base, dirname(root), true);
-      await addFile(root, displayRoot, rules, state);
-    } else {
-      throw new Error(`Search path must be a regular file or directory: '${root}'`);
+
+      if (metadata.isDirectory()) {
+        const rules = await inheritedIgnoreRules(base, root, false);
+        if (shouldIgnore(displayRoot, true, rules)) {
+          state.stats.skippedIgnored++;
+          continue;
+        }
+        await visitDirectory(root, rules, state);
+      } else if (metadata.isFile()) {
+        const rules = await inheritedIgnoreRules(base, dirname(root), true);
+        await addFile(root, displayRoot, rules, state);
+      } else {
+        throw new Error(`Search path must be a regular file or directory: '${root}'`);
+      }
+    } catch (error) {
+      checkAborted(signal);
+      pathErrors.push({ path: root, message: errorText(error) });
     }
 
     if (state.stats.scannedFiles >= maxFiles) {
@@ -527,7 +543,7 @@ async function scanTextFiles(
       break;
     }
   }
-  return { files: [...state.files.values()], stats: state.stats };
+  return { files: [...state.files.values()], stats: state.stats, pathErrors };
 }
 
 function passagesFor(file: SearchFile): IndexedPassage[] {
@@ -651,19 +667,27 @@ function renderResults(
   roots: readonly string[],
   results: SearchResult[],
   stats: SearchStats,
+  pathErrors: readonly SearchPathError[],
 ): string {
   const target = roots.length === 1 ? roots[0] : `[${roots.join(", ")}]`;
   const header = `BM25 results for ${JSON.stringify(query)} under ${target}\n${formatStats(stats)}`;
-  if (results.length === 0) return `${header}\nNo matching files.`;
-
-  const body = results.map((result, index) => {
-    const title = `${index + 1}. ${result.path} (score=${result.score.toFixed(3)}, matched=${result.matchedTerms})`;
-    const snippets = result.snippets.length
-      ? result.snippets.map((snippet) => snippet.text).join("\n---\n")
-      : "(file ranked by a matching passage; no compact matching line window was produced)";
-    return `${title}\n${snippets}`;
-  });
-  return [header, ...body].join("\n\n");
+  const pathIssues = pathErrors.length
+    ? `Search path issues:\n${pathErrors
+        .map(({ path, message }) => `- ${path}: ${message}`)
+        .join("\n")}`
+    : undefined;
+  const body = results.length
+    ? results.map((result, index) => {
+        const title = `${index + 1}. ${result.path} (score=${result.score.toFixed(3)}, matched=${result.matchedTerms})`;
+        const snippets = result.snippets.length
+          ? result.snippets.map((snippet) => snippet.text).join("\n---\n")
+          : "(file ranked by a matching passage; no compact matching line window was produced)";
+        return `${title}\n${snippets}`;
+      })
+    : ["No matching files."];
+  return [header, pathIssues, ...body]
+    .filter((section): section is string => section !== undefined)
+    .join("\n\n");
 }
 
 function searchTargets(params: Bm25SearchParams, cwd: string): string[] {
@@ -768,6 +792,7 @@ export default function bm25SearchExtension(pi: ExtensionAPI): void {
       if (isPartial) return new Text(theme.fg("warning", "Searching..."), 0, 0);
       const details = result.details as SearchDetails | undefined;
       const results = Array.isArray(details?.results) ? details.results : [];
+      const pathErrors = Array.isArray(details?.pathErrors) ? details.pathErrors : [];
       const stats = details?.stats;
       const content = result.content
         .filter((item) => item.type === "text")
@@ -785,6 +810,7 @@ export default function bm25SearchExtension(pi: ExtensionAPI): void {
             )
             .join("\n")
         : "No matching files.";
+      if (pathErrors.length) text += `\n${pathErrors.length} search path issue(s).`;
       if (stats?.truncated) text += "\nScan limit reached.";
       if (expanded) text += `\n\n${content}\n\n${JSON.stringify(details ?? {}, null, 2)}`;
       return new Text(theme.fg("toolOutput", text), 0, 0);
@@ -855,10 +881,14 @@ export default function bm25SearchExtension(pi: ExtensionAPI): void {
           },
           stats: scan.stats,
           results,
+          pathErrors: scan.pathErrors,
         };
         return {
           content: [
-            { type: "text" as const, text: renderResults(query, roots, results, scan.stats) },
+            {
+              type: "text" as const,
+              text: renderResults(query, roots, results, scan.stats, scan.pathErrors),
+            },
           ],
           details,
         };
