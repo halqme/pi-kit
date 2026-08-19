@@ -15,6 +15,7 @@ import {
   summarizeAgentTeamJobs,
   type AgentTeamJob,
 } from "./runtime.ts";
+import { normalizePiModel } from "./pi-runner.ts";
 import {
   type AgentTeamConfig,
   type AgentTeamInstructionPolicy,
@@ -81,7 +82,24 @@ export async function resolveSkill(spec: string, cwd: string): Promise<string> {
       // Try the next supported skill location.
     }
   }
-  throw new Error(`Could not resolve skill '${value}' from ${cwd}`);
+  const recovery =
+    "Provide an existing SKILL.md path or a bare skill name available under " +
+    "skills/<name>/SKILL.md, .pi/skills/<name>/SKILL.md, or .agents/skills/<name>/SKILL.md.";
+  const error = new Error(
+    [
+      `Could not resolve skill '${value}' from ${cwd}.`,
+      `Searched candidates: ${candidates.join(", ")}.`,
+      `Recovery: ${recovery}`,
+    ].join(" "),
+  );
+  Object.assign(error, {
+    code: "AGENT_TEAM_SKILL_NOT_FOUND",
+    skill: value,
+    cwd,
+    candidates,
+    recovery,
+  });
+  throw error;
 }
 
 async function resolveSkills(specs: string[] | undefined, cwd: string): Promise<string[]> {
@@ -264,7 +282,55 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
         .filter((item) => item.type === "text")
         .map((item) => item.text ?? "")
         .join("\n");
-      const snapshots = Array.isArray(result.details) ? result.details : [result.details];
+      const details = result.details as unknown;
+      const isPreflightFailure =
+        details &&
+        !Array.isArray(details) &&
+        typeof details === "object" &&
+        (details as { phase?: unknown }).phase === "preflight";
+      if (isPreflightFailure) {
+        const failure = details as {
+          error?: string;
+          diagnostics?: Array<{
+            scope?: string;
+            member?: string;
+            skill?: string;
+            model?: string;
+            cwd?: string;
+            searchedCandidates?: string[];
+            recovery?: string;
+          }>;
+        };
+        const diagnosticText = (failure.diagnostics ?? [])
+          .map((diagnostic) => {
+            const scope = diagnostic.member
+              ? `${diagnostic.scope ?? "member"} '${diagnostic.member}'`
+              : (diagnostic.scope ?? "team");
+            if (diagnostic.model !== undefined) {
+              return [
+                `${scope} model '${diagnostic.model}' is invalid.`,
+                `Recovery: ${diagnostic.recovery ?? "use provider/model or omit it to use the child default"}`,
+              ].join("\n");
+            }
+            return [
+              `${scope} skill '${diagnostic.skill ?? "unknown"}' could not be resolved.`,
+              `cwd: ${diagnostic.cwd ?? "unknown"}`,
+              `Searched candidates: ${(diagnostic.searchedCandidates ?? []).join(", ")}`,
+              `Recovery: ${diagnostic.recovery ?? "provide an existing SKILL.md path"}`,
+            ].join("\n");
+          })
+          .join("\n\n");
+        let text =
+          content ||
+          [failure.error ?? "Agent-team start preflight failed.", diagnosticText]
+            .filter(Boolean)
+            .join("\n\n");
+        if (expanded) text += `\n\n${JSON.stringify(details, null, 2)}`;
+        return new Text(theme.fg("error", text), 0, 0);
+      }
+      const snapshots = (
+        Array.isArray(result.details) ? result.details : [result.details]
+      ) as AgentTeamSnapshot[];
       if (snapshots.length === 0 || !snapshots[0]) {
         const text = context.isError ? content || "Agent-team failed." : "No agent-team session.";
         return new Text(theme.fg(context.isError ? "error" : "toolOutput", text), 0, 0);
@@ -301,8 +367,132 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
       ctx: ExtensionContext,
     ): Promise<{
       content: Array<{ type: "text"; text: string }>;
-      details: AgentTeamSnapshot | AgentTeamSnapshot[];
+      details:
+        | AgentTeamSnapshot
+        | AgentTeamSnapshot[]
+        | {
+            status: "failed";
+            phase: "preflight";
+            error: string;
+            diagnostics: Array<{
+              scope: "team" | "member";
+              member?: string;
+              skill?: string;
+              model?: string;
+              cwd?: string;
+              searchedCandidates?: string[];
+              recovery: string;
+            }>;
+          };
     }> {
+      const getSkillFailure = (error: unknown) => {
+        if (!(error instanceof Error)) return undefined;
+        const metadata = error as Error & {
+          code?: unknown;
+          skill?: unknown;
+          cwd?: unknown;
+          candidates?: unknown;
+          recovery?: unknown;
+        };
+        if (
+          metadata.code !== "AGENT_TEAM_SKILL_NOT_FOUND" ||
+          typeof metadata.skill !== "string" ||
+          typeof metadata.cwd !== "string" ||
+          !Array.isArray(metadata.candidates) ||
+          !metadata.candidates.every((candidate) => typeof candidate === "string") ||
+          typeof metadata.recovery !== "string"
+        ) {
+          return undefined;
+        }
+        return {
+          skill: metadata.skill,
+          cwd: metadata.cwd,
+          candidates: metadata.candidates,
+          recovery: metadata.recovery,
+        };
+      };
+
+      const preflightFailure = (
+        scope: "team" | "member",
+        member: string | undefined,
+        error: unknown,
+      ) => {
+        const failure = getSkillFailure(error);
+        if (!failure) throw error;
+        const scopeLabel = member ? `member '${member}'` : "team";
+        const diagnostic = {
+          scope,
+          ...(member ? { member } : {}),
+          skill: failure.skill,
+          cwd: failure.cwd,
+          searchedCandidates: failure.candidates,
+          recovery: failure.recovery,
+        };
+        const details = {
+          status: "failed" as const,
+          phase: "preflight" as const,
+          error: `${scopeLabel} skill '${failure.skill}' could not be resolved.`,
+          diagnostics: [diagnostic],
+        };
+        updateJobStatus(ctx);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: [
+                "Agent-team start was not launched because skill preflight failed.",
+                details.error,
+                `cwd: ${failure.cwd}`,
+                `Searched candidates: ${failure.candidates.join(", ")}`,
+                `Recovery: ${failure.recovery}`,
+              ].join("\n"),
+            },
+          ],
+          details,
+        };
+      };
+
+      const modelPreflightFailure = (
+        scope: "team" | "member",
+        member: string | undefined,
+        requestedModel: unknown,
+        error: unknown,
+      ) => {
+        const requested =
+          typeof requestedModel === "string" ? requestedModel.trim() : String(requestedModel);
+        const reason = error instanceof Error ? error.message : String(error);
+        const scopeLabel = member ? `member '${member}'` : "team";
+        const recovery =
+          "Use provider/model form (for example, anthropic/claude-sonnet-4-5), or omit model to use the child default.";
+        const details = {
+          status: "failed" as const,
+          phase: "preflight" as const,
+          error: `${scopeLabel} model '${requested}' is invalid: ${reason}`,
+          diagnostics: [
+            {
+              scope,
+              ...(member ? { member } : {}),
+              model: requested,
+              recovery,
+            },
+          ],
+        };
+        updateJobStatus(ctx);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: [
+                "Agent-team start was not launched because model preflight failed.",
+                details.error,
+                `Recovery: ${recovery}`,
+              ].join("\n"),
+            },
+          ],
+          details,
+        };
+      };
+
       try {
         if (params.action === "list") {
           await refresh(ctx);
@@ -339,15 +529,41 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
           const tools = selectTools(params.tools);
           const thinking = validateAgentTeamThinking(params.thinking);
           const timeoutMs = params.turnTimeoutMs ?? 300_000;
-          const teamSkills = await resolveSkills(params.skills, ctx.cwd);
-          const members: AgentTeamMemberConfig[] = [];
+          let teamModel: string | undefined;
+          try {
+            teamModel = normalizePiModel(params.model);
+          } catch (error) {
+            return modelPreflightFailure("team", undefined, params.model, error);
+          }
+          const memberModels: Array<string | undefined> = [];
           for (const member of params.members) {
-            const skills = await resolveSkills(member.skills ?? teamSkills, ctx.cwd);
+            try {
+              memberModels.push(normalizePiModel(member.model));
+            } catch (error) {
+              return modelPreflightFailure("member", member.name.trim(), member.model, error);
+            }
+          }
+
+          let teamSkills: string[];
+          try {
+            teamSkills = await resolveSkills(params.skills, ctx.cwd);
+          } catch (error) {
+            return preflightFailure("team", undefined, error);
+          }
+          const members: AgentTeamMemberConfig[] = [];
+          for (const [index, member] of params.members.entries()) {
+            let skills: string[];
+            try {
+              skills = await resolveSkills(member.skills ?? teamSkills, ctx.cwd);
+            } catch (error) {
+              return preflightFailure("member", member.name.trim(), error);
+            }
+            const memberModel = memberModels[index];
             members.push({
               name: member.name.trim(),
               role: member.role.trim(),
               ...(member.instructionPolicy ? { instructionPolicy: member.instructionPolicy } : {}),
-              ...(member.model?.trim() ? { model: member.model.trim() } : {}),
+              ...(memberModel ? { model: memberModel } : {}),
               ...(skills.length > 0 ? { skills } : {}),
             });
           }
@@ -358,7 +574,7 @@ export default function agentTeamExtension(pi: ExtensionAPI): void {
             interaction: params.interaction ?? "autonomous",
             members,
             maxRounds: params.maxRounds ?? 1,
-            ...(params.model?.trim() ? { model: params.model.trim() } : {}),
+            ...(teamModel ? { model: teamModel } : {}),
             tools,
             thinking,
             timeoutMs,

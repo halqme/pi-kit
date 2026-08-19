@@ -26,12 +26,41 @@ export interface PiRunnerOptions {
   timeoutMs: number;
 }
 
+export function normalizePiModel(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") {
+    throw new Error("model must be a provider/model string or omitted");
+  }
+  const model = value.trim();
+  if (!model) return undefined;
+  if (!/^[^/\s]+\/[^/\s]+$/.test(model)) {
+    throw new Error(
+      `model '${model}' must use provider/model form or be omitted to use the child default`,
+    );
+  }
+  return model;
+}
+
+export function formatPiAgentFailure(message: string, model?: string): string {
+  if (!model) return message;
+  return `${message} Selected model '${model}' may be unavailable. Recovery: verify provider/model '${model}' or omit it to use the child default.`;
+}
+
+function selectedPiModel(
+  member: AgentTeamMemberConfig,
+  options: Pick<PiRunnerOptions, "model">,
+): string | undefined {
+  const memberModel = normalizePiModel(member.model);
+  const teamModel = normalizePiModel(options.model);
+  return memberModel || teamModel;
+}
+
 export function buildPiArgs(
   member: AgentTeamMemberConfig,
   options: Pick<PiRunnerOptions, "model" | "tools" | "thinking">,
 ): string[] {
   const args = ["-p", "--no-session"];
-  const model = member.model?.trim() || options.model?.trim();
+  const model = selectedPiModel(member, options);
   if (model) args.push("--model", model);
   args.push("--thinking", validateAgentTeamThinking(options.thinking));
   const tools = validateAgentTeamTools(options.tools);
@@ -69,6 +98,7 @@ export function createPiAgentFactory(options: PiRunnerOptions): AgentTeamAgentFa
   return async (member: AgentTeamMemberConfig, systemPrompt: string): Promise<AgentTeamAgent> => {
     const active = new Set<string>();
     const ask = async (prompt: string, signal?: AbortSignal): Promise<string> => {
+      const selectedModel = selectedPiModel(member, options);
       const args = buildPiArgs(member, options);
       await ensureAgentTeamTaskRoot(options.taskRoot);
       const task = await startBackgroundProcess({
@@ -94,7 +124,10 @@ export function createPiAgentFactory(options: PiRunnerOptions): AgentTeamAgentFa
             if (snapshot.result?.outcome !== "success") {
               const reason = output.stderr || snapshot.result?.error || "Pi process failed";
               throw new Error(
-                `agent-team member '${member.name}' ${snapshot.result?.outcome ?? "failed"}: ${reason}`,
+                formatPiAgentFailure(
+                  `agent-team member '${member.name}' ${snapshot.result?.outcome ?? "failed"}: ${reason}`,
+                  selectedModel,
+                ),
               );
             }
             return output.stdout.trim();
@@ -103,7 +136,10 @@ export function createPiAgentFactory(options: PiRunnerOptions): AgentTeamAgentFa
         }
         await stopProcessAndWait(task.taskDir);
         throw new Error(
-          `agent-team member '${member.name}' timed out after ${options.timeoutMs}ms`,
+          formatPiAgentFailure(
+            `agent-team member '${member.name}' timed out after ${options.timeoutMs}ms`,
+            selectedModel,
+          ),
         );
       } finally {
         active.delete(task.taskDir);
