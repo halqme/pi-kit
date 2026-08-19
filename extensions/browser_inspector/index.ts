@@ -32,7 +32,11 @@ export function setBrowserHostFactoryForTests(factory?: () => BrowserHost): void
 
 function required<T>(value: T | undefined, name: string, action: string): T {
   if (value === undefined || value === null || value === "") {
-    throw new Error(`${name} is required for ${action}`);
+    const hint =
+      name === "target"
+        ? ' Pass target as { selector: "..." }, { ref: "e4" }, or { point: { x, y } }.'
+        : "";
+    throw new Error(`${name} is required for ${action}.${hint}`);
   }
   return value;
 }

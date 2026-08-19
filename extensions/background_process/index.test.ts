@@ -92,9 +92,15 @@ test("start_many starts independent commands and reports each process", async (t
     undefined,
     undefined,
     ctx,
-  )) as { details: { started: Array<{ taskDir: string }>; failed: unknown[] }; isError?: boolean };
+  )) as {
+    content: Array<{ text?: string }>;
+    details: { started: Array<{ taskDir: string }>; failed: unknown[] };
+    isError?: boolean;
+  };
 
   assert.equal(result.isError, undefined);
+  assert.match(String(result.content[0]?.text), /Launch acknowledged/);
+  assert.match(String(result.content[0]?.text), /readiness\/failure watch/);
   assert.equal(result.details.started.length, 2);
   assert.deepEqual(result.details.failed, []);
   for (const process of result.details.started) {

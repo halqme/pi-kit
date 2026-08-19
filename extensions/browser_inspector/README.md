@@ -17,6 +17,18 @@ The Pi extension itself runs on Node.js. Browser work is delegated over a JSONL 
 - `console` and `network` expose cursor-based event buffers so repeated checks can request only events newer than a previous result.
 - `close` destroys the current page. The Bun sidecar itself is disposed when the Pi session shuts down.
 
+## Typical call sequence
+
+Open the page, inspect a target, then reuse the returned ref:
+
+```json
+{"action":"open","url":"http://127.0.0.1:5173"}
+{"action":"inspect","target":{"selector":"button[aria-label=\"Save\"]"}}
+{"action":"styles","target":{"ref":"e4"},"preset":"layout"}
+```
+
+`inspect` and `styles` require a nested `target` (`selector`, `ref`, or `point`); a top-level `selector` is not a target.
+
 ## Element refs
 
 `inspect` and `snapshot` return opaque refs such as `e4`. Reuse them for `styles`, `screenshot`, or `interact` rather than repeatedly reconstructing fragile selectors. Refs belong to one document generation and are deliberately invalidated by navigation or reload. If a framework replaces a DOM node, the old ref also fails instead of silently resolving to a different element.
@@ -31,4 +43,4 @@ The Pi extension itself runs on Node.js. Browser work is delegated over a JSONL 
 
 Raw CDP is intentionally not part of the Pi tool API. The Bun host uses CDP internally for DOM, CSS, Accessibility, Page, Runtime, and Network observations while exposing stable, task-level operations to the model. Add a structured browser action when a recurring observation is missing instead of teaching callers to assemble protocol commands themselves.
 
-`Bun.WebView` is experimental, so the JSONL host boundary also isolates Pi from Bun API churn. The browser tool should not manage dev servers or other long-running commands; use `terminal` or `background_process` for those processes and `browser_inspector` for the rendered runtime they serve.
+`Bun.WebView` is experimental, so the JSONL host boundary also isolates Pi from Bun API churn. The browser tool should not manage dev servers or other long-running commands; use `terminal` when browser checks depend on readiness or startup/failure output, and use `background_process` only when no readiness observation is needed.

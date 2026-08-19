@@ -94,14 +94,14 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
     name: TOOL_NAME,
     label: "Background Process",
     description:
-      "Manage durable detached, non-interactive shell commands. Use for dev servers, watchers, builds, tests, batch jobs, frequent lightweight review requests such as `pi -ne 'please review ...'`, and other commands that may outlive the current turn when later stdin, TTY state, control keys, and output-pattern watches are unnecessary; use terminal when those interactive capabilities are required. Prefer this over agent_team for routine reviews. After starting a process, do not wait with sleep, polling, ps, or repeated check calls. Completion is delivered automatically, including after session resume. Completed processes are hidden unless explicitly requested.",
+      "Manage durable detached, non-interactive shell commands. Use for dev servers, watchers, builds, tests, batch jobs, frequent lightweight review requests such as `pi -ne 'please review ...'`, and other commands that may outlive the current turn when later stdin, TTY state, control keys, output-pattern watches, and startup-readiness observation are unnecessary; use terminal when those are required. Prefer this over agent_team for routine reviews. A long-running process reports completion only after it exits, so its completion notification is not a server-readiness signal. Completion is delivered automatically, including after session resume. After starting a process, do not wait with sleep, polling, ps, or repeated check calls. Completed processes are hidden unless explicitly requested.",
     promptGuidelines: [
       "Use background_process for frequent lightweight review requests when a detached Pi command such as `pi -ne 'please review ...'` is sufficient; reserve agent_team for infrequent high-value judgment.",
-      "Choose background_process by interaction model, not by expected duration: long-lived servers and watchers are valid when they do not need later TTY interaction.",
-      "Use terminal instead when later stdin, control keys, interactive TTY state, or pattern watches are required.",
+      "Choose background_process by interaction model, not by expected duration: long-lived servers and watchers are valid only when later TTY interaction, pattern watches, and startup-readiness observation are unnecessary.",
+      "Use terminal instead when later stdin, control keys, interactive TTY state, pattern watches, or a readiness/failure signal is required before the next step.",
       "Use start or start_many for commands that may take longer than the current turn.",
-      "After starting a background process, do not use sleep, polling, ps, or check to wait for completion.",
-      "Report that the process started and end the turn; background-process will notify you when it completes.",
+      "After starting a long-lived process, do not use sleep, polling, ps, or check to wait for completion; a running server will not complete until it exits.",
+      "For a background process with no readiness dependency, report that it started and end the turn; background-process will notify you when it completes.",
       "Use check only when the user explicitly asks for current progress or output.",
       "When a background-process completion message arrives, inspect its result and continue the pending task.",
     ],
@@ -190,7 +190,7 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
           content: [
             {
               type: "text" as const,
-              text: `Started ${describe(snapshot)}\nDo not wait or poll for completion; end this turn and let background-process notify you.`,
+              text: `Started ${describe(snapshot)}\nLaunch acknowledged. A long-running process reports completion only after it exits; this is not a readiness signal. If the next step depends on a dev server being ready, use terminal with a readiness/failure watch instead.`,
             },
           ],
           details: snapshot,
@@ -229,7 +229,7 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
             ? `Failed ${failed.length} process(es):\n${failed.map((item) => `${item.index}: ${item.error}`).join("\n")}`
             : "",
           started.length
-            ? "Do not wait or poll for completion; end this turn and let background-process notify you."
+            ? "Launch acknowledged. Long-running processes complete only after exit; if a next step depends on dev-server readiness, use terminal with a readiness/failure watch instead of waiting for background-process completion."
             : "",
         ]
           .filter(Boolean)
