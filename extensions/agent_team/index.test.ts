@@ -141,3 +141,64 @@ test("agent-team reports missing member skills with member scope", async () => {
   const listed = await tool.execute("list-call", { action: "list" }, undefined, undefined, ctx);
   assert.deepEqual(listed.details, []);
 });
+
+test("agent-team reports malformed team models before creating a job", async () => {
+  const tool = captureTool();
+  const ctx = { cwd: "/tmp/pi-kit-agent-team-model-preflight-team", ui: { setStatus() {} } };
+  const result = await tool.execute(
+    "team-model-call",
+    {
+      action: "start",
+      topic: "Review model selection",
+      model: "model-only",
+      members: [
+        { name: "reviewer", role: "Review the failure" },
+        { name: "skeptic", role: "Challenge the recovery" },
+      ],
+    },
+    undefined,
+    undefined,
+    ctx,
+  );
+
+  assert.equal(result.details.status, "failed");
+  assert.equal(result.details.phase, "preflight");
+  const diagnostic = result.details.diagnostics[0];
+  assert.equal(diagnostic.scope, "team");
+  assert.equal(diagnostic.model, "model-only");
+  assert.match(diagnostic.recovery, /provider\/model/);
+  assert.match(result.content[0].text, /model preflight failed/);
+
+  const listed = await tool.execute("list-call", { action: "list" }, undefined, undefined, ctx);
+  assert.deepEqual(listed.details, []);
+});
+
+test("agent-team reports malformed member models with member scope", async () => {
+  const tool = captureTool();
+  const ctx = { cwd: "/tmp/pi-kit-agent-team-model-preflight-member", ui: { setStatus() {} } };
+  const result = await tool.execute(
+    "member-model-call",
+    {
+      action: "start",
+      topic: "Review member model selection",
+      members: [
+        { name: "bad-reviewer", role: "Review the failure", model: "provider/" },
+        { name: "skeptic", role: "Challenge the recovery" },
+      ],
+    },
+    undefined,
+    undefined,
+    ctx,
+  );
+
+  assert.equal(result.details.status, "failed");
+  assert.equal(result.details.phase, "preflight");
+  const diagnostic = result.details.diagnostics[0];
+  assert.equal(diagnostic.scope, "member");
+  assert.equal(diagnostic.member, "bad-reviewer");
+  assert.equal(diagnostic.model, "provider/");
+  assert.match(diagnostic.recovery, /child default/);
+
+  const listed = await tool.execute("list-call", { action: "list" }, undefined, undefined, ctx);
+  assert.deepEqual(listed.details, []);
+});
