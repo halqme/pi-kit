@@ -1,0 +1,65 @@
+{
+  "skill_name": "apply-correction",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "この説明文を直して。今は『Aはカレーを食べた』となっているけど、正しくはシチューを食べた。最終文だけ自然に修正して。",
+      "expected_output": "The final artifact states that A ate stew as the current fact. It does not preserve the correction dialogue or mention curry because the discarded value is not useful to the reader.",
+      "assertions": [
+        "The final artifact states that A ate stew.",
+        "The final artifact does not mention curry or frame the sentence as a correction from curry to stew.",
+        "The response does not add an explanation of the editing history around the final artifact."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "このコードコメントを修正して。`// This lookup bypasses the cache.` は誤りで、実装は LRU cache を使って repeated lookup を高速化している。コード自体は変えずコメントだけ直して。",
+      "expected_output": "The resulting code comment directly describes the current LRU-cache behavior rather than explaining that the previous bypass-cache statement was wrong.",
+      "assertions": [
+        "The comment describes use of the LRU cache for repeated lookups.",
+        "The comment does not preserve the old bypass-cache claim as a negated or contrastive statement.",
+        "The response changes only the comment semantics requested by the user."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "README の architecture 節を直したい。前のレビューで『worker は Redis 経由で通信する』と書いたけど、それは間違いで、現在は process-local queue を使っている。現在の設計だけを説明する節として書き直して。",
+      "expected_output": "The architecture text describes the process-local queue as the current design and omits the rejected Redis architecture because the section is about the present system rather than its history.",
+      "assertions": [
+        "The output describes a process-local queue as the current communication mechanism.",
+        "The output does not mention Redis solely to contrast it with the current mechanism.",
+        "The section reads as standalone current-state documentation rather than a response to review feedback."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "v2 migration guide に、v1 では `timeout` が秒単位だったが v2 ではミリ秒単位になったことを書いて。移行時に値を1000倍する必要があることも説明して。",
+      "expected_output": "The migration guide keeps the v1/v2 contrast because historical comparison is essential to the artifact and explains the required conversion accurately.",
+      "assertions": [
+        "The output explicitly states the v1 seconds and v2 milliseconds distinction.",
+        "The output explains that migrated values must be multiplied by 1000.",
+        "The skill does not erase useful historical contrast merely because it mentions a previous state."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "設計判断の記録を書いて。最初は SQLite を候補にしたが、複数プロセスからの同時書き込みが要件になったので PostgreSQL を採用した。なぜ SQLite を採用しなかったかも後から分かるようにしたい。",
+      "expected_output": "The design rationale retains the rejected SQLite alternative and the reason for choosing PostgreSQL because the rejected alternative is part of the requested rationale.",
+      "assertions": [
+        "The output records SQLite as a considered alternative.",
+        "The output records the concurrent multi-process write requirement as the reason PostgreSQL was selected.",
+        "The output preserves this contrast because the user explicitly requested decision history."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "新しく追加した `parseConfig` のコメントを書いて。入力を検証して `Config` を返し、不正な入力では `ConfigError` を返す関数。以前のコメントやレビュー履歴は特にない。",
+      "expected_output": "The agent writes a concise current-state comment directly. It does not invent a correction workflow, previous behavior, or rejected alternative when none exists.",
+      "assertions": [
+        "The comment describes validation and the Config/ConfigError behavior accurately.",
+        "The response does not invent previous behavior, rejected alternatives, or correction history.",
+        "The result remains concise and appropriate for a code comment."
+      ]
+    }
+  ]
+}
