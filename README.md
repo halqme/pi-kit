@@ -1,30 +1,47 @@
 # Pi Kit
 
-Pi向けの個人用ハーネスです。現在の中核は、repository context、structure-aware mutation、adaptive task state、executed verification、isolated delegation の5境界です。
+Pi Kit is a deliberately small runtime layer for Pi Coding Agent. The active architecture is organized around five mechanical boundaries:
 
 ```text
 context -> code -> task -> verify
-                    |
-                    `-> delegate
+                    \
+                     -> delegate
 ```
 
-`context` は概念検索と構造検索を1つのread-only surfaceへまとめ、`code` はそこから得たcontinuationを使って既存sourceを安全に編集します。`task` のplanは固定workflowではなく更新可能な仮説です。`verify.run` が実際にcheckを実行し、`task.finish` は実行済みverificationなしでは成立しません。`delegate` はworkerごとにGit worktree/branchを分離します。
+- `context` acquires repository evidence through lexical and structural retrieval.
+- `code` performs structured mutation using handles produced by the same repository engine.
+- `task` keeps lightweight goal, checkpoint, blocker, and completion state.
+- `verify` distinguishes executed checks from reported evidence; only executed strong checks can unlock completion.
+- `delegate` runs independent child Pi work in isolated Git worktrees and branches.
 
-主要extension:
+## Layout
 
-- `extensions/repository`: `context` / `code`
-- `extensions/task`: `task` / `verify`
-- `extensions/delegate`: isolated child Pi
-- `extensions/background-process`: detached process utility
-- `extensions/browser-inspector`: browser inspection
-- `extensions/terminal`: named terminal sessions
-- `extensions/session-metrics`: session metrics UI
-
-オフライン分析は `extensions/session-metrics` が担当します。`session-metrics --runtime` は `context/code/task/delegate/verify` とverification provenanceを集計します。
-
-設計の詳細は `docs/architecture.md` を参照してください。
-
-```sh
-bun install
-bun run check
+```text
+extensions/
+  background-process/
+  browser-inspector/
+  delegate/
+  repository/
+    src/
+      context/
+      code/
+      syntax/
+  session-metrics/
+  statusline/
+  suggest-reload/
+  task/
+  terminal/
+skills/
+prompts/
+themes/
+docs/
+tsconfig.json
 ```
+
+Every runtime workspace now lives under `extensions/`; there is no separate `packages/` layer. `session-metrics` owns both the Pi extension and its offline CLI/analysis kernel. Multi-word extension directories use kebab-case, and the shared TypeScript configuration lives at the repository root.
+
+The repository extension exposes only `context` and `code`. The old standalone Astrolabe and BM25 tool surfaces are gone; their useful structural and lexical mechanisms are internal implementation details under `src/syntax` and `src/context`.
+
+Additional independent utilities remain available through the extensions listed above. Offline session analysis is provided by the `session-metrics` CLI in `extensions/session-metrics`.
+
+See [`docs/architecture.md`](docs/architecture.md) for the design rationale and runtime contracts.
