@@ -1,20 +1,15 @@
-# Pi Extensions Workspace
+# Extensions
 
-Pi extensions live in one Bun workspace. Pi auto-discovers each `<extension>/index.ts` entry point. Every extension is an independent package with its own dependencies, checks, and documentation; see the extension's README for its behavior and constraints.
+Pi Kit no longer discovers every directory here as public runtime surface. The root `package.json` explicitly lists loaded extensions.
 
-Run from this directory:
+`vnext/` owns the core agent runtime:
 
-```sh
-bun install
-bun run check
-bun run --filter <package-name> dev
-bun run --filter <package-name> smoke
-```
+- `context`: repository retrieval and structural inspection
+- `code`: structure-aware mutation
+- `task`: adaptive task lifecycle
+- `delegate`: isolated child Pi worktrees
+- `verify`: provenance-aware verification evidence
 
-`bun run check` runs each package's TypeScript checks and tests. The `dev` and `smoke` scripts run one selected extension through Pi. After changing an extension already loaded by Pi, use `/reload`.
+The manifest also loads a small set of independent utilities: `background_process`, `browser_inspector`, `session_metrics`, `statusline`, `suggest_reload`, and `terminal`.
 
-## Naming conventions
-
-- Extension directories and their workspace package names use `snake_case` because they implement Pi tools.
-- Pi tool identifiers also use `snake_case` and remain stable because session metrics records them.
-- Skills and standalone packages under `packages/` use `kebab-case`.
+Other directories are historical implementation substrate and are inert unless explicitly added back to the package manifest. In particular, Astrolabe and BM25 are now kernel implementations consumed by `vnext/`; their old tool names are not registered directly.
