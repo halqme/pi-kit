@@ -1,12 +1,18 @@
 # Pi Kit
 
-A collection of extensions, reusable agent skills, prompts, themes, and session analysis tools for [Pi](https://github.com/earendil-works/pi), focused on planning, collaboration, project-aware automation, and safe development workflows.
+Pi Kit is an opinionated runtime for coding agents built around five boundaries:
+
+```text
+context acquisition -> structured mutation -> adaptive task state
+                    -> isolated delegation -> provenance-aware verification
+```
+
+The public core is intentionally small. Planning, continuation, review, delegation, and completion are not separate workflow products anymore; they are runtime concerns behind four tools plus verification.
 
 ## Install
 
 ```sh
 pi install git:github.com/halqme/pi-kit
-
 ```
 
 Requirements:
@@ -14,80 +20,52 @@ Requirements:
 - Node.js 24 or later
 - Bun 1.3.14 or later
 
-Recommendation:
-- npm:@ollama/pi-web-search
+## Core tools
 
-Settings:
-```json
-{
-  "enabledModels": [
-    "openai-codex/gpt-5.6-luna:max",
-    "openai-codex/gpt-5.6-terra:max",
-    "openai-codex/gpt-5.6-sol:high"
-  ]
-}
-```
+### `context`
 
-## Included packages
+Repository context acquisition. `find` uses passage-level BM25 for conceptual retrieval; `locate`, `search`, `inspect`, and `inspect_many` reuse the structural/LSP kernel formerly exposed as Astrolabe. Retrieval is separated from mutation so exploratory history does not need to become edit authority.
 
-### Extensions
+### `code`
 
-Pi discovers extensions from the `extensions/` directory. Each extension is an independent Bun workspace package with its own documentation and checks.
+Structure-aware mutation. `edit` replaces one validated syntax node and `rename` applies an LSP-generated semantic rename after staleness and syntax checks. Continuations come from `context` and are session-scoped capabilities.
 
-See each extension's README for its behavior, tools, hooks, and constraints. Workspace-level commands are covered in the [extension development guide](./extensions/README.md).
+### `task`
 
-### Packages
+One adaptive task state with a goal, optional acceptance criteria, checkpoints, observations, a disposable current plan, blockers, and evidence-backed completion. There is no approval-gated planner and no step-count completion rule. A plan is a hypothesis that may be replaced as new observations arrive.
 
-Additional standalone packages live under `packages/`. See each package's documentation for usage and constraints.
+### `delegate`
 
-### Skills, prompts, and themes
+Starts a child Pi in its own Git worktree and branch. Workers are isolated by construction instead of coordinating writes through prompt conventions. A worker is expected to commit its branch, but its exit is only an event: the parent still inspects and verifies before integration.
 
-- Reusable workflows live under `skills/`; each skill is defined by a `SKILL.md` file.
-- Prompt templates live under `prompts/`.
-- Themes live under `themes/`.
+### `verify`
 
-`agent_team` runs its discussion members as isolated Pi subprocesses through the bundled `background_process` extension.
+Records verification evidence together with provenance. Existing tests, CI, compilers, typecheckers, linters, user acceptance, and structural audits count as strong evidence. Agent-authored tests and self-review remain useful supporting signals but cannot alone satisfy `task.finish`.
+
+## Utility extensions
+
+The package also loads `background_process`, `browser_inspector`, `session_metrics`, `statusline`, `suggest_reload`, and `terminal`. They are utilities rather than orchestration layers.
+
+Older experimental extensions remain in the repository as implementation substrate and historical reference, but they are not loaded by the package manifest. Runtime behavior is defined by the explicit `pi.extensions` and `pi.skills` lists in `package.json`.
+
+## Why this shape
+
+The redesign follows several recent results in coding-agent research:
+
+- structured AST/entity mutation improves reliability and reduces token use;
+- repository retrieval has no single winning strategy, while focused context selection matters materially;
+- separating repository exploration from solving can reduce solver-context pollution;
+- asynchronous multi-agent work benefits from isolated workspaces and branch-and-merge coordination;
+- self-authored verification is not a trustworthy acceptance signal by itself;
+- oversized repository instruction files can reduce task success and increase inference cost.
+
+See [docs/architecture.md](./docs/architecture.md) for the design rationale and research references.
 
 ## Development
 
-Install dependencies from the repository root:
-
 ```sh
 bun install
-```
-
-Run all extension checks from the extension workspace:
-
-```sh
-cd extensions
 bun run check
 ```
 
-The full check runs strict TypeScript checks and Node test-runner tests for every extension. You can also run one kind of check across the workspace:
-
-```sh
-bun run typecheck
-bun run test
-```
-
-To work on a single extension, use its package name:
-
-```sh
-bun --filter @halqme/agent_team dev
-bun --filter @halqme/agent_team smoke
-```
-
-Replace `@halqme/agent_team` with the target package name. After changing an extension already loaded by Pi, run `/reload` in the Pi session.
-
-## Repository layout
-
-```text
-.
-├── extensions/   # Pi extensions and Bun workspace configuration
-├── packages/     # Standalone packages such as session-metrics
-├── skills/       # Reusable agent workflows
-├── prompts/      # Prompt templates
-├── themes/       # Pi themes
-├── package.json  # Pi package metadata
-└── bun.lock      # Locked dependencies
-```
+For a focused change, run the nearest package checks first and then the repository check. The package uses an explicit runtime manifest, so adding a directory under `extensions/` does not make it active unless `package.json` loads it.
