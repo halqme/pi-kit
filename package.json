@@ -6,6 +6,7 @@
   ],
   "workspaces": [
     "extensions/*",
+    "!extensions/vnext",
     "packages/*"
   ],
   "scripts": {
