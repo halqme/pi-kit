@@ -37,7 +37,6 @@ jobs:
           git mv packages/session-metrics/test extensions/session-metrics/test
           git mv packages/session-metrics/README.md extensions/session-metrics/docs/analysis.md
           git rm packages/session-metrics/package.json packages/session-metrics/tsconfig.json
-          rmdir packages/session-metrics packages
 
           git mv extensions/tsconfig.json tsconfig.json
           git rm extensions/package.json
@@ -66,7 +65,7 @@ jobs:
           git mv "$repo/languages" "$repo/src/syntax/languages"
           git mv "$repo/shared.ts" "$repo/src/shared.ts"
           git mv "$repo/tests"/* "$repo/test/syntax/"
-          rmdir "$repo/tests"
+          rmdir "$repo/tests" 2>/dev/null || true
           git mv "$repo/index.test.ts" "$repo/test/index.test.ts"
           git mv "$repo/lexical.test.ts" "$repo/test/context.test.ts"
 
@@ -149,9 +148,6 @@ jobs:
               'from "@halqme/pi-session-metrics";', 'from "./src/index.ts";'
           )
           session_index.write_text(session_text)
-          extension_test = Path('extensions/session-metrics/test/extension.test.ts')
-          if Path('extensions/session-metrics/index.test.ts').exists():
-              raise SystemExit('session-metrics extension test was not moved as expected')
 
           for tsconfig in Path('extensions').glob('*/tsconfig.json'):
               if tsconfig == Path('extensions/session-metrics/tsconfig.json'):
@@ -250,16 +246,12 @@ jobs:
               text = text.replace(old, new)
           analysis_doc.write_text(text)
 
-          extension_test = Path('extensions/session-metrics/test/extension.test.ts')
+          extension_test = Path('extensions/session-metrics/index.test.ts')
           if extension_test.exists():
-              extension_test.write_text(
-                  extension_test.read_text().replace('"./index.ts"', '"../index.ts"')
-              )
+              extension_test.rename('extensions/session-metrics/test/extension.test.ts')
+              moved = Path('extensions/session-metrics/test/extension.test.ts')
+              moved.write_text(moved.read_text().replace('"./index.ts"', '"../index.ts"'))
           PY
-
-          cat > extensions/session-metrics/package.json.tmp <<'EOF'
-          EOF
-          rm extensions/session-metrics/package.json.tmp
 
           if grep -RInE 'extensions/(background_process|browser_inspector|session_metrics|suggest_reload)|packages/session-metrics' --exclude=bun.lock .; then
             echo 'stale layout references remain'
