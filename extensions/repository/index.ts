@@ -1,10 +1,10 @@
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import installStructuralEngine from "./structural-engine.ts";
-import installLexicalEngine from "./lexical-engine.ts";
-import { supportedLanguageIds } from "./src/language-profile.ts";
-import type { TextToolResult } from "./shared.ts";
+import installStructuralEngine from "./src/syntax/engine.ts";
+import installLexicalEngine from "./src/context/lexical.ts";
+import { supportedLanguageIds } from "./src/syntax/language-profile.ts";
+import type { TextToolResult } from "./src/shared.ts";
 
 type CapturedTool = {
   name: string;

@@ -5,8 +5,7 @@
     "pi-package"
   ],
   "workspaces": [
-    "extensions/*",
-    "packages/*"
+    "extensions/*"
   ],
   "scripts": {
     "hooks:install": "git config core.hooksPath .githooks",
@@ -34,11 +33,11 @@
       "./extensions/repository/index.ts",
       "./extensions/task/index.ts",
       "./extensions/delegate/index.ts",
-      "./extensions/background_process/index.ts",
-      "./extensions/browser_inspector/index.ts",
-      "./extensions/session_metrics/index.ts",
+      "./extensions/background-process/index.ts",
+      "./extensions/browser-inspector/index.ts",
+      "./extensions/session-metrics/index.ts",
       "./extensions/statusline/index.ts",
-      "./extensions/suggest_reload/index.ts",
+      "./extensions/suggest-reload/index.ts",
       "./extensions/terminal/index.ts"
     ],
     "skills": [

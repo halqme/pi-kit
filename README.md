@@ -15,12 +15,12 @@ context -> code -> task -> verify
 - `extensions/repository`: `context` / `code`
 - `extensions/task`: `task` / `verify`
 - `extensions/delegate`: isolated child Pi
-- `extensions/background_process`: detached process utility
-- `extensions/browser_inspector`: browser inspection
+- `extensions/background-process`: detached process utility
+- `extensions/browser-inspector`: browser inspection
 - `extensions/terminal`: named terminal sessions
-- `extensions/session_metrics`: session metrics UI
+- `extensions/session-metrics`: session metrics UI
 
-オフライン分析は `packages/session-metrics` が担当します。`session-metrics --runtime` は `context/code/task/delegate/verify` とverification provenanceを集計します。
+オフライン分析は `extensions/session-metrics` が担当します。`session-metrics --runtime` は `context/code/task/delegate/verify` とverification provenanceを集計します。
 
 設計の詳細は `docs/architecture.md` を参照してください。
 

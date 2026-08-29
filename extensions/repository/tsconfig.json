@@ -1,14 +1,4 @@
 {
-  "extends": "../tsconfig.json",
-  "include": [
-    "index.ts",
-    "shared.ts",
-    "structural-engine.ts",
-    "lexical-engine.ts",
-    "bm25.ts",
-    "src/**/*.ts",
-    "languages/**/*.ts",
-    "tests/**/*.ts",
-    "*.test.ts"
-  ]
+  "extends": "../../tsconfig.json",
+  "include": ["index.ts", "src/**/*.ts", "test/**/*.ts"]
 }

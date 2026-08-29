@@ -9,8 +9,8 @@
         "oxlint": "latest",
       },
     },
-    "extensions/background_process": {
-      "name": "@halqme/background_process",
+    "extensions/background-process": {
+      "name": "@halqme/background-process",
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
@@ -21,8 +21,8 @@
         "typescript": "catalog:",
       },
     },
-    "extensions/browser_inspector": {
-      "name": "@halqme/browser_inspector",
+    "extensions/browser-inspector": {
+      "name": "@halqme/browser-inspector",
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
@@ -62,15 +62,18 @@
         "typescript": "catalog:",
       },
     },
-    "extensions/session_metrics": {
-      "name": "@halqme/pi_session_metrics_extension",
+    "extensions/session-metrics": {
+      "name": "@halqme/session-metrics",
+      "bin": {
+        "session-metrics": "cli.ts",
+      },
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@earendil-works/pi-tui": "catalog:",
-        "@halqme/pi-session-metrics": "workspace:*",
       },
       "devDependencies": {
+        "@types/bun": "catalog:",
         "@types/node": "catalog:",
         "typescript": "catalog:",
       },
@@ -89,8 +92,8 @@
         "typescript": "catalog:",
       },
     },
-    "extensions/suggest_reload": {
-      "name": "suggest_reload",
+    "extensions/suggest-reload": {
+      "name": "@halqme/suggest-reload",
       "dependencies": {
         "@earendil-works/pi-coding-agent": "catalog:",
       },
@@ -119,20 +122,6 @@
       },
       "devDependencies": {
         "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/session-metrics": {
-      "name": "@halqme/pi-session-metrics",
-      "bin": {
-        "session-metrics": "cli.ts",
-      },
-      "dependencies": {
-        "@earendil-works/pi-ai": "catalog:",
-        "@earendil-works/pi-coding-agent": "catalog:",
-      },
-      "devDependencies": {
-        "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -215,19 +204,19 @@
 
     "@google/genai": ["@google/genai@1.52.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-gwSvbpiN/17O9TbsqSsE/OzZcpv5Fo4RQjdngGgogtuB9RsyJ8ZHhX5KjHj1bp5N9snN2eK8LDGXSaWW2hof8Q=="],
 
-    "@halqme/background_process": ["@halqme/background_process@workspace:extensions/background_process"],
+    "@halqme/background-process": ["@halqme/background-process@workspace:extensions/background-process"],
 
-    "@halqme/browser_inspector": ["@halqme/browser_inspector@workspace:extensions/browser_inspector"],
+    "@halqme/browser-inspector": ["@halqme/browser-inspector@workspace:extensions/browser-inspector"],
 
     "@halqme/delegate": ["@halqme/delegate@workspace:extensions/delegate"],
 
-    "@halqme/pi-session-metrics": ["@halqme/pi-session-metrics@workspace:packages/session-metrics"],
-
-    "@halqme/pi_session_metrics_extension": ["@halqme/pi_session_metrics_extension@workspace:extensions/session_metrics"],
-
     "@halqme/repository": ["@halqme/repository@workspace:extensions/repository"],
 
+    "@halqme/session-metrics": ["@halqme/session-metrics@workspace:extensions/session-metrics"],
+
     "@halqme/statusline": ["@halqme/statusline@workspace:extensions/statusline"],
+
+    "@halqme/suggest-reload": ["@halqme/suggest-reload@workspace:extensions/suggest-reload"],
 
     "@halqme/task": ["@halqme/task@workspace:extensions/task"],
 
@@ -542,8 +531,6 @@
     "shebang-regex": ["shebang-regex@3.0.0", "", {}, "sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A=="],
 
     "signal-exit": ["signal-exit@3.0.7", "", {}, "sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ=="],
-
-    "suggest_reload": ["suggest_reload@workspace:extensions/suggest_reload"],
 
     "tinypool": ["tinypool@2.1.0", "", {}, "sha512-Pugqs6M0m7Lv1I7FtxN4aoyToKg1C4tu+/381vH35y8oENM/Ai7f7C4StcoK4/+BSw9ebcS8jRiVrORFKCALLw=="],
 
