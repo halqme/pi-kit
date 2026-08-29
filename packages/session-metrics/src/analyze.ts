@@ -1,6 +1,6 @@
 import { explicitSkillNames, skillNameFromRead, skillReadPath } from "./analyzers/skills.ts";
 import { toolAction } from "./analyzers/tool-actions.ts";
-import { runtimeFacet, type RuntimeFacet } from "./analyzers/runtime.ts";
+import { runtimeFacetForTool, type RuntimeFacet } from "./analyzers/runtime.ts";
 import {
   emptyUsage,
   eventsFromLines,
@@ -17,7 +17,7 @@ import type {
   ToolMetrics,
   UsageTotals,
   VerificationProvenanceMetrics,
-  RuntimeRuntimeMetrics,
+  RuntimeMetrics,
 } from "./types.ts";
 
 export type {
@@ -29,7 +29,7 @@ export type {
   ToolMetrics,
   UsageTotals,
   VerificationProvenanceMetrics,
-  RuntimeRuntimeMetrics,
+  RuntimeMetrics,
 } from "./types.ts";
 
 function createToolMetrics(): ToolMetrics {
@@ -48,7 +48,7 @@ function createRuntimeOperationMetrics(): RuntimeOperationMetrics {
   return { calls: 0, errors: 0, actions: {} };
 }
 
-function createRuntimeMetrics(): RuntimeRuntimeMetrics {
+function createRuntimeMetrics(): RuntimeMetrics {
   return {
     context: createRuntimeOperationMetrics(),
     code: createRuntimeOperationMetrics(),
@@ -132,7 +132,7 @@ function addToolResult(
   }
 }
 
-function addRuntimeCall(metrics: RuntimeRuntimeMetrics, facet: RuntimeFacet): void {
+function addRuntimeCall(metrics: RuntimeMetrics, facet: RuntimeFacet): void {
   const area = metrics[facet.area];
   area.calls++;
   const action = (area.actions[facet.action] ??= { calls: 0, errors: 0 });
@@ -140,7 +140,7 @@ function addRuntimeCall(metrics: RuntimeRuntimeMetrics, facet: RuntimeFacet): vo
 }
 
 function provenanceMetrics(
-  metrics: RuntimeRuntimeMetrics,
+  metrics: RuntimeMetrics,
   provenance: string,
 ): VerificationProvenanceMetrics {
   return (metrics.verification.byProvenance[provenance] ??= {
@@ -152,7 +152,7 @@ function provenanceMetrics(
 }
 
 function recordVerificationResult(
-  metrics: RuntimeRuntimeMetrics,
+  metrics: RuntimeMetrics,
   facet: RuntimeFacet,
   passed: boolean,
 ): void {
@@ -167,7 +167,7 @@ function recordVerificationResult(
 }
 
 function addRuntimeResult(
-  metrics: RuntimeRuntimeMetrics,
+  metrics: RuntimeMetrics,
   facet: RuntimeFacet,
   event: Extract<SessionEvent, { kind: "tool_result" }>,
 ): void {
@@ -309,7 +309,7 @@ function createAccumulator() {
         const actions = (result.toolActions[event.toolName] ??= {});
         (actions[action] ??= createToolMetrics()).calls++;
       }
-      const runtimeFacet = runtimeFacet(event.toolName, event.input);
+      const runtimeFacet = runtimeFacetForTool(event.toolName, event.input);
       if (runtimeFacet) addRuntimeCall(result.runtime, runtimeFacet);
       if (event.toolCallId) {
         const startedAt = timestampMs(event.timestamp);
@@ -450,7 +450,7 @@ function mergeRuntimeOperationMetrics(
   }
 }
 
-function mergeRuntimeMetrics(target: RuntimeRuntimeMetrics, source: RuntimeRuntimeMetrics): void {
+function mergeRuntimeMetrics(target: RuntimeMetrics, source: RuntimeMetrics): void {
   mergeRuntimeOperationMetrics(target.context, source.context);
   mergeRuntimeOperationMetrics(target.code, source.code);
   mergeRuntimeOperationMetrics(target.task, source.task);

@@ -13,7 +13,7 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-export function runtimeFacet(toolName: string, input: unknown): RuntimeFacet | undefined {
+export function runtimeFacetForTool(toolName: string, input: unknown): RuntimeFacet | undefined {
   if (!(["context", "code", "task", "delegate", "verify"] as const).includes(toolName as RuntimeArea)) {
     return undefined;
   }

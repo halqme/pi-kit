@@ -42,7 +42,7 @@ export interface VerificationProvenanceMetrics {
   errors: number;
 }
 
-export interface RuntimeRuntimeMetrics {
+export interface RuntimeMetrics {
   context: RuntimeOperationMetrics;
   code: RuntimeOperationMetrics;
   task: RuntimeOperationMetrics;
@@ -108,7 +108,7 @@ export interface MetricSummary {
   toolUsage: Record<string, ToolMetrics>;
   toolActions: Record<string, Record<string, ToolMetrics>>;
   logicalOperations: LogicalOperationMetrics;
-  runtime: RuntimeRuntimeMetrics;
+  runtime: RuntimeMetrics;
   skills: Record<string, SkillMetrics>;
   models: Record<string, { messages: number; usage: UsageTotals }>;
   thinkingLevels: Record<string, { messages: number; usage: UsageTotals }>;

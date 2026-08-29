@@ -41,9 +41,9 @@ session JSONLだけから再計算できる、Pi上の利用形態に沿った�
 
 - skill usage: `/skill:name` の明示呼出しと、`read`で読み込まれたskill file
 - tool action: tool inputにstring `action`がある場合のaction別calls / errors / result tokens / latency
-- runtime runtime: `context` / `code` / `task` / `delegate` / `verify` のaction別calls / errorsと、成功した`verify.record`のprovenance別pass / fail
+- runtime: `context` / `code` / `task` / `delegate` / `verify` のaction別calls / errorsと、成功した`verify.record`のprovenance別pass / fail
 
-runtime runtime集計はtool call/resultだけから再構成します。session本文やverification detailをreportへコピーせず、verification provenanceと結果だけを集計するため、harness変更前後のtrajectory比較に使えます。
+runtime集計はtool call/resultだけから再構成します。session本文やverification detailをreportへコピーせず、verification provenanceと結果だけを集計するため、harness変更前後のtrajectory比較に使えます。
 
 skill readはread対象とresultをtool call idで対応付け、skill本文のfrontmatter `name`を優先して名前を確定します。現在そのskillがinstallされているかには依存しないため、削除済みskillの過去usageも残ります。
 
@@ -107,7 +107,7 @@ for await (const event of readSessionEvents(sessionPath)) {
 }
 ```
 
-オプション指定時のCLIはcanonical JSONを出力します。オプションなしの場合だけ、overview（ツール・スキル頻度、モデル概況、Activity草、MonthlyActivity）のTUI風表示を出します。`--all`は従来の全レポート相当を返します。summary、daily、weekly、monthly、monthly-activity、projects、models、skills、tools、tool-actions、logical-operations、vnextは、よく使うqueryへのaliasです。`--since`は入力sessionの選択に一律適用し、`--limit`は結果rowsだけを制限します。集計対象sessionやsummaryの集計値は`--limit`で変わりません。
+オプション指定時のCLIはcanonical JSONを出力します。オプションなしの場合だけ、overview（ツール・スキル頻度、モデル概況、Activity草、MonthlyActivity）のTUI風表示を出します。`--all`は従来の全レポート相当を返します。summary、daily、weekly、monthly、monthly-activity、projects、models、skills、tools、tool-actions、logical-operations、runtimeは、よく使うqueryへのaliasです。`--since`は入力sessionの選択に一律適用し、`--limit`は結果rowsだけを制限します。集計対象sessionやsummaryの集計値は`--limit`で変わりません。
 
 `--tools`ではtool別のcalls、errors、estimated / reported result tokens、平均・最大latencyとcurrent statusをJSONで返します。`--monthly-activity`では月別のsessions / turns / messages / tokens / cost / errorsを返します。timestampが不足するcallはlatency集計から除外します。`--skills`ではreads / explicit invocationとcurrent statusを返します。overviewではスキルのfrequency（reads + explicit）を上位10件返します。`--tool-actions`ではtool inputのstring `action`をaction名として使い、`action`がないtoolはtool名（例: `bash`）を既定actionとしてaction単位で集計します。`--logical-operations`ではturn単位のlogical operationについてtool call、returned token、wall clock、error、retry、successを返します。`--runtime`ではruntime coreのarea/action別calls/errorsとverification provenance別records/pass/fail/errorsを返します。表示はNuShell用スクリプトなどのconsumerに委ねます。
 
