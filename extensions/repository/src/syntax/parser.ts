@@ -157,14 +157,14 @@ export function createTreeEdit(
   }
   const startPosition = pointAtStringIndex(source, startIndex);
   const oldEndPosition = pointAtStringIndex(source, oldEndIndex);
-  return {
+  return new ParserModule.Edit({
     startIndex,
     oldEndIndex,
     newEndIndex: startIndex + replacement.length,
     startPosition,
     oldEndPosition,
     newEndPosition: advancePoint(startPosition, replacement),
-  };
+  });
 }
 
 function collectSyntaxIssues(tree: Tree): SyntaxIssue[] {
