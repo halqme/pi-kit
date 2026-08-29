@@ -11,7 +11,8 @@
   ],
   "scripts": {
     "hooks:install": "git config core.hooksPath .githooks",
-    "check": "bun run lint && bun run --parallel --workspaces --if-present check",
+    "check": "bun run lint && bun run check:vnext && bun run --parallel --workspaces --if-present check",
+    "check:vnext": "tsc -p extensions/vnext/tsconfig.json",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint ."
