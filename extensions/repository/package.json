@@ -5,7 +5,7 @@
   "scripts": {
     "check": "bun run typecheck && bun run test",
     "typecheck": "tsc --noEmit",
-    "test": "node --test"
+    "test": "bun test --parallel"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "catalog:",
