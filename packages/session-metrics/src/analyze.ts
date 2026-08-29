@@ -151,6 +151,21 @@ function provenanceMetrics(
   });
 }
 
+function recordVerificationResult(
+  metrics: VnextRuntimeMetrics,
+  facet: VnextFacet,
+  passed: boolean,
+): void {
+  metrics.verification.records++;
+  if (passed) metrics.verification.passed++;
+  else metrics.verification.failed++;
+  if (!facet.provenance) return;
+  const provenance = provenanceMetrics(metrics, facet.provenance);
+  provenance.records++;
+  if (passed) provenance.passed++;
+  else provenance.failed++;
+}
+
 function addVnextResult(
   metrics: VnextRuntimeMetrics,
   facet: VnextFacet,
@@ -161,21 +176,22 @@ function addVnextResult(
   if (event.isError) {
     area.errors++;
     action.errors++;
-    if (facet.area === "verify" && facet.action === "record" && facet.provenance) {
+    if (facet.area === "verify" && facet.provenance) {
       provenanceMetrics(metrics, facet.provenance).errors++;
+    }
+    if (facet.area === "verify" && facet.action === "run") {
+      recordVerificationResult(metrics, facet, false);
     }
     return;
   }
-  if (facet.area !== "verify" || facet.action !== "record") return;
-
-  metrics.verification.records++;
-  if (facet.passed === true) metrics.verification.passed++;
-  if (facet.passed === false) metrics.verification.failed++;
-  if (!facet.provenance) return;
-  const provenance = provenanceMetrics(metrics, facet.provenance);
-  provenance.records++;
-  if (facet.passed === true) provenance.passed++;
-  if (facet.passed === false) provenance.failed++;
+  if (facet.area !== "verify") return;
+  if (facet.action === "run") {
+    recordVerificationResult(metrics, facet, true);
+    return;
+  }
+  if (facet.action === "record" && facet.passed !== undefined) {
+    recordVerificationResult(metrics, facet, facet.passed);
+  }
 }
 
 function createAccumulator() {
