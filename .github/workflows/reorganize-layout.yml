@@ -212,7 +212,17 @@ jobs:
               rewrite_imports(path)
 
           index_test = repository / 'test/index.test.ts'
-          index_test.write_text(index_test.read_text().replace('"./index.ts"', '"../index.ts"'))
+          index_test.write_text(
+              index_test.read_text()
+              .replace('"./index.ts"', '"../index.ts"')
+              .replace("'./index.ts'", "'../index.ts'")
+          )
+          for path in (repository / 'test/syntax').glob('*.ts'):
+              path.write_text(
+                  path.read_text()
+                  .replace('"../index.ts"', '"../../index.ts"')
+                  .replace("'../index.ts'", "'../../index.ts'")
+              )
 
           repository_tsconfig = {
               'extends': '../../tsconfig.json',
@@ -253,7 +263,11 @@ jobs:
           if extension_test.exists():
               extension_test.rename('extensions/session-metrics/test/extension.test.ts')
               moved = Path('extensions/session-metrics/test/extension.test.ts')
-              moved.write_text(moved.read_text().replace('"./index.ts"', '"../index.ts"'))
+              moved.write_text(
+                  moved.read_text()
+                  .replace('"./index.ts"', '"../index.ts"')
+                  .replace("'./index.ts'", "'../index.ts'")
+              )
           PY
 
           if grep -RInE 'extensions/(background_process|browser_inspector|session_metrics|suggest_reload)|packages/session-metrics' --exclude=bun.lock --exclude=reorganize-layout.yml .; then
