@@ -27,13 +27,10 @@ extensions/
       code/
       syntax/
   session-metrics/
-  statusline/
-  suggest-reload/
   task/
   terminal/
 skills/
 prompts/
-themes/
 docs/
 tsconfig.json
 ```
