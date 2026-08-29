@@ -6,8 +6,8 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 import { jsonResult } from "./shared.ts";
 
-const TASK_ENTRY = "vnext-task-state";
-const VERIFY_ENTRY = "vnext-verification-evidence";
+const TASK_ENTRY = "task-state";
+const VERIFY_ENTRY = "verification-evidence";
 
 const runnableProvenance = new Set<Provenance>([
   "existing_test",

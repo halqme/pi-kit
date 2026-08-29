@@ -18,7 +18,7 @@ type CliOptions = {
 };
 
 function usage(): string {
-  return `Usage: session-metrics [path] [options]\n\nOptions:\n  --all               Output the complete selected report\n  --daily             Show daily activity\n  --weekly            Show weekly activity\n  --monthly           Show monthly activity\n  --monthly-activity  Show monthly activity rows\n  --projects          Show project ranking\n  --models            Show model / effort ranking\n  --skills            Show skill usage and current status\n  --tools             Show tool usage, latency, and current status\n  --tool-actions      Show action facets within tools\n  --logical-operations Show logical operation totals\n  --vnext             Show vNext context/code/task/delegate/verify metrics\n  --since YYYY-MM-DD  Filter activity from this UTC date\n  --limit N           Limit result rows\n  --help              Show this help\n\nOutput:\n  No options: compact TUI overview. Any option: canonical JSON. --since filters sessions; --limit limits result rows.`;
+  return `Usage: session-metrics [path] [options]\n\nOptions:\n  --all               Output the complete selected report\n  --daily             Show daily activity\n  --weekly            Show weekly activity\n  --monthly           Show monthly activity\n  --monthly-activity  Show monthly activity rows\n  --projects          Show project ranking\n  --models            Show model / effort ranking\n  --skills            Show skill usage and current status\n  --tools             Show tool usage, latency, and current status\n  --tool-actions      Show action facets within tools\n  --logical-operations Show logical operation totals\n  --runtime             Show runtime context/code/task/delegate/verify metrics\n  --since YYYY-MM-DD  Filter activity from this UTC date\n  --limit N           Limit result rows\n  --help              Show this help\n\nOutput:\n  No options: compact TUI overview. Any option: canonical JSON. --since filters sessions; --limit limits result rows.`;
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -42,7 +42,7 @@ function parseArgs(args: string[]): CliOptions {
         "--tools",
         "--tool-actions",
         "--logical-operations",
-        "--vnext",
+        "--runtime",
       ].includes(arg)
     )
       options.view = arg.slice(2) as QueryView;

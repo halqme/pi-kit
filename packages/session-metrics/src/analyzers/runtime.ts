@@ -1,7 +1,7 @@
-export type VnextArea = "context" | "code" | "task" | "delegate" | "verify";
+export type RuntimeArea = "context" | "code" | "task" | "delegate" | "verify";
 
-export interface VnextFacet {
-  area: VnextArea;
+export interface RuntimeFacet {
+  area: RuntimeArea;
   action: string;
   provenance?: string;
   passed?: boolean;
@@ -13,15 +13,15 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-export function vnextFacet(toolName: string, input: unknown): VnextFacet | undefined {
-  if (!(["context", "code", "task", "delegate", "verify"] as const).includes(toolName as VnextArea)) {
+export function runtimeFacet(toolName: string, input: unknown): RuntimeFacet | undefined {
+  if (!(["context", "code", "task", "delegate", "verify"] as const).includes(toolName as RuntimeArea)) {
     return undefined;
   }
   const data = record(input);
   const action = data?.action;
   if (typeof action !== "string" || action.length === 0) return undefined;
   if (toolName !== "verify" || (action !== "record" && action !== "run")) {
-    return { area: toolName as VnextArea, action };
+    return { area: toolName as RuntimeArea, action };
   }
 
   const provenance = data?.provenance;

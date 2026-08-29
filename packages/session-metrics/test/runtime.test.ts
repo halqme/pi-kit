@@ -30,9 +30,9 @@ function toolPair(
   ];
 }
 
-test("summarizes vNext runtime operations and verification provenance", () => {
+test("summarizes runtime runtime operations and verification provenance", () => {
   const metrics = analyzeLines([
-    JSON.stringify({ type: "session", id: "vnext-1", timestamp: "2026-08-29T00:00:00Z" }),
+    JSON.stringify({ type: "session", id: "runtime-1", timestamp: "2026-08-29T00:00:00Z" }),
     ...toolPair("context-1", "context", { action: "find", query: "state restore" }),
     ...toolPair("code-1", "code", { action: "edit", continuation: { token: "x" }, replacement: "y" }, true),
     ...toolPair("task-1", "task", { action: "checkpoint", summary: "replan" }),
@@ -51,21 +51,21 @@ test("summarizes vNext runtime operations and verification provenance", () => {
     ...toolPair("delegate-1", "delegate", { action: "start", task: "isolated work" }),
   ]);
 
-  assert.equal(metrics.vnext.context.actions.find?.calls, 1);
-  assert.equal(metrics.vnext.code.actions.edit?.calls, 1);
-  assert.equal(metrics.vnext.code.actions.edit?.errors, 1);
-  assert.equal(metrics.vnext.task.actions.checkpoint?.calls, 1);
-  assert.equal(metrics.vnext.delegate.actions.start?.calls, 1);
-  assert.equal(metrics.vnext.verification.records, 2);
-  assert.equal(metrics.vnext.verification.passed, 1);
-  assert.equal(metrics.vnext.verification.failed, 1);
-  assert.deepEqual(metrics.vnext.verification.byProvenance.typecheck, {
+  assert.equal(metrics.runtime.context.actions.find?.calls, 1);
+  assert.equal(metrics.runtime.code.actions.edit?.calls, 1);
+  assert.equal(metrics.runtime.code.actions.edit?.errors, 1);
+  assert.equal(metrics.runtime.task.actions.checkpoint?.calls, 1);
+  assert.equal(metrics.runtime.delegate.actions.start?.calls, 1);
+  assert.equal(metrics.runtime.verification.records, 2);
+  assert.equal(metrics.runtime.verification.passed, 1);
+  assert.equal(metrics.runtime.verification.failed, 1);
+  assert.deepEqual(metrics.runtime.verification.byProvenance.typecheck, {
     records: 1,
     passed: 1,
     failed: 0,
     errors: 0,
   });
-  assert.deepEqual(metrics.vnext.verification.byProvenance.self_test, {
+  assert.deepEqual(metrics.runtime.verification.byProvenance.self_test, {
     records: 1,
     passed: 0,
     failed: 1,
@@ -73,7 +73,7 @@ test("summarizes vNext runtime operations and verification provenance", () => {
   });
 });
 
-test("exposes vNext metrics as a selectable report view", () => {
+test("exposes runtime metrics as a selectable report view", () => {
   const report = createReport();
   addToReport(
     report,
@@ -83,7 +83,7 @@ test("exposes vNext metrics as a selectable report view", () => {
     ]),
   );
 
-  const selected = selectReport(report, { view: "vnext" });
-  assert.equal(selected.data.kind, "vnext");
-  if (selected.data.kind === "vnext") assert.equal(selected.data.metrics.task.actions.start?.calls, 1);
+  const selected = selectReport(report, { view: "runtime" });
+  assert.equal(selected.data.kind, "runtime");
+  if (selected.data.kind === "runtime") assert.equal(selected.data.metrics.task.actions.start?.calls, 1);
 });

@@ -45,5 +45,5 @@ export type {
   ToolResourceMetrics,
   UsageTotals,
   VerificationProvenanceMetrics,
-  VnextRuntimeMetrics,
+  RuntimeRuntimeMetrics,
 } from "./types.ts";

@@ -1,6 +1,6 @@
 import { explicitSkillNames, skillNameFromRead, skillReadPath } from "./analyzers/skills.ts";
 import { toolAction } from "./analyzers/tool-actions.ts";
-import { vnextFacet, type VnextFacet } from "./analyzers/vnext.ts";
+import { runtimeFacet, type RuntimeFacet } from "./analyzers/runtime.ts";
 import {
   emptyUsage,
   eventsFromLines,
@@ -17,7 +17,7 @@ import type {
   ToolMetrics,
   UsageTotals,
   VerificationProvenanceMetrics,
-  VnextRuntimeMetrics,
+  RuntimeRuntimeMetrics,
 } from "./types.ts";
 
 export type {
@@ -29,7 +29,7 @@ export type {
   ToolMetrics,
   UsageTotals,
   VerificationProvenanceMetrics,
-  VnextRuntimeMetrics,
+  RuntimeRuntimeMetrics,
 } from "./types.ts";
 
 function createToolMetrics(): ToolMetrics {
@@ -48,7 +48,7 @@ function createRuntimeOperationMetrics(): RuntimeOperationMetrics {
   return { calls: 0, errors: 0, actions: {} };
 }
 
-function createVnextMetrics(): VnextRuntimeMetrics {
+function createRuntimeMetrics(): RuntimeRuntimeMetrics {
   return {
     context: createRuntimeOperationMetrics(),
     code: createRuntimeOperationMetrics(),
@@ -88,7 +88,7 @@ export function createMetrics(): SessionMetrics {
       retries: 0,
       successes: 0,
     },
-    vnext: createVnextMetrics(),
+    runtime: createRuntimeMetrics(),
     skills: {},
     models: {},
     thinkingLevels: {},
@@ -132,7 +132,7 @@ function addToolResult(
   }
 }
 
-function addVnextCall(metrics: VnextRuntimeMetrics, facet: VnextFacet): void {
+function addRuntimeCall(metrics: RuntimeRuntimeMetrics, facet: RuntimeFacet): void {
   const area = metrics[facet.area];
   area.calls++;
   const action = (area.actions[facet.action] ??= { calls: 0, errors: 0 });
@@ -140,7 +140,7 @@ function addVnextCall(metrics: VnextRuntimeMetrics, facet: VnextFacet): void {
 }
 
 function provenanceMetrics(
-  metrics: VnextRuntimeMetrics,
+  metrics: RuntimeRuntimeMetrics,
   provenance: string,
 ): VerificationProvenanceMetrics {
   return (metrics.verification.byProvenance[provenance] ??= {
@@ -152,8 +152,8 @@ function provenanceMetrics(
 }
 
 function recordVerificationResult(
-  metrics: VnextRuntimeMetrics,
-  facet: VnextFacet,
+  metrics: RuntimeRuntimeMetrics,
+  facet: RuntimeFacet,
   passed: boolean,
 ): void {
   metrics.verification.records++;
@@ -166,9 +166,9 @@ function recordVerificationResult(
   else provenance.failed++;
 }
 
-function addVnextResult(
-  metrics: VnextRuntimeMetrics,
-  facet: VnextFacet,
+function addRuntimeResult(
+  metrics: RuntimeRuntimeMetrics,
+  facet: RuntimeFacet,
   event: Extract<SessionEvent, { kind: "tool_result" }>,
 ): void {
   const area = metrics[facet.area];
@@ -212,7 +212,7 @@ function createAccumulator() {
       action?: string;
       skillPath?: string;
       timestampMs?: number;
-      vnext?: VnextFacet;
+      runtime?: RuntimeFacet;
     }
   >();
 
@@ -309,8 +309,8 @@ function createAccumulator() {
         const actions = (result.toolActions[event.toolName] ??= {});
         (actions[action] ??= createToolMetrics()).calls++;
       }
-      const runtimeFacet = vnextFacet(event.toolName, event.input);
-      if (runtimeFacet) addVnextCall(result.vnext, runtimeFacet);
+      const runtimeFacet = runtimeFacet(event.toolName, event.input);
+      if (runtimeFacet) addRuntimeCall(result.runtime, runtimeFacet);
       if (event.toolCallId) {
         const startedAt = timestampMs(event.timestamp);
         const skillPath = skillReadPath(event.toolName, event.input);
@@ -319,7 +319,7 @@ function createAccumulator() {
           ...(action ? { action } : {}),
           ...(skillPath ? { skillPath } : {}),
           ...(startedAt !== undefined ? { timestampMs: startedAt } : {}),
-          ...(runtimeFacet ? { vnext: runtimeFacet } : {}),
+          ...(runtimeFacet ? { runtime: runtimeFacet } : {}),
         });
       }
       return;
@@ -346,7 +346,7 @@ function createAccumulator() {
         const action = (result.toolActions[toolName] ??= {})[pending.action];
         if (action) addToolResult(action, event, durationMs);
       }
-      if (pending?.vnext) addVnextResult(result.vnext, pending.vnext, event);
+      if (pending?.runtime) addRuntimeResult(result.runtime, pending.runtime, event);
       if (!event.isError && pending?.skillPath) {
         const name = skillNameFromRead(pending.skillPath, event.content);
         (result.skills[name] ??= createSkillMetrics()).reads++;
@@ -450,7 +450,7 @@ function mergeRuntimeOperationMetrics(
   }
 }
 
-function mergeVnextMetrics(target: VnextRuntimeMetrics, source: VnextRuntimeMetrics): void {
+function mergeRuntimeMetrics(target: RuntimeRuntimeMetrics, source: RuntimeRuntimeMetrics): void {
   mergeRuntimeOperationMetrics(target.context, source.context);
   mergeRuntimeOperationMetrics(target.code, source.code);
   mergeRuntimeOperationMetrics(target.task, source.task);
@@ -490,7 +490,7 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.logicalOperations.errors += source.logicalOperations.errors;
   target.logicalOperations.retries += source.logicalOperations.retries;
   target.logicalOperations.successes += source.logicalOperations.successes;
-  mergeVnextMetrics(target.vnext, source.vnext);
+  mergeRuntimeMetrics(target.runtime, source.runtime);
   target.errors += source.errors;
   target.invalidLines += source.invalidLines;
   for (const [name, count] of Object.entries(source.toolCallsByName))
