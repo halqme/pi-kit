@@ -1,5 +1,6 @@
 import { explicitSkillNames, skillNameFromRead, skillReadPath } from "./analyzers/skills.ts";
 import { toolAction } from "./analyzers/tool-actions.ts";
+import { vnextFacet, type VnextFacet } from "./analyzers/vnext.ts";
 import {
   emptyUsage,
   eventsFromLines,
@@ -10,19 +11,25 @@ import {
 import type {
   MetricsReport,
   MetricSummary,
+  RuntimeOperationMetrics,
   SessionMetrics,
   SkillMetrics,
   ToolMetrics,
   UsageTotals,
+  VerificationProvenanceMetrics,
+  VnextRuntimeMetrics,
 } from "./types.ts";
 
 export type {
   MetricsReport,
   MetricSummary,
+  RuntimeOperationMetrics,
   SessionMetrics,
   SkillMetrics,
   ToolMetrics,
   UsageTotals,
+  VerificationProvenanceMetrics,
+  VnextRuntimeMetrics,
 } from "./types.ts";
 
 function createToolMetrics(): ToolMetrics {
@@ -34,6 +41,21 @@ function createToolMetrics(): ToolMetrics {
     completedCalls: 0,
     totalDurationMs: 0,
     maxDurationMs: 0,
+  };
+}
+
+function createRuntimeOperationMetrics(): RuntimeOperationMetrics {
+  return { calls: 0, errors: 0, actions: {} };
+}
+
+function createVnextMetrics(): VnextRuntimeMetrics {
+  return {
+    context: createRuntimeOperationMetrics(),
+    code: createRuntimeOperationMetrics(),
+    task: createRuntimeOperationMetrics(),
+    delegate: createRuntimeOperationMetrics(),
+    verify: createRuntimeOperationMetrics(),
+    verification: { records: 0, passed: 0, failed: 0, byProvenance: {} },
   };
 }
 
@@ -66,6 +88,7 @@ export function createMetrics(): SessionMetrics {
       retries: 0,
       successes: 0,
     },
+    vnext: createVnextMetrics(),
     skills: {},
     models: {},
     thinkingLevels: {},
@@ -109,6 +132,52 @@ function addToolResult(
   }
 }
 
+function addVnextCall(metrics: VnextRuntimeMetrics, facet: VnextFacet): void {
+  const area = metrics[facet.area];
+  area.calls++;
+  const action = (area.actions[facet.action] ??= { calls: 0, errors: 0 });
+  action.calls++;
+}
+
+function provenanceMetrics(
+  metrics: VnextRuntimeMetrics,
+  provenance: string,
+): VerificationProvenanceMetrics {
+  return (metrics.verification.byProvenance[provenance] ??= {
+    records: 0,
+    passed: 0,
+    failed: 0,
+    errors: 0,
+  });
+}
+
+function addVnextResult(
+  metrics: VnextRuntimeMetrics,
+  facet: VnextFacet,
+  event: Extract<SessionEvent, { kind: "tool_result" }>,
+): void {
+  const area = metrics[facet.area];
+  const action = (area.actions[facet.action] ??= { calls: 0, errors: 0 });
+  if (event.isError) {
+    area.errors++;
+    action.errors++;
+    if (facet.area === "verify" && facet.action === "record" && facet.provenance) {
+      provenanceMetrics(metrics, facet.provenance).errors++;
+    }
+    return;
+  }
+  if (facet.area !== "verify" || facet.action !== "record") return;
+
+  metrics.verification.records++;
+  if (facet.passed === true) metrics.verification.passed++;
+  if (facet.passed === false) metrics.verification.failed++;
+  if (!facet.provenance) return;
+  const provenance = provenanceMetrics(metrics, facet.provenance);
+  provenance.records++;
+  if (facet.passed === true) provenance.passed++;
+  if (facet.passed === false) provenance.failed++;
+}
+
 function createAccumulator() {
   const result = createMetrics();
   let thinkingLevel = "unknown";
@@ -122,7 +191,13 @@ function createAccumulator() {
   let operationReturnedTokens = 0;
   const pendingTools = new Map<
     string,
-    { toolName: string; action?: string; skillPath?: string; timestampMs?: number }
+    {
+      toolName: string;
+      action?: string;
+      skillPath?: string;
+      timestampMs?: number;
+      vnext?: VnextFacet;
+    }
   >();
 
   const push = (event: SessionEvent): void => {
@@ -218,6 +293,8 @@ function createAccumulator() {
         const actions = (result.toolActions[event.toolName] ??= {});
         (actions[action] ??= createToolMetrics()).calls++;
       }
+      const runtimeFacet = vnextFacet(event.toolName, event.input);
+      if (runtimeFacet) addVnextCall(result.vnext, runtimeFacet);
       if (event.toolCallId) {
         const startedAt = timestampMs(event.timestamp);
         const skillPath = skillReadPath(event.toolName, event.input);
@@ -226,6 +303,7 @@ function createAccumulator() {
           ...(action ? { action } : {}),
           ...(skillPath ? { skillPath } : {}),
           ...(startedAt !== undefined ? { timestampMs: startedAt } : {}),
+          ...(runtimeFacet ? { vnext: runtimeFacet } : {}),
         });
       }
       return;
@@ -252,6 +330,7 @@ function createAccumulator() {
         const action = (result.toolActions[toolName] ??= {})[pending.action];
         if (action) addToolResult(action, event, durationMs);
       }
+      if (pending?.vnext) addVnextResult(result.vnext, pending.vnext, event);
       if (!event.isError && pending?.skillPath) {
         const name = skillNameFromRead(pending.skillPath, event.content);
         (result.skills[name] ??= createSkillMetrics()).reads++;
@@ -342,6 +421,42 @@ function mergeToolMetrics(target: ToolMetrics, source: ToolMetrics): void {
   target.maxDurationMs = Math.max(target.maxDurationMs, source.maxDurationMs);
 }
 
+function mergeRuntimeOperationMetrics(
+  target: RuntimeOperationMetrics,
+  source: RuntimeOperationMetrics,
+): void {
+  target.calls += source.calls;
+  target.errors += source.errors;
+  for (const [actionName, action] of Object.entries(source.actions)) {
+    const item = (target.actions[actionName] ??= { calls: 0, errors: 0 });
+    item.calls += action.calls;
+    item.errors += action.errors;
+  }
+}
+
+function mergeVnextMetrics(target: VnextRuntimeMetrics, source: VnextRuntimeMetrics): void {
+  mergeRuntimeOperationMetrics(target.context, source.context);
+  mergeRuntimeOperationMetrics(target.code, source.code);
+  mergeRuntimeOperationMetrics(target.task, source.task);
+  mergeRuntimeOperationMetrics(target.delegate, source.delegate);
+  mergeRuntimeOperationMetrics(target.verify, source.verify);
+  target.verification.records += source.verification.records;
+  target.verification.passed += source.verification.passed;
+  target.verification.failed += source.verification.failed;
+  for (const [name, provenance] of Object.entries(source.verification.byProvenance)) {
+    const item = (target.verification.byProvenance[name] ??= {
+      records: 0,
+      passed: 0,
+      failed: 0,
+      errors: 0,
+    });
+    item.records += provenance.records;
+    item.passed += provenance.passed;
+    item.failed += provenance.failed;
+    item.errors += provenance.errors;
+  }
+}
+
 export function mergeMetrics(target: MetricSummary, source: MetricSummary): MetricSummary {
   target.sessions += source.sessions;
   target.messages += source.messages;
@@ -359,6 +474,7 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.logicalOperations.errors += source.logicalOperations.errors;
   target.logicalOperations.retries += source.logicalOperations.retries;
   target.logicalOperations.successes += source.logicalOperations.successes;
+  mergeVnextMetrics(target.vnext, source.vnext);
   target.errors += source.errors;
   target.invalidLines += source.invalidLines;
   for (const [name, count] of Object.entries(source.toolCallsByName))
