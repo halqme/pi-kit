@@ -1,0 +1,297 @@
+name: Reorganize layout
+
+on:
+  push:
+    branches:
+      - vnext-restructure
+
+permissions:
+  contents: write
+
+jobs:
+  reorganize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Reorganize filesystem
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git mv extensions/background_process extensions/background-process
+          git mv extensions/browser_inspector extensions/browser-inspector
+          git mv extensions/session_metrics extensions/session-metrics
+          git mv extensions/suggest_reload extensions/suggest-reload
+
+          mkdir -p extensions/session-metrics/docs
+          git mv packages/session-metrics/cli.ts extensions/session-metrics/cli.ts
+          git mv packages/session-metrics/src extensions/session-metrics/src
+          git mv packages/session-metrics/test extensions/session-metrics/test
+          git mv packages/session-metrics/README.md extensions/session-metrics/docs/analysis.md
+          git rm packages/session-metrics/package.json packages/session-metrics/tsconfig.json
+          rmdir packages/session-metrics packages
+
+          git mv extensions/tsconfig.json tsconfig.json
+          git rm extensions/package.json
+
+          repo=extensions/repository
+          mkdir -p "$repo/src/context" "$repo/src/code" "$repo/src/syntax" "$repo/test/syntax"
+          git mv "$repo/lexical-engine.ts" "$repo/src/context/lexical.ts"
+          git mv "$repo/bm25.ts" "$repo/src/context/bm25.ts"
+          git mv "$repo/structural-engine.ts" "$repo/src/syntax/engine.ts"
+          git mv "$repo/src/edit.ts" "$repo/src/code/edit.ts"
+          git mv "$repo/src/rename.ts" "$repo/src/code/rename.ts"
+          git mv "$repo/src/workspace-edit.ts" "$repo/src/code/workspace-edit.ts"
+          git mv "$repo/src/inspect.ts" "$repo/src/context/inspect.ts"
+          git mv "$repo/src/locate.ts" "$repo/src/context/locate.ts"
+          git mv "$repo/src/semantic-locate.ts" "$repo/src/context/semantic-locate.ts"
+          git mv "$repo/src/syntax-search.ts" "$repo/src/context/syntax-search.ts"
+          git mv "$repo/src/language-profile.ts" "$repo/src/syntax/language-profile.ts"
+          git mv "$repo/src/lsp.ts" "$repo/src/syntax/lsp.ts"
+          git mv "$repo/src/metrics.ts" "$repo/src/syntax/metrics.ts"
+          git mv "$repo/src/node-handles.ts" "$repo/src/syntax/node-handles.ts"
+          git mv "$repo/src/parser.ts" "$repo/src/syntax/parser.ts"
+          git mv "$repo/src/path.ts" "$repo/src/syntax/path.ts"
+          git mv "$repo/src/protocol.ts" "$repo/src/syntax/protocol.ts"
+          git mv "$repo/src/render.ts" "$repo/src/syntax/render.ts"
+          git mv "$repo/src/syntax-validation.ts" "$repo/src/syntax/syntax-validation.ts"
+          git mv "$repo/languages" "$repo/src/syntax/languages"
+          git mv "$repo/shared.ts" "$repo/src/shared.ts"
+          git mv "$repo/tests"/* "$repo/test/syntax/"
+          rmdir "$repo/tests"
+          git mv "$repo/index.test.ts" "$repo/test/index.test.ts"
+          git mv "$repo/lexical.test.ts" "$repo/test/context.test.ts"
+
+      - name: Rewrite manifests and imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import re
+          from pathlib import Path, PurePosixPath
+
+          root = Path('.')
+
+          package_path = root / 'package.json'
+          package = json.loads(package_path.read_text())
+          package['workspaces'] = ['extensions/*']
+          extension_path_replacements = {
+              './extensions/background_process/index.ts': './extensions/background-process/index.ts',
+              './extensions/browser_inspector/index.ts': './extensions/browser-inspector/index.ts',
+              './extensions/session_metrics/index.ts': './extensions/session-metrics/index.ts',
+              './extensions/suggest_reload/index.ts': './extensions/suggest-reload/index.ts',
+          }
+          package['pi']['extensions'] = [
+              extension_path_replacements.get(path, path) for path in package['pi']['extensions']
+          ]
+          package_path.write_text(json.dumps(package, indent=2, ensure_ascii=False) + '\n')
+
+          package_names = {
+              Path('extensions/background-process/package.json'): '@halqme/background-process',
+              Path('extensions/browser-inspector/package.json'): '@halqme/browser-inspector',
+              Path('extensions/suggest-reload/package.json'): '@halqme/suggest-reload',
+          }
+          for path, name in package_names.items():
+              data = json.loads(path.read_text())
+              data['name'] = name
+              path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n')
+
+          session_package = {
+              'name': '@halqme/session-metrics',
+              'private': True,
+              'type': 'module',
+              'bin': {'session-metrics': 'cli.ts'},
+              'exports': {'.': './src/index.ts'},
+              'scripts': {
+                  'check': 'bun run typecheck && bun test --parallel',
+                  'typecheck': 'tsc --noEmit',
+                  'test': 'bun test --parallel',
+              },
+              'dependencies': {
+                  '@earendil-works/pi-ai': 'catalog:',
+                  '@earendil-works/pi-coding-agent': 'catalog:',
+                  '@earendil-works/pi-tui': 'catalog:',
+              },
+              'devDependencies': {
+                  '@types/bun': 'catalog:',
+                  '@types/node': 'catalog:',
+                  'typescript': 'catalog:',
+              },
+          }
+          Path('extensions/session-metrics/package.json').write_text(
+              json.dumps(session_package, indent=2, ensure_ascii=False) + '\n'
+          )
+          Path('extensions/session-metrics/tsconfig.json').write_text(
+              json.dumps(
+                  {
+                      'extends': '../../tsconfig.json',
+                      'compilerOptions': {'types': ['bun', 'node']},
+                      'include': ['index.ts', 'cli.ts', 'src/**/*.ts', 'test/**/*.ts'],
+                  },
+                  indent=2,
+              ) + '\n'
+          )
+
+          session_index = Path('extensions/session-metrics/index.ts')
+          session_text = session_index.read_text().replace(
+              'from "@halqme/pi-session-metrics";', 'from "./src/index.ts";'
+          )
+          session_index.write_text(session_text)
+          extension_test = Path('extensions/session-metrics/test/extension.test.ts')
+          if Path('extensions/session-metrics/index.test.ts').exists():
+              raise SystemExit('session-metrics extension test was not moved as expected')
+
+          for tsconfig in Path('extensions').glob('*/tsconfig.json'):
+              if tsconfig == Path('extensions/session-metrics/tsconfig.json'):
+                  continue
+              text = tsconfig.read_text()
+              text = text.replace('"../tsconfig.json"', '"../../tsconfig.json"')
+              tsconfig.write_text(text)
+
+          repository = Path('extensions/repository')
+          module_targets = {
+              'lexical-engine.ts': 'src/context/lexical.ts',
+              'bm25.ts': 'src/context/bm25.ts',
+              'structural-engine.ts': 'src/syntax/engine.ts',
+              'edit.ts': 'src/code/edit.ts',
+              'rename.ts': 'src/code/rename.ts',
+              'workspace-edit.ts': 'src/code/workspace-edit.ts',
+              'inspect.ts': 'src/context/inspect.ts',
+              'locate.ts': 'src/context/locate.ts',
+              'semantic-locate.ts': 'src/context/semantic-locate.ts',
+              'syntax-search.ts': 'src/context/syntax-search.ts',
+              'language-profile.ts': 'src/syntax/language-profile.ts',
+              'lsp.ts': 'src/syntax/lsp.ts',
+              'metrics.ts': 'src/syntax/metrics.ts',
+              'node-handles.ts': 'src/syntax/node-handles.ts',
+              'parser.ts': 'src/syntax/parser.ts',
+              'path.ts': 'src/syntax/path.ts',
+              'protocol.ts': 'src/syntax/protocol.ts',
+              'render.ts': 'src/syntax/render.ts',
+              'syntax-validation.ts': 'src/syntax/syntax-validation.ts',
+              'shared.ts': 'src/shared.ts',
+          }
+
+          import_pattern = re.compile(r'(?P<quote>["\'])(?P<path>\.\.?/[^"\']+)(?P=quote)')
+
+          def relative_import(source: Path, target: str) -> str:
+              rel = os.path.relpath(repository / target, source.parent).replace(os.sep, '/')
+              return rel if rel.startswith('.') else f'./{rel}'
+
+          def rewrite_imports(path: Path) -> None:
+              text = path.read_text()
+
+              def replace(match: re.Match[str]) -> str:
+                  raw = match.group('path')
+                  pure = PurePosixPath(raw)
+                  basename = pure.name
+                  target = module_targets.get(basename)
+                  if target:
+                      new_path = relative_import(path, target)
+                      return f'{match.group("quote")}{new_path}{match.group("quote")}'
+                  parts = pure.parts
+                  if 'languages' in parts:
+                      index = parts.index('languages')
+                      suffix = '/'.join(parts[index + 1:])
+                      target = f'src/syntax/languages/{suffix}'
+                      new_path = relative_import(path, target)
+                      return f'{match.group("quote")}{new_path}{match.group("quote")}'
+                  return match.group(0)
+
+              path.write_text(import_pattern.sub(replace, text))
+
+          for path in repository.rglob('*.ts'):
+              rewrite_imports(path)
+
+          index_test = repository / 'test/index.test.ts'
+          index_test.write_text(index_test.read_text().replace('"./index.ts"', '"../index.ts"'))
+
+          repository_tsconfig = {
+              'extends': '../../tsconfig.json',
+              'include': ['index.ts', 'src/**/*.ts', 'test/**/*.ts'],
+          }
+          (repository / 'tsconfig.json').write_text(
+              json.dumps(repository_tsconfig, indent=2) + '\n'
+          )
+
+          textual_replacements = {
+              'extensions/background_process': 'extensions/background-process',
+              'extensions/browser_inspector': 'extensions/browser-inspector',
+              'extensions/session_metrics': 'extensions/session-metrics',
+              'extensions/suggest_reload': 'extensions/suggest-reload',
+              'packages/session-metrics': 'extensions/session-metrics',
+              '@halqme/pi-session-metrics': '@halqme/session-metrics',
+              'lexical-engine.ts': 'src/context/lexical.ts',
+              'structural-engine.ts': 'src/syntax/engine.ts',
+          }
+          for path in [Path('README.md'), Path('AGENTS.md'), Path('docs/architecture.md'), Path('extensions/README.md'), Path('extensions/repository/README.md')]:
+              if not path.exists():
+                  continue
+              text = path.read_text()
+              for old, new in textual_replacements.items():
+                  text = text.replace(old, new)
+              path.write_text(text)
+
+          analysis_doc = Path('extensions/session-metrics/docs/analysis.md')
+          text = analysis_doc.read_text()
+          for old, new in textual_replacements.items():
+              text = text.replace(old, new)
+          analysis_doc.write_text(text)
+
+          extension_test = Path('extensions/session-metrics/test/extension.test.ts')
+          if extension_test.exists():
+              extension_test.write_text(
+                  extension_test.read_text().replace('"./index.ts"', '"../index.ts"')
+              )
+          PY
+
+          cat > extensions/session-metrics/package.json.tmp <<'EOF'
+          EOF
+          rm extensions/session-metrics/package.json.tmp
+
+          if grep -RInE 'extensions/(background_process|browser_inspector|session_metrics|suggest_reload)|packages/session-metrics' --exclude=bun.lock .; then
+            echo 'stale layout references remain'
+            exit 1
+          fi
+
+          if find extensions/repository -maxdepth 1 -type f \( -name 'bm25.ts' -o -name '*-engine.ts' -o -name 'shared.ts' \) | grep -q .; then
+            echo 'repository implementation files remain at package root'
+            exit 1
+          fi
+
+      - name: Regenerate lockfile and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun install
+          bun run format
+          bun run check
+          git diff --check
+          test ! -e packages
+          test ! -e extensions/package.json
+          test -f tsconfig.json
+          test -d extensions/repository/src/context
+          test -d extensions/repository/src/code
+          test -d extensions/repository/src/syntax
+
+      - name: Commit reorganized layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'refactor: simplify repository layout'
+          git push origin HEAD:vnext-restructure
