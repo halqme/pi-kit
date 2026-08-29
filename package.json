@@ -37,12 +37,24 @@
   },
   "pi": {
     "extensions": [
-      "./extensions",
-      "./node_modules/pi-intercom/index.ts"
+      "./extensions/vnext/index.ts",
+      "./extensions/background_process/index.ts",
+      "./extensions/browser_inspector/index.ts",
+      "./extensions/session_metrics/index.ts",
+      "./extensions/statusline/index.ts",
+      "./extensions/suggest_reload/index.ts",
+      "./extensions/terminal/index.ts"
     ],
     "skills": [
-      "./skills",
-      "./node_modules/pi-intercom/skills"
+      "./skills/apply-correction",
+      "./skills/diagnose-problem",
+      "./skills/git-workflow",
+      "./skills/implement-change",
+      "./skills/natural-japanese-writing",
+      "./skills/perform-safely",
+      "./skills/research-answer",
+      "./skills/test-design",
+      "./skills/writing-skills"
     ],
     "prompts": [
       "./prompts"
