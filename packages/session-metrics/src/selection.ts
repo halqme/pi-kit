@@ -14,7 +14,8 @@ export type QueryView =
   | "skills"
   | "tools"
   | "tool-actions"
-  | "logical-operations";
+  | "logical-operations"
+  | "vnext";
 
 export interface MetricsQuery {
   view: QueryView;
@@ -57,6 +58,7 @@ export type SelectionData =
   | { kind: "summary"; metrics: MetricSummary }
   | { kind: "all"; report: MetricsReport }
   | { kind: "logical-operations"; metrics: MetricSummary["logicalOperations"] }
+  | { kind: "vnext"; metrics: MetricSummary["vnext"] }
   | {
       kind: "period";
       period: "daily" | "weekly" | "monthly";
@@ -308,6 +310,7 @@ export function selectReport(
   if (view === "all") return result({ kind: view, report });
   if (view === "logical-operations")
     return result({ kind: view, metrics: metrics.logicalOperations });
+  if (view === "vnext") return result({ kind: view, metrics: metrics.vnext });
   if (view === "daily" || view === "weekly" || view === "monthly") {
     return result({
       kind: "period",
