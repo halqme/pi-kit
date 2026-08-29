@@ -30,17 +30,20 @@ export {
   type PiResourceInventory,
 } from "./resources.ts";
 export type {
+  LogicalOperationMetrics,
   MetricsReport,
   MetricSummary,
   ResourceMetrics,
   ResourceSource,
   ResourceStatus,
+  RuntimeOperationMetrics,
   SessionMetrics,
-  LogicalOperationMetrics,
   SkillMetrics,
   SkillResourceMetrics,
   SourceDiagnostic,
   ToolMetrics,
   ToolResourceMetrics,
   UsageTotals,
+  VerificationProvenanceMetrics,
+  VnextRuntimeMetrics,
 } from "./types.ts";
