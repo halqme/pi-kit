@@ -36,8 +36,6 @@
       "./extensions/background-process/index.ts",
       "./extensions/browser-inspector/index.ts",
       "./extensions/session-metrics/index.ts",
-      "./extensions/statusline/index.ts",
-      "./extensions/suggest-reload/index.ts",
       "./extensions/terminal/index.ts"
     ],
     "skills": [
@@ -54,8 +52,6 @@
     "prompts": [
       "./prompts"
     ],
-    "themes": [
-      "./themes"
-    ]
+    "themes": []
   }
 }
