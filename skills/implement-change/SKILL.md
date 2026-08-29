@@ -1,25 +1,18 @@
 ---
 name: implement-change
-description: Implement, modify, refactor, or remove code, configuration, tests, or documentation. Use when the user asks Pi to build something, change behavior, fix an identified issue, clean up code, or otherwise edit project artifacts. Do not use for review- or diagnosis-only requests.
+description: Implement, modify, refactor, or remove project artifacts. Use for non-trivial code changes where repository grounding, mutation, verification, or isolated delegation materially improves reliability.
 ---
 
 # Implement a Change
 
-1. Inspect the request, applicable instructions, current diff, source-of-truth documents, relevant implementation, tests, and project commands.
-2. State the intended outcome and acceptance criteria. Identify material uncertainty, affected surfaces, and approval boundaries; for non-trivial work, give a brief implementation and verification plan before editing. Before choosing direct execution, if the user asks to delegate or the task has multiple independently verifiable workstreams, load `delegate-task` and hand off a self-contained workstream while keeping design decisions and final verification with the parent.
-3. Choose the smallest coherent change. When uncertainty is material, state genuinely competing hypotheses with their supporting and contradicting evidence, then choose a falsifiable experiment or change that is safe and reversible. State the predicted outcomes, stop conditions, and what will change if the result supports or rejects the hypothesis. Do not manufacture alternatives when the evidence is already sufficient.
-4. Execute only the selected action, respecting `perform-safely` and any approval boundary. Implement in the project's existing style and preserve behavior, interfaces, validation, error handling, and compatibility unless the request requires otherwise.
-   - When an existing source file is written in a language supported by a structural syntax tool such as Astrolabe, use that tool as the primary path for inspection and local edits, regardless of change size. Begin with its structural overview, drill into only the needed nodes, and decompose large changes into a sequence of local edits so intermediate states can be inspected.
-   - Reuse still-valid node handles and broader structural results to avoid redundant inspections. After each structural edit, refresh handles or inspect again when the edit may have changed surrounding structure. Use ordinary diff/edit tools for new files, unsupported or non-structural files, generated artifacts, configuration, or cases where structural editing provides no useful leverage.
-   - When adding, modifying, or reviewing source comments, follow [the comment and documentation guidance](./references/comments.md). Distinguish implementation comments that bind code to independently verifiable external constraints from documentation comments that describe an API for humans and tooling.
-5. Update tests and documentation when the externally observable behavior, contract, or operating procedure changes.
-6. Run the narrowest relevant checks first, then broader checks proportionate to risk. Inspect full failures, warnings, skipped cases, and truncation; fix causes rather than suppressing signals. Record actual results and use new evidence to resolve material uncertainty rather than repeating unchanged actions.
-7. Review the resulting diff for scope, accidental changes, stale comments, secrets, missing coverage, inconsistent style, type-system escapes, abnormal defensive code, and obvious performance or resource regressions.
-8. When applicable repository instructions make committing the default and the user has not prohibited it, use `git-workflow` after verification to commit the logically related changes. Do not push, merge, rebase, alter branches or tags, or open a pull request unless separately requested.
-9. Before claiming the work is finished, apply `assess-task-completion` to evaluate the requested outcome against the actual resulting state and evidence.
+1. Establish the requested outcome and observable acceptance criteria. For non-trivial work, start `task`; do not invent a detailed plan before repository evidence exists.
+2. Acquire only the context needed to identify the relevant boundary. Use `context.find` when the location is unknown, then structural `context` actions for concrete source targets. Expand retrieval only when the current evidence is insufficient.
+3. Keep the current plan disposable. Record a `task.checkpoint` when new evidence changes the intended implementation, not after every tool call.
+4. Apply the smallest coherent mutation. For supported existing source, prefer `code` with the continuation returned by `context`; use ordinary file editing for new files, configuration, generated content, and unsupported languages.
+5. Use `delegate` only for a self-contained workstream with independent acceptance criteria. The child works in an isolated worktree and branch. Its report or process exit is not proof of correctness; inspect and verify the branch before integration.
+6. Run the narrowest existing checks that can falsify the change, then broaden with risk. Record actual results with `verify.record` and accurate provenance. Agent-authored tests and self-review are supporting evidence, not substitutes for existing or otherwise exogenous checks.
+7. Review the resulting diff for scope, accidental changes, stale comments, secrets, broken contracts, and unnecessary complexity.
+8. Call `task.finish` only when the requested outcome is supported by the workspace and strong verification evidence. If evidence is insufficient, continue, block, or stop rather than converting completed steps into a completion claim.
+9. Use `git-workflow` for commits or other Git mutations when requested or authorized by repository instructions.
 
-Stop and ask before a choice that materially changes product behavior, public interfaces, data, dependencies, or external state and cannot be resolved from project evidence.
-
-## Trigger and contract
-
-Use when the user requests an implementation, modification, refactor, removal, or documentation/configuration change. Do not edit for diagnosis or review-only requests. Input is the request plus repository evidence; output is the smallest coherent change with relevant verification evidence. Completion itself is evaluated by `assess-task-completion`. Stop before editing when scope, approval, compatibility, or a competing hypothesis remains materially unresolved.
+Keep architecture and product decisions with the parent until repository evidence resolves them. A worker may implement a resolved decision; it should not silently widen the contract.
