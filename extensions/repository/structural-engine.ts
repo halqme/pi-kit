@@ -338,7 +338,9 @@ async function dispatch(
         }
       }),
     );
-    const sources = inspected.flatMap((target) => (target.kind === "source" ? [target.source] : []));
+    const sources = inspected.flatMap((target) =>
+      target.kind === "source" ? [target.source] : [],
+    );
     const errors = inspected.flatMap((target) => (target.kind === "error" ? [target] : []));
     if (sources.length === 0) {
       const allInvalid = errors.every((error) => error.code === "invalid_continuation");

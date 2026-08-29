@@ -60,7 +60,9 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
       Type.Object({
         action: Type.Literal("find"),
         query: Type.String({ minLength: 1 }),
-        paths: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 16 })),
+        paths: Type.Optional(
+          Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 16 }),
+        ),
         limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
         contextLines: Type.Optional(Type.Integer({ minimum: 0, maximum: 10 })),
         maxFiles: Type.Optional(Type.Integer({ minimum: 1, maximum: 10_000 })),

@@ -14,7 +14,9 @@ function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 export function runtimeFacetForTool(toolName: string, input: unknown): RuntimeFacet | undefined {
-  if (!(["context", "code", "task", "delegate", "verify"] as const).includes(toolName as RuntimeArea)) {
+  if (
+    !(["context", "code", "task", "delegate", "verify"] as const).includes(toolName as RuntimeArea)
+  ) {
     return undefined;
   }
   const data = record(input);

@@ -38,7 +38,9 @@ async function runCommand(
       { cwd, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
-          reject(new Error(`${command} ${args.join(" ")} failed: ${stderr.trim() || error.message}`));
+          reject(
+            new Error(`${command} ${args.join(" ")} failed: ${stderr.trim() || error.message}`),
+          );
           return;
         }
         resolvePromise({ stdout: stdout.trim(), stderr: stderr.trim() });
@@ -73,7 +75,9 @@ async function saveDelegate(path: string, metadata: DelegateMetadata): Promise<v
 }
 
 async function loadDelegate(commonDir: string, id: string): Promise<DelegateMetadata> {
-  return JSON.parse(await readFile(delegatePaths(commonDir, id).metadata, "utf8")) as DelegateMetadata;
+  return JSON.parse(
+    await readFile(delegatePaths(commonDir, id).metadata, "utf8"),
+  ) as DelegateMetadata;
 }
 
 function processAlive(pid: number): boolean {
@@ -127,7 +131,12 @@ export function registerDelegate(pi: ExtensionAPI): void {
         const id = randomUUID().slice(0, 12);
         const baseRef = params.baseRef?.trim() || "HEAD";
         const branch = `pi/delegate/${id}`;
-        const worktree = join(dirname(repository.root), ".pi-worktrees", basename(repository.root), id);
+        const worktree = join(
+          dirname(repository.root),
+          ".pi-worktrees",
+          basename(repository.root),
+          id,
+        );
         const paths = delegatePaths(repository.commonDir, id);
         await mkdir(paths.dir, { recursive: true });
         await mkdir(dirname(worktree), { recursive: true });

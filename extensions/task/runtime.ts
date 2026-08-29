@@ -190,11 +190,7 @@ export function registerVerification(pi: ExtensionAPI): void {
         pi.appendEntry(VERIFY_ENTRY, evidence);
         if (!result.passed) {
           throw new Error(
-            [
-              `${summary} failed.`,
-              result.error,
-              result.stderr || result.stdout,
-            ]
+            [`${summary} failed.`, result.error, result.stderr || result.stdout]
               .filter(Boolean)
               .join("\n"),
           );
@@ -272,7 +268,9 @@ export function registerTask(pi: ExtensionAPI): void {
 
       if (params.action === "start") {
         if (current && (current.status === "active" || current.status === "blocked")) {
-          throw new Error(`Task '${current.id}' is still ${current.status}; finish or stop it first.`);
+          throw new Error(
+            `Task '${current.id}' is still ${current.status}; finish or stop it first.`,
+          );
         }
         const now = new Date().toISOString();
         const state: TaskState = {
@@ -314,7 +312,8 @@ export function registerTask(pi: ExtensionAPI): void {
         if (state.status !== "blocked") throw new Error(`Task is ${state.status}, not blocked.`);
         state.status = "active";
         delete state.blocker;
-        if (params.summary?.trim()) state.checkpoints.push({ at: now, summary: params.summary.trim() });
+        if (params.summary?.trim())
+          state.checkpoints.push({ at: now, summary: params.summary.trim() });
       } else if (params.action === "stop") {
         if (state.status === "done" || state.status === "stopped") {
           throw new Error(`Task is already ${state.status}.`);

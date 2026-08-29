@@ -34,7 +34,12 @@ test("summarizes runtime runtime operations and verification provenance", () => 
   const metrics = analyzeLines([
     JSON.stringify({ type: "session", id: "runtime-1", timestamp: "2026-08-29T00:00:00Z" }),
     ...toolPair("context-1", "context", { action: "find", query: "state restore" }),
-    ...toolPair("code-1", "code", { action: "edit", continuation: { token: "x" }, replacement: "y" }, true),
+    ...toolPair(
+      "code-1",
+      "code",
+      { action: "edit", continuation: { token: "x" }, replacement: "y" },
+      true,
+    ),
     ...toolPair("task-1", "task", { action: "checkpoint", summary: "replan" }),
     ...toolPair("verify-1", "verify", {
       action: "record",
@@ -85,5 +90,6 @@ test("exposes runtime metrics as a selectable report view", () => {
 
   const selected = selectReport(report, { view: "runtime" });
   assert.equal(selected.data.kind, "runtime");
-  if (selected.data.kind === "runtime") assert.equal(selected.data.metrics.task.actions.start?.calls, 1);
+  if (selected.data.kind === "runtime")
+    assert.equal(selected.data.metrics.task.actions.start?.calls, 1);
 });

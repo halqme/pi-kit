@@ -46,10 +46,16 @@ test("lexical engine scans text while excluding repository hazards", async () =>
       undefined,
       { cwd: root },
     );
-    const details = response.details as { results: Array<{ path: string }>; stats: { skippedSecret: number } };
+    const details = response.details as {
+      results: Array<{ path: string }>;
+      stats: { skippedSecret: number };
+    };
     assert.equal(details.results[0]?.path, "docs/hit.md");
     assert.ok(details.stats.skippedSecret >= 1);
-    assert.equal(details.results.some((item) => item.path.includes("node_modules")), false);
+    assert.equal(
+      details.results.some((item) => item.path.includes("node_modules")),
+      false,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

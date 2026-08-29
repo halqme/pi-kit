@@ -18,8 +18,14 @@ test("exposes repository capabilities only as context and code", async () => {
     tools.map((tool) => tool.name),
     ["context", "code"],
   );
-  assert.equal(tools.some((tool) => tool.name === "astrolabe"), false);
-  assert.equal(tools.some((tool) => tool.name === "bm25_search"), false);
+  assert.equal(
+    tools.some((tool) => tool.name === "astrolabe"),
+    false,
+  );
+  assert.equal(
+    tools.some((tool) => tool.name === "bm25_search"),
+    false,
+  );
 
   for (const handler of shutdown) await handler();
 });
