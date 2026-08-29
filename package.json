@@ -5,8 +5,7 @@
     "pi-package"
   ],
   "workspaces": [
-    "extensions/*",
-    "packages/*"
+    "extensions/*"
   ],
   "scripts": {
     "hooks:install": "git config core.hooksPath .githooks",
@@ -15,16 +14,10 @@
     "format:check": "oxfmt --check .",
     "lint": "oxlint ."
   },
-  "dependencies": {
-    "pi-intercom": "^0.10.0"
-  },
   "peerDependencies": {
     "oxfmt": "latest",
     "oxlint": "latest"
   },
-  "bundledDependencies": [
-    "pi-intercom"
-  ],
   "packageManager": "bun@1.3.14",
   "catalog": {
     "@earendil-works/pi-agent-core": "^0.84.1",
@@ -37,12 +30,26 @@
   },
   "pi": {
     "extensions": [
-      "./extensions",
-      "./node_modules/pi-intercom/index.ts"
+      "./extensions/repository/index.ts",
+      "./extensions/task/index.ts",
+      "./extensions/delegate/index.ts",
+      "./extensions/background-process/index.ts",
+      "./extensions/browser-inspector/index.ts",
+      "./extensions/session-metrics/index.ts",
+      "./extensions/statusline/index.ts",
+      "./extensions/suggest-reload/index.ts",
+      "./extensions/terminal/index.ts"
     ],
     "skills": [
-      "./skills",
-      "./node_modules/pi-intercom/skills"
+      "./skills/apply-correction",
+      "./skills/diagnose-problem",
+      "./skills/git-workflow",
+      "./skills/implement-change",
+      "./skills/natural-japanese-writing",
+      "./skills/perform-safely",
+      "./skills/research-answer",
+      "./skills/test-design",
+      "./skills/writing-skills"
     ],
     "prompts": [
       "./prompts"

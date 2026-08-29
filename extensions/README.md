@@ -1,20 +1,20 @@
-# Pi Extensions Workspace
+# Extensions
 
-Pi extensions live in one Bun workspace. Pi auto-discovers each `<extension>/index.ts` entry point. Every extension is an independent package with its own dependencies, checks, and documentation; see the extension's README for its behavior and constraints.
+Pi Kitのextensionは、モデルに見せる境界を少なく保ちます。
 
-Run from this directory:
+中核:
 
-```sh
-bun install
-bun run check
-bun run --filter <package-name> dev
-bun run --filter <package-name> smoke
-```
+- `repository` — `context` と `code`。概念検索、構造検索、inspection、validated mutationを同一repository engine上で扱う。
+- `task` — `task` と `verify`。適応的task stateと実行済みverification evidenceを管理する。
+- `delegate` — child Piを専用Git worktree/branchへ隔離して実行する。
 
-`bun run check` runs each package's TypeScript checks and tests. The `dev` and `smoke` scripts run one selected extension through Pi. After changing an extension already loaded by Pi, use `/reload`.
+汎用utility:
 
-## Naming conventions
+- `background_process`
+- `browser_inspector`
+- `session_metrics`
+- `statusline`
+- `suggest_reload`
+- `terminal`
 
-- Extension directories and their workspace package names use `snake_case` because they implement Pi tools.
-- Pi tool identifiers also use `snake_case` and remain stable because session metrics records them.
-- Skills and standalone packages under `packages/` use `kebab-case`.
+過去のplan/planner/runner/loop/grill、committee agent、standalone lexical/structural toolは互換surfaceとして保持しません。

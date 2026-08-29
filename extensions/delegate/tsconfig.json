@@ -1,0 +1,4 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["index.ts", "runtime.ts", "shared.ts", "*.test.ts"]
+}

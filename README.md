@@ -1,93 +1,47 @@
 # Pi Kit
 
-A collection of extensions, reusable agent skills, prompts, themes, and session analysis tools for [Pi](https://github.com/earendil-works/pi), focused on planning, collaboration, project-aware automation, and safe development workflows.
-
-## Install
-
-```sh
-pi install git:github.com/halqme/pi-kit
-
-```
-
-Requirements:
-
-- Node.js 24 or later
-- Bun 1.3.14 or later
-
-Recommendation:
-- npm:@ollama/pi-web-search
-
-Settings:
-```json
-{
-  "enabledModels": [
-    "openai-codex/gpt-5.6-luna:max",
-    "openai-codex/gpt-5.6-terra:max",
-    "openai-codex/gpt-5.6-sol:high"
-  ]
-}
-```
-
-## Included packages
-
-### Extensions
-
-Pi discovers extensions from the `extensions/` directory. Each extension is an independent Bun workspace package with its own documentation and checks.
-
-See each extension's README for its behavior, tools, hooks, and constraints. Workspace-level commands are covered in the [extension development guide](./extensions/README.md).
-
-### Packages
-
-Additional standalone packages live under `packages/`. See each package's documentation for usage and constraints.
-
-### Skills, prompts, and themes
-
-- Reusable workflows live under `skills/`; each skill is defined by a `SKILL.md` file.
-- Prompt templates live under `prompts/`.
-- Themes live under `themes/`.
-
-`agent_team` runs its discussion members as isolated Pi subprocesses through the bundled `background_process` extension.
-
-## Development
-
-Install dependencies from the repository root:
-
-```sh
-bun install
-```
-
-Run all extension checks from the extension workspace:
-
-```sh
-cd extensions
-bun run check
-```
-
-The full check runs strict TypeScript checks and Node test-runner tests for every extension. You can also run one kind of check across the workspace:
-
-```sh
-bun run typecheck
-bun run test
-```
-
-To work on a single extension, use its package name:
-
-```sh
-bun --filter @halqme/agent_team dev
-bun --filter @halqme/agent_team smoke
-```
-
-Replace `@halqme/agent_team` with the target package name. After changing an extension already loaded by Pi, run `/reload` in the Pi session.
-
-## Repository layout
+Pi Kit is a deliberately small runtime layer for Pi Coding Agent. The active architecture is organized around five mechanical boundaries:
 
 ```text
-.
-├── extensions/   # Pi extensions and Bun workspace configuration
-├── packages/     # Standalone packages such as session-metrics
-├── skills/       # Reusable agent workflows
-├── prompts/      # Prompt templates
-├── themes/       # Pi themes
-├── package.json  # Pi package metadata
-└── bun.lock      # Locked dependencies
+context -> code -> task -> verify
+                    \
+                     -> delegate
 ```
+
+- `context` acquires repository evidence through lexical and structural retrieval.
+- `code` performs structured mutation using handles produced by the same repository engine.
+- `task` keeps lightweight goal, checkpoint, blocker, and completion state.
+- `verify` distinguishes executed checks from reported evidence; only executed strong checks can unlock completion.
+- `delegate` runs independent child Pi work in isolated Git worktrees and branches.
+
+## Layout
+
+```text
+extensions/
+  background-process/
+  browser-inspector/
+  delegate/
+  repository/
+    src/
+      context/
+      code/
+      syntax/
+  session-metrics/
+  statusline/
+  suggest-reload/
+  task/
+  terminal/
+skills/
+prompts/
+themes/
+docs/
+tsconfig.json
+```
+
+Every runtime workspace now lives under `extensions/`; there is no separate `packages/` layer. `session-metrics` owns both the Pi extension and its offline CLI/analysis kernel. Multi-word extension directories use kebab-case, and the shared TypeScript configuration lives at the repository root.
+
+The repository extension exposes only `context` and `code`. The old standalone Astrolabe and BM25 tool surfaces are gone; their useful structural and lexical mechanisms are internal implementation details under `src/syntax` and `src/context`.
+
+Additional independent utilities remain available through the extensions listed above. Offline session analysis is provided by the `session-metrics` CLI in `extensions/session-metrics`.
+
+See [`docs/architecture.md`](docs/architecture.md) for the design rationale and runtime contracts.

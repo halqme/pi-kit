@@ -1,0 +1,26 @@
+{
+  "name": "@halqme/session-metrics",
+  "private": true,
+  "bin": {
+    "session-metrics": "cli.ts"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "bun run typecheck && bun test --parallel",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --parallel"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "catalog:",
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "@earendil-works/pi-tui": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

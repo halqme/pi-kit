@@ -1,52 +1,17 @@
-# pi-kit 開発ガイド
+# AGENTS.md
 
-## プロジェクトの概要
+Pi Kit is a Bun workspace for Pi extensions, skills, prompts, and support packages.
 
-pi-kitは、Pi向けの拡張、スキル、プロンプト、テーマをまとめたパッケージです。拡張は`extensions/*`のワークスペースとして管理し、ルートの`package.json`でPiへの登録を行います。
+- Keep changes scoped to the requested outcome. Remove superseded implementation instead of preserving compatibility layers unless compatibility is explicitly required.
+- Stable behavior belongs in code, schemas, tests, or runtime state rather than always-on prompt prose.
+- Existing supported source should use the repository `context`/`code` path when structural editing provides leverage; new/config/generated/unsupported files may use ordinary editing.
+- Verification must use the repository's existing checks. Do not treat an agent-authored test or self-review as the only proof of completion when an executable existing check is available.
+- Do not push, merge, rebase, alter refs, or open a pull request unless explicitly requested. Commits are allowed after verification unless the user says not to commit.
 
-## 基本方針
+Primary validation:
 
-- 既存の設計、公開インターフェース、エラーメッセージ、テスト方針を尊重する。
-- 変更は目的に必要な範囲に限定し、無関係なリファクタリングを混ぜない。
-- ユーザー向けの説明とコード内の識別子・コメントは、既存の言語と用語に合わせる。
-- 外部に公開される動作、権限、ファイル操作、Git操作、依存関係の変更は影響範囲を確認してから行う。
-- 生成物、設定、Markdownなど構文編集の効果が薄いファイルには通常の編集を使う。
+```sh
+bun run check
+```
 
-## Git操作
-
-- 実装・修正・ドキュメント作業は、ユーザーが「コミットしない」「保留」「コミットは不要」などと特記しない限り、検証後に今回の変更を論理単位でコミットしてよい。通常はコミットまで行う。
-- 既存の人間の変更や無関係な変更を勝手にコミットへ含めない。変更の起点や範囲を安全に分離できない場合は確認する。
-- `push`、`merge`、`rebase`、ブランチ・タグ操作、Pull Request作成は、別途明示的に依頼されない限り実行しない。
-
-## 構造化されたソースの編集
-
-- 対応言語の既存ソースを読むときは、構文編集ツール（Astrolabeなど）を通常の全文読み出しより先に検討する。
-- まず構造の概要を取得し、必要な宣言だけを掘り下げ、本文が必要なノードだけを取得する。
-- 変更規模を理由に構文編集を避けない。大規模な変更も、import、型、関数、呼出し側などの局所編集へ分解し、各段階の中間状態を確認する。
-- 有効なノードハンドル、検索結果、構造情報を再利用し、意味のないinspectを繰り返さない。編集後にハンドルが陳腐化し得る場合だけ再取得する。
-- 新規ファイル、非対応言語、生成物、設定ファイル、構文単位で扱う利点のない変更には、通常のdiff・patch・編集を使う。
-
-## 拡張の追加・変更
-
-- 拡張は`extensions/<name>/index.ts`をエントリーポイントとし、実装・テスト・READMEを同じディレクトリに置く。
-- ツール定義には、名前、説明、パラメータスキーマ、必要なら表示、実行、エラー処理を含める。
-- ツールの説明は「何ができるか」だけでなく、「いつ使うか」「何を避けるか」も明示する。
-- 複数言語を扱う機能は、言語固有のgrammar、拡張子、Query、ノード分類をアダプターに閉じ込める。共通処理に言語名をハードコードしない。
-- 外部依存やパッケージ、カタログを追加した場合は、該当ワークスペースの`package.json`と`bun.lock`を更新する。
-
-## スキル・ドキュメント
-
-- 人間向けREADMEには設計意図、対応範囲、制約、使用例を記載する。
-- READMEの詳細は、記載対象に最も近いディレクトリのREADMEへ書く。下位ディレクトリのREADMEで説明できる内容をルートREADMEへ重複して追加せず、ルートREADMEは全体概要と下位READMEへの導線に留める。
-
-## 検証
-
-変更後は、最小の関連チェックから実行し、変更範囲に応じて広げる。
-
-- Astrolabeの型チェック・テスト：`bun run --cwd extensions/astrolabe check`
-- 個別拡張の型チェック：`bun run --cwd extensions/<name> typecheck`
-- 個別拡張のテスト：`bun run --cwd extensions/<name> test`
-- ルートのフォーマット・Lint：`oxfmt .`、`oxlint .`
-- 空白エラー確認：`git diff --check`
-
-テストを実行しなかった場合は理由を報告する。失敗を隠すためにテストやLintを無効化しない。
+For a focused workspace, run its `check` script first, then broaden as needed. Do not disable lint or tests to make a change pass.

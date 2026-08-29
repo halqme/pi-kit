@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun", "node"]
+  },
+  "include": ["index.ts", "cli.ts", "src/**/*.ts", "test/**/*.ts"]
+}
