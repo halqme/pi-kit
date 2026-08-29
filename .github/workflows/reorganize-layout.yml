@@ -232,19 +232,22 @@ jobs:
               'lexical-engine.ts': 'src/context/lexical.ts',
               'structural-engine.ts': 'src/syntax/engine.ts',
           }
-          for path in [Path('README.md'), Path('AGENTS.md'), Path('docs/architecture.md'), Path('extensions/README.md'), Path('extensions/repository/README.md')]:
+          documentation_paths = [
+              Path('README.md'),
+              Path('AGENTS.md'),
+              Path('docs/architecture.md'),
+              Path('extensions/README.md'),
+              Path('extensions/repository/README.md'),
+              Path('extensions/session-metrics/README.md'),
+              Path('extensions/session-metrics/docs/analysis.md'),
+          ]
+          for path in documentation_paths:
               if not path.exists():
                   continue
               text = path.read_text()
               for old, new in textual_replacements.items():
                   text = text.replace(old, new)
               path.write_text(text)
-
-          analysis_doc = Path('extensions/session-metrics/docs/analysis.md')
-          text = analysis_doc.read_text()
-          for old, new in textual_replacements.items():
-              text = text.replace(old, new)
-          analysis_doc.write_text(text)
 
           extension_test = Path('extensions/session-metrics/index.test.ts')
           if extension_test.exists():
@@ -253,7 +256,7 @@ jobs:
               moved.write_text(moved.read_text().replace('"./index.ts"', '"../index.ts"'))
           PY
 
-          if grep -RInE 'extensions/(background_process|browser_inspector|session_metrics|suggest_reload)|packages/session-metrics' --exclude=bun.lock .; then
+          if grep -RInE 'extensions/(background_process|browser_inspector|session_metrics|suggest_reload)|packages/session-metrics' --exclude=bun.lock --exclude=reorganize-layout.yml .; then
             echo 'stale layout references remain'
             exit 1
           fi
