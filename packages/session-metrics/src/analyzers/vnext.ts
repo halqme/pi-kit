@@ -20,7 +20,9 @@ export function vnextFacet(toolName: string, input: unknown): VnextFacet | undef
   const data = record(input);
   const action = data?.action;
   if (typeof action !== "string" || action.length === 0) return undefined;
-  if (toolName !== "verify" || action !== "record") return { area: toolName as VnextArea, action };
+  if (toolName !== "verify" || (action !== "record" && action !== "run")) {
+    return { area: toolName as VnextArea, action };
+  }
 
   const provenance = data?.provenance;
   const passed = data?.passed;
@@ -28,6 +30,6 @@ export function vnextFacet(toolName: string, input: unknown): VnextFacet | undef
     area: "verify",
     action,
     ...(typeof provenance === "string" && provenance.length > 0 ? { provenance } : {}),
-    ...(typeof passed === "boolean" ? { passed } : {}),
+    ...(action === "record" && typeof passed === "boolean" ? { passed } : {}),
   };
 }
