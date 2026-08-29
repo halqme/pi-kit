@@ -29,6 +29,33 @@ export interface LogicalOperationMetrics {
   successes: number;
 }
 
+export interface RuntimeOperationMetrics {
+  calls: number;
+  errors: number;
+  actions: Record<string, { calls: number; errors: number }>;
+}
+
+export interface VerificationProvenanceMetrics {
+  records: number;
+  passed: number;
+  failed: number;
+  errors: number;
+}
+
+export interface VnextRuntimeMetrics {
+  context: RuntimeOperationMetrics;
+  code: RuntimeOperationMetrics;
+  task: RuntimeOperationMetrics;
+  delegate: RuntimeOperationMetrics;
+  verify: RuntimeOperationMetrics;
+  verification: {
+    records: number;
+    passed: number;
+    failed: number;
+    byProvenance: Record<string, VerificationProvenanceMetrics>;
+  };
+}
+
 export interface SkillMetrics {
   reads: number;
   explicit: number;
@@ -81,6 +108,7 @@ export interface MetricSummary {
   toolUsage: Record<string, ToolMetrics>;
   toolActions: Record<string, Record<string, ToolMetrics>>;
   logicalOperations: LogicalOperationMetrics;
+  vnext: VnextRuntimeMetrics;
   skills: Record<string, SkillMetrics>;
   models: Record<string, { messages: number; usage: UsageTotals }>;
   thinkingLevels: Record<string, { messages: number; usage: UsageTotals }>;
