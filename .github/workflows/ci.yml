@@ -5,10 +5,9 @@ on:
   push:
     branches:
       - main
-      - vnext-restructure
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -19,51 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: 24
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
-      - name: Repair final runtime naming
-        if: github.event_name == 'push' && github.ref == 'refs/heads/vnext-restructure'
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          for path in [
-              Path('packages/session-metrics/src/types.ts'),
-              Path('packages/session-metrics/src/analyze.ts'),
-              Path('packages/session-metrics/src/index.ts'),
-          ]:
-              text = path.read_text().replace('RuntimeRuntimeMetrics', 'RuntimeMetrics')
-              path.write_text(text)
-
-          analyze = Path('packages/session-metrics/src/analyze.ts')
-          text = analyze.read_text()
-          text = text.replace(
-              'import { runtimeFacet, type RuntimeFacet } from "./analyzers/runtime.ts";',
-              'import { runtimeFacetForTool, type RuntimeFacet } from "./analyzers/runtime.ts";',
-          )
-          text = text.replace('const runtimeFacet = runtimeFacet(', 'const runtimeFacet = runtimeFacetForTool(')
-          analyze.write_text(text)
-
-          analyzer = Path('packages/session-metrics/src/analyzers/runtime.ts')
-          text = analyzer.read_text().replace('export function runtimeFacet(', 'export function runtimeFacetForTool(')
-          analyzer.write_text(text)
-
-          readme = Path('packages/session-metrics/README.md')
-          text = readme.read_text()
-          text = text.replace('runtime runtime', 'runtime')
-          text = text.replace('logical-operations、vnext', 'logical-operations、runtime')
-          readme.write_text(text)
-          PY
-          if ! git diff --quiet; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add -A
-            git commit -m 'fix: repair final runtime naming'
-            git push origin HEAD:vnext-restructure
-          fi
       - run: bun install --frozen-lockfile
       - run: bun run check
