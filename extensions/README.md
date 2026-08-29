@@ -1,15 +1,20 @@
 # Extensions
 
-Pi Kit no longer discovers every directory here as public runtime surface. The root `package.json` explicitly lists loaded extensions.
+Pi Kitのextensionは、モデルに見せる境界を少なく保ちます。
 
-`vnext/` owns the core agent runtime:
+中核:
 
-- `context`: repository retrieval and structural inspection
-- `code`: structure-aware mutation
-- `task`: adaptive task lifecycle
-- `delegate`: isolated child Pi worktrees
-- `verify`: provenance-aware verification evidence
+- `repository` — `context` と `code`。概念検索、構造検索、inspection、validated mutationを同一repository engine上で扱う。
+- `task` — `task` と `verify`。適応的task stateと実行済みverification evidenceを管理する。
+- `delegate` — child Piを専用Git worktree/branchへ隔離して実行する。
 
-The manifest also loads a small set of independent utilities: `background_process`, `browser_inspector`, `session_metrics`, `statusline`, `suggest_reload`, and `terminal`.
+汎用utility:
 
-Other directories are historical implementation substrate and are inert unless explicitly added back to the package manifest. In particular, Astrolabe and BM25 are now kernel implementations consumed by `vnext/`; their old tool names are not registered directly.
+- `background_process`
+- `browser_inspector`
+- `session_metrics`
+- `statusline`
+- `suggest_reload`
+- `terminal`
+
+過去のplan/planner/runner/loop/grill、committee agent、standalone lexical/structural toolは互換surfaceとして保持しません。

@@ -1,11 +1,17 @@
-# Pi Kit development contract
+# AGENTS.md
 
-Pi Kit targets Node.js 24+ and Bun. The active runtime is the explicit `pi.extensions` / `pi.skills` manifest in `package.json`; do not assume every historical directory is loaded.
+Pi Kit is a Bun workspace for Pi extensions, skills, prompts, and support packages.
 
-Keep changes centered on observable behavior. Tests should explain intended behavior, not preserve implementation accidents. Comments should expose intent, invariants, or external connection points. Commit messages should explain why the change exists.
+- Keep changes scoped to the requested outcome. Remove superseded implementation instead of preserving compatibility layers unless compatibility is explicitly required.
+- Stable behavior belongs in code, schemas, tests, or runtime state rather than always-on prompt prose.
+- Existing supported source should use the repository `context`/`code` path when structural editing provides leverage; new/config/generated/unsupported files may use ordinary editing.
+- Verification must use the repository's existing checks. Do not treat an agent-authored test or self-review as the only proof of completion when an executable existing check is available.
+- Do not push, merge, rebase, alter refs, or open a pull request unless explicitly requested. Commits are allowed after verification unless the user says not to commit.
 
-For existing supported source, use the runtime's `context` tool to acquire the target and `code` for structure-aware mutation when that improves precision. New files, configuration, generated content, and unsupported languages can use ordinary file editing.
+Primary validation:
 
-Verification should start with the smallest relevant check and expand with change scope. Prefer existing tests, compiler/typechecker/linter output, CI, and structural audits as acceptance evidence. Do not weaken checks to make a change pass.
+```sh
+bun run check
+```
 
-A normal implementation may be committed after verification unless the user says otherwise. Do not push, merge, rebase, create branches/tags, or publish externally without explicit authorization.
+For a focused workspace, run its `check` script first, then broaden as needed. Do not disable lint or tests to make a change pass.
