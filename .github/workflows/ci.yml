@@ -25,15 +25,49 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
-      - run: bun install
-      - name: Commit regenerated lockfile
+      - name: Finalize runtime naming
         if: github.event_name == 'push' && github.ref == 'refs/heads/vnext-restructure'
         run: |
-          if ! git diff --quiet -- bun.lock; then
+          python - <<'PY'
+          from pathlib import Path
+
+          files = [
+              Path('packages/session-metrics/src/types.ts'),
+              Path('packages/session-metrics/src/analyze.ts'),
+              Path('packages/session-metrics/src/selection.ts'),
+              Path('packages/session-metrics/cli.ts'),
+              Path('packages/session-metrics/src/index.ts'),
+              Path('packages/session-metrics/test/vnext.test.ts'),
+          ]
+          for path in files:
+              text = path.read_text()
+              text = text.replace('Vnext', 'Runtime').replace('vNext', 'runtime').replace('vnext', 'runtime')
+              path.write_text(text)
+
+          analyzer = Path('packages/session-metrics/src/analyzers/vnext.ts')
+          analyzer.write_text(
+              analyzer.read_text().replace('Vnext', 'Runtime').replace('vNext', 'runtime').replace('vnext', 'runtime')
+          )
+          analyzer.rename('packages/session-metrics/src/analyzers/runtime.ts')
+          Path('packages/session-metrics/test/vnext.test.ts').rename('packages/session-metrics/test/runtime.test.ts')
+
+          for path in [Path('README.md'), Path('packages/session-metrics/README.md')]:
+              text = path.read_text().replace('--vnext', '--runtime').replace('vNext', 'runtime')
+              path.write_text(text)
+
+          task = Path('extensions/task/runtime.ts')
+          task.write_text(
+              task.read_text()
+                  .replace('vnext-task-state', 'task-state')
+                  .replace('vnext-verification-evidence', 'verification-evidence')
+          )
+          PY
+          if ! git diff --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add bun.lock
-            git commit -m 'chore: regenerate bun lockfile'
+            git add -A
+            git commit -m 'refactor: finalize runtime naming'
             git push origin HEAD:vnext-restructure
           fi
+      - run: bun install --frozen-lockfile
       - run: bun run check
