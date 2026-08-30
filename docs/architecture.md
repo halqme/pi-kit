@@ -1,34 +1,31 @@
 # Pi Kit architecture
 
-Pi Kit is organized around a small set of mechanical runtime boundaries rather than a stack of prompt-driven workflows.
+Pi Kit is organized around a small set of mechanical runtime boundaries rather than a stack of prompt-driven workflows. These boundaries define authority, not a mandatory execution order.
 
 ```text
-User goal
-   |
-   v
-context ---------> compact repository evidence
-   |
-   v
-code ------------> validated structural mutation
-   |
-   v
-task ------------> adaptive checkpoints / blockers
-   | \
-   |  `----------> delegate -> isolated Git worktree / branch
-   |
-   `-------------> verify -> provenance-aware evidence
-                           |
-                           v
-                      task.finish
+Repository evidence ───────> context ───────> structural targets / compact evidence
+        │
+        └──────────────────> code ─────────> validated mutation
+
+User goal ─────────────────> task ─────────> adaptive checkpoints / blockers
+                               | \
+                               |  `────────> delegate -> isolated Git worktree / branch
+                               |
+                               `───────────> verify -> provenance-aware evidence
+                                                    |
+                                                    v
+                                               task.finish
 ```
 
-An observation is not authority for a mutation, a completed plan is not authority for completion, and a child agent's report is not authority for integration.
+An observation is not authority for a mutation, a completed plan is not authority for completion, and a child agent's report is not authority for integration. Likewise, `context` is not a qualification gate for `code`: structural discovery is useful only when it provides leverage.
 
 ## Repository intelligence
 
 `context` is the read-only repository-intelligence boundary. Conceptual retrieval uses passage-level Okapi BM25, while structural lookup and inspection use Tree-sitter plus optional LSP evidence. These are implementation strategies behind one tool rather than separate product boundaries the model must route between.
 
-`code` is the mutation boundary. It shares the same structural engine instance as `context`, so opaque continuations remain valid across retrieval and mutation. Existing source is edited by validated syntax-node replacement or semantic rename; new, generated, configuration, and unsupported files use ordinary editing.
+`code` is the mutation boundary. It shares the same structural engine instance as `context`, so opaque continuations remain valid across retrieval and mutation. A continuation is the strongest target when structural discovery has already selected a node, but it is not required merely to enter the mutation boundary. An exact unique text target can be resolved to the smallest containing syntax node inside the same engine, then use the same validated node-replacement path. Semantic rename continues to use LSP workspace edits. New, generated, configuration, and unsupported files use ordinary editing.
+
+This separation keeps structured discovery and structured mutation independent: `context` competes with ordinary repository reading on retrieval value, while `code` can still provide mutation validation after evidence came from `read`, search, diagnostics, or another source.
 
 The design follows the retrieval results reported by Agent Retrieval Bench (arXiv:2607.24882) and FastContext (arXiv:2606.14066), and the structured action-space results in CODESTRUCT (arXiv:2604.05407).
 
