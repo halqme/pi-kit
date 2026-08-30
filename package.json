@@ -47,6 +47,7 @@
       "./skills/perform-safely",
       "./skills/research-answer",
       "./skills/test-design",
+      "./skills/visualize-structure",
       "./skills/writing-skills"
     ],
     "prompts": [
