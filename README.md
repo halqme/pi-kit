@@ -1,18 +1,24 @@
 # Pi Kit
 
-Pi Kit is a deliberately small runtime layer for Pi Coding Agent. The active architecture is organized around five mechanical boundaries:
+Pi Kit is a deliberately small runtime layer for Pi Coding Agent. The active architecture is organized around five mechanical authority boundaries, not a mandatory execution pipeline:
 
 ```text
-context -> code -> task -> verify
-                    \
-                     -> delegate
+repository evidence ──> context
+         │
+         └────────────> code
+
+user goal ────────────> task ─────> verify ─────> task.finish
+                          \
+                           └───────> delegate
 ```
 
 - `context` acquires repository evidence through lexical and structural retrieval.
-- `code` performs structured mutation using handles produced by the same repository engine.
+- `code` performs validated mutation of supported existing source. A structural continuation is the strongest target when `context` already produced one; an exact unique text target can enter the same structural mutation engine directly.
 - `task` keeps lightweight goal, checkpoint, blocker, and completion state.
 - `verify` distinguishes executed checks from reported evidence; only executed strong checks can unlock completion.
 - `delegate` runs independent child Pi work in isolated Git worktrees and branches.
+
+The arrows describe common evidence and authority flow. They are not prerequisites between tools: `context` is not a qualification gate for `code`, and `delegate` is only useful when the work actually decomposes.
 
 ## Layout
 
