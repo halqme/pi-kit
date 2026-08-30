@@ -1,12 +1,26 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import extension from "../index.ts";
 
-test("exposes repository capabilities only as context and code", async () => {
-  const tools: Array<{ name: string }> = [];
+type RegisteredTool = {
+  name: string;
+  execute: (
+    id: string,
+    params: Record<string, unknown>,
+    signal: AbortSignal,
+    update: unknown,
+    ctx: { cwd: string },
+  ) => Promise<{ content: Array<{ type: "text"; text: string }> }>;
+};
+
+test("exposes repository capabilities and keeps code reachable without context", async () => {
+  const tools: RegisteredTool[] = [];
   const shutdown: Array<() => Promise<void> | void> = [];
   extension({
-    registerTool(tool: { name: string }) {
+    registerTool(tool: RegisteredTool) {
       tools.push(tool);
     },
     on(event: string, handler: () => Promise<void> | void) {
@@ -26,6 +40,51 @@ test("exposes repository capabilities only as context and code", async () => {
     tools.some((tool) => tool.name === "bm25_search"),
     false,
   );
+
+  const context = tools.find((tool) => tool.name === "context");
+  const code = tools.find((tool) => tool.name === "code");
+  assert.ok(context);
+  assert.ok(code);
+
+  const dir = await mkdtemp(join(tmpdir(), "repository-surface-"));
+  await writeFile(join(dir, "sample.ts"), "export const answer = 1;\n", "utf8");
+  const signal = new AbortController().signal;
+
+  const inspected = await context.execute(
+    "context-source",
+    { action: "inspect", path: "sample.ts", detail: "source" },
+    signal,
+    undefined,
+    { cwd: dir },
+  );
+  const inspection = JSON.parse(inspected.content[0]?.text ?? "{}") as {
+    ok?: boolean;
+    source?: string;
+    data?: { mode?: string };
+  };
+  assert.equal(inspection.ok, true);
+  assert.equal(inspection.data?.mode, "source");
+  assert.equal(inspection.source, "export const answer = 1;\n");
+
+  const edited = await code.execute(
+    "code-edit",
+    {
+      action: "edit",
+      path: "sample.ts",
+      oldText: "answer = 1",
+      newText: "answer = 2",
+    },
+    signal,
+    undefined,
+    { cwd: dir },
+  );
+  const mutation = JSON.parse(edited.content[0]?.text ?? "{}") as {
+    ok?: boolean;
+    data?: { mode?: string };
+  };
+  assert.equal(mutation.ok, true);
+  assert.equal(mutation.data?.mode, "text");
+  assert.equal(await readFile(join(dir, "sample.ts"), "utf8"), "export const answer = 2;\n");
 
   for (const handler of shutdown) await handler();
 });
