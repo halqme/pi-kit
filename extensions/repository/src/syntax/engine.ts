@@ -3,6 +3,7 @@ import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { type ExtensionAPI, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { editContinuationDetailed } from "../code/edit.ts";
+import { editTextDetailed } from "../code/text-edit.ts";
 import { inspect } from "../context/inspect.ts";
 import {
   adapterForIdentity,
@@ -30,10 +31,10 @@ import { renameContinuationDetailed } from "../code/rename.ts";
 import { locateResolvedDetailed } from "../context/semantic-locate.ts";
 import { syntaxSearchDetailed } from "../context/syntax-search.ts";
 
-const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDescription} source, use astrolabe to resolve a concrete syntax target and use edit for a complete replacement; use rename for semantic symbol renames when LSP is available. Use bm25_search for unfamiliar concepts, responsibilities, or behavior; use search for exact syntax-shaped functions, calls, or imports; use ordinary text search for arbitrary literals. A no_match result from locate is a normal empty result; choose a different discovery route instead of retrying the same hints. Use read/edit for new, generated, configuration, or unsupported files.`;
+const TOOL_SELECTION_GUIDANCE = `When modifying existing ${supportedLanguageDescription} source, use astrolabe for validated mutation. Resolve concrete syntax targets when structural context provides leverage; exact unique text may also target an edit without a prior structural lookup. Use rename for semantic symbol renames when LSP is available. Use bm25_search for unfamiliar concepts, responsibilities, or behavior; use search for exact syntax-shaped functions, calls, or imports; use ordinary text search for arbitrary literals. A no_match result from locate is a normal empty result; choose a different discovery route instead of retrying the same hints. Use read/edit for new, generated, configuration, or unsupported files.`;
 
 const GUIDANCE = [
-  `For existing ${supportedLanguageDescription} source, use astrolabe before read or edit. Do not use read/edit for a supported existing source file unless astrolabe reports unsupported, generated, or configuration content.`,
+  `For existing ${supportedLanguageDescription} source, prefer astrolabe for mutation validation. Structural discovery is useful when it reduces ambiguity, but it is not a prerequisite for an exact unique text edit.`,
   "Choose discovery by intent: bm25_search finds conceptually relevant files and passages when the location or symbol is unknown; search finds exact syntax-shaped functions, calls, or imports; locate resolves known declaration/edit targets using Tree-sitter and optional LSP evidence. locate is not BM25 or arbitrary text search. A no_match result is a normal empty result; choose a different discovery route instead of retrying the same hints. If locate returns mode=source, use that source and continuation directly with edit; do not inspect the same candidate again. If it returns mode=cards, inspect only when the card does not provide enough context for the intended replacement. Use inspect_many only as a read-only batch for selected continuations.",
   "For a semantic symbol rename, pass the located declaration continuation to rename. The language server proposes the WorkspaceEdit; Astrolabe validates staleness and syntax before committing it.",
   "Use read or normal edits for unsupported languages, generated/configuration files, new files, or when astrolabe explicitly reports that the target is not applicable.",
@@ -52,13 +53,13 @@ const actionSchema = Type.Union([
     path: Type.Optional(
       Type.String({
         description:
-          "Existing supported source path for outline inspection. Source inspection requires a continuation instead of a bare path.",
+          "Existing supported source path. outline returns structural navigation; source returns the whole file when compact enough and otherwise degrades to outline.",
       }),
     ),
     language: Type.Optional(StringEnum(supportedLanguageIds)),
     detail: Type.Optional(
       StringEnum(["outline", "source"] as const, {
-        description: "outline for a path; source for a selected continuation",
+        description: "outline for structural navigation; source for selected or compact source",
       }),
     ),
     depth: Type.Optional(Type.Integer({ minimum: 0, maximum: 12 })),
@@ -103,6 +104,12 @@ const actionSchema = Type.Union([
       token: Type.String({ description: "Continuation returned by locate, search, or inspect" }),
     }),
     replacement: Type.String({ description: "Complete replacement text for the selected node" }),
+  }),
+  Type.Object({
+    action: Type.Literal("edit"),
+    path: Type.String({ description: "Existing supported source file" }),
+    oldText: Type.String({ minLength: 1, description: "Exact text that must occur exactly once" }),
+    newText: Type.String({ description: "Replacement for oldText inside its structural target" }),
   }),
   Type.Object({
     action: Type.Literal("rename"),
@@ -399,14 +406,6 @@ async function dispatch(
         "Provide a source path or a continuation.",
       );
     }
-    if (!handle && detail === "source") {
-      return failure(
-        "inspect",
-        "source_requires_target",
-        "Source inspection requires a selected continuation; request outline first or pass a continuation returned by locate or search.",
-        [outlineRequest(request.path as string, request.language)],
-      );
-    }
     const path = handle?.path ?? normalizePath(request.path as string);
     const inspectParams = {
       path,
@@ -423,6 +422,27 @@ async function dispatch(
         request.path ? [outlineRequest(request.path, request.language)] : [],
       );
     }
+
+    if (detail === "source" && !handle && Buffer.byteLength(output) > AUTO_SOURCE_LIMIT) {
+      const outlineOutput = await inspect({ ...inspectParams, view: "outline" }, cwd, handles);
+      const responseHandles = handlesFromOutput(handles, outlineOutput);
+      return {
+        ok: true,
+        action: "inspect",
+        outline: outlineOutput,
+        data: { mode: "outline", sourceBytes: Buffer.byteLength(output) },
+        ...(responseHandles.length > 0
+          ? {
+              next: responseHandles.map((item) => ({
+                action: "inspect" as const,
+                continuation: item.continuation,
+                detail: "source" as const,
+              })),
+            }
+          : {}),
+      };
+    }
+
     const responseHandles =
       detail === "source" && handle
         ? [handleResponse(handles, handle)].filter((item): item is SyntaxHandle => Boolean(item))
@@ -431,6 +451,9 @@ async function dispatch(
       ok: true,
       action: "inspect",
       ...(detail === "source" ? { source: output } : { outline: output }),
+      ...(detail === "source" && !handle
+        ? { data: { mode: "source", sourceBytes: Buffer.byteLength(output) } }
+        : {}),
       ...(detail === "outline" && responseHandles.length > 0
         ? {
             next: responseHandles.map((item) => ({
@@ -470,6 +493,19 @@ async function dispatch(
       action: "rename",
       message: "ok",
       data: result.details ? { ...result.details } : {},
+    };
+  }
+
+  if ("path" in request) {
+    const result = await editTextDetailed(request, cwd, handles);
+    if (!result.message.startsWith("edited ")) {
+      return failure("edit", result.message.split(":")[0] ?? "edit_failed", result.message);
+    }
+    return {
+      ok: true,
+      action: "edit",
+      message: "ok",
+      data: { mode: "text", ...(result.targetType ? { targetType: result.targetType } : {}) },
     };
   }
 
@@ -527,9 +563,9 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "astrolabe",
     label: "Astrolabe",
-    description: `Use first for existing ${supportedLanguageDescription} source instead of read/edit: resolve edit targets with structural/LSP signals, inspect syntax, batch selected reads, safely replace validated nodes, and use semantic rename when LSP is available. Avoid for new, generated, configuration, or unsupported files.`,
+    description: `Use for existing ${supportedLanguageDescription} source: resolve structural/LSP targets when useful, inspect syntax or compact source, apply validated structural edits from either continuations or exact unique text, and use semantic rename when LSP is available. Avoid for new, generated, configuration, or unsupported files.`,
     promptSnippet:
-      "Prefer for existing supported source; resolve targets, batch inspections when useful, safely replace validated syntax, and use semantic rename for symbol renames",
+      "Prefer for existing supported source mutation; use structural targets when useful or exact unique text for direct validated edits",
     promptGuidelines: GUIDANCE,
     parameters: actionSchema,
     renderCall(args, theme) {
@@ -541,7 +577,9 @@ export default function treeStructuralEditExtension(pi: ExtensionAPI): void {
             ? (request.path ?? "continuation")
             : request.action === "inspect_many"
               ? `${request.targets.length} continuations`
-              : "continuation";
+              : request.action === "edit" && "path" in request
+                ? request.path
+                : "continuation";
       return new Text(
         `${theme.fg("toolTitle", theme.bold("astrolabe "))}${theme.fg("accent", target)}${theme.fg("dim", ` ${request.action}`)}`,
         0,
