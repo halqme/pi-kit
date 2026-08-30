@@ -55,11 +55,6 @@ export async function inspect(
       "structure_requires_node: Start with outline, then drill down with structure on a selected nodeId.",
     );
   }
-  if (view === "source" && !handle) {
-    throw new Error(
-      "source_requires_node: Start with outline, drill down with structure, then request source for a selected nodeId.",
-    );
-  }
   const file = await parseFile(path, adapter);
   const resolution = handle
     ? resolveHandleResult(file, handles, handle)

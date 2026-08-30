@@ -42,11 +42,20 @@ export interface SearchRequest {
   source?: string;
 }
 
-export interface EditRequest {
+export interface ContinuationEditRequest {
   action: "edit";
   continuation: Continuation;
   replacement: string;
 }
+
+export interface TextEditRequest {
+  action: "edit";
+  path: string;
+  oldText: string;
+  newText: string;
+}
+
+export type EditRequest = ContinuationEditRequest | TextEditRequest;
 
 export interface RenameRequest {
   action: "rename";
