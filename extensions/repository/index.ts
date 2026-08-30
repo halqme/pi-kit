@@ -1,16 +1,10 @@
-import { readFile } from "node:fs/promises";
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import { editTextDetailed } from "./src/code/text-edit.ts";
 import installStructuralEngine from "./src/syntax/engine.ts";
 import installLexicalEngine from "./src/context/lexical.ts";
-import {
-  requireAdapterForPath,
-  supportedLanguageIds,
-} from "./src/syntax/language-profile.ts";
-import { resolveExistingPath } from "./src/syntax/path.ts";
-import { jsonResult, type TextToolResult } from "./src/shared.ts";
+import { supportedLanguageIds } from "./src/syntax/language-profile.ts";
+import type { TextToolResult } from "./src/shared.ts";
 
 type CapturedTool = {
   name: string;
@@ -18,8 +12,6 @@ type CapturedTool = {
 };
 
 type Installer = (pi: ExtensionAPI) => void;
-
-const DIRECT_SOURCE_LIMIT = 6_000;
 
 function captureTool(pi: ExtensionAPI, installer: Installer, expectedName: string): CapturedTool {
   let captured: CapturedTool | undefined;
@@ -47,14 +39,6 @@ function captureTool(pi: ExtensionAPI, installer: Installer, expectedName: strin
   installer(proxy);
   if (!captured) throw new Error(`Repository engine '${expectedName}' was not registered.`);
   return captured;
-}
-
-function fail(action: "inspect" | "edit", code: string, message: string): never {
-  throw new Error(JSON.stringify({ ok: false, action, error: { code, message } }));
-}
-
-function normalizePath(path: string): string {
-  return path.startsWith("@") ? path.slice(1) : path;
 }
 
 export default function repositoryExtension(pi: ExtensionAPI): void {
@@ -122,32 +106,6 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
         const { action: _action, ...query } = params;
         return lexical.execute(id, query, signal, update, ctx);
       }
-      if (
-        params.action === "inspect" &&
-        params.detail === "source" &&
-        !params.continuation &&
-        params.path
-      ) {
-        const path = await resolveExistingPath(ctx.cwd, normalizePath(params.path));
-        requireAdapterForPath(path, params.language);
-        const source = await readFile(path, "utf8");
-        const sourceBytes = Buffer.byteLength(source, "utf8");
-        if (sourceBytes <= DIRECT_SOURCE_LIMIT) {
-          return jsonResult({
-            ok: true,
-            action: "inspect",
-            source,
-            data: { mode: "source", sourceBytes },
-          });
-        }
-        return structural.execute(
-          id,
-          { ...params, detail: "outline" },
-          signal,
-          update,
-          ctx,
-        );
-      }
       return structural.execute(id, params, signal, update, ctx);
     },
   });
@@ -156,7 +114,7 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
     name: "code",
     label: "Code",
     description:
-      "Mutate supported existing source with syntax validation. edit accepts either a structural continuation for a complete node replacement or path/oldText/newText for one exact unique textual replacement; rename uses language-server workspace edits.",
+      "Mutate supported existing source through the repository structural engine. edit accepts either a structural continuation for a complete node replacement or path/oldText/newText for one exact unique target; rename uses language-server workspace edits.",
     promptGuidelines: [
       "Prefer code for supported existing source mutations. If context already produced a continuation, pass it unchanged for the stronger structural edit path. Otherwise use path/oldText/newText when the intended exact text occurs once; do not call context solely to qualify for code.",
       "Use ordinary file editing for new files, generated/configuration files, and unsupported languages.",
@@ -181,16 +139,6 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
       }),
     ]),
     async execute(id, params, signal, update, ctx) {
-      if (params.action === "edit" && "path" in params) {
-        const result = await editTextDetailed(params, ctx.cwd);
-        if (!result.ok) fail("edit", result.code, result.message);
-        return jsonResult({
-          ok: true,
-          action: "edit",
-          message: "ok",
-          data: { mode: "text", ...result },
-        });
-      }
       return structural.execute(id, params, signal, update, ctx);
     },
   });
