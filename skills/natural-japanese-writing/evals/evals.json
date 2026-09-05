@@ -1,0 +1,105 @@
+{
+  "skill_name": "natural-japanese-writing",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "次の文を自然な日本語に整えて。友達に送るチャットなので、この話し方は残してほしい。『これマジで便利なんよな。設定ほぼいらんし、入れた瞬間から普通に使える。』",
+      "expected_output": "The revision, if any, preserves the casual conversational voice instead of normalizing it into neutral explanatory prose.",
+      "assertions": [
+        "The output preserves the casual register and does not rewrite the message into formal or neutral prose.",
+        "Expressions such as 'マジで' or 'なんよな' are not removed merely because a more standard alternative exists.",
+        "The meaning and degree of enthusiasm remain unchanged."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "技術仕様書の一文を校正して。用語と意味が正しければ無理に言い換えなくていい。『この機構は、コピーを介さないデータ転送を可能にする。』",
+      "expected_output": "The sentence may remain unchanged when '可能にする' accurately expresses a capability boundary in this technical context; the skill does not rewrite it solely because that construction can sound translated in other contexts.",
+      "assertions": [
+        "The output does not treat '可能にする' as intrinsically unnatural.",
+        "Any change is justified by the technical context rather than by a fixed lexical preference.",
+        "The capability meaning is preserved."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "論文の結果節です。分野の文体は崩さずに校正して。『条件間には有意な差が観察された。』",
+      "expected_output": "The revision respects academic register and does not mechanically eliminate passive or conventional research phrasing when it is acceptable in context.",
+      "assertions": [
+        "The output remains appropriate for an academic results section.",
+        "Passive or conventional research phrasing is not rejected merely because an active or shorter alternative exists.",
+        "The statistical claim is not strengthened, weakened, or supplemented."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "次を日本語に訳して。研究紹介文として自然にしてほしい。『These results provide insight into how spatial relations are represented inside the model.』",
+      "expected_output": "The translation conveys what the results let the reader understand about internal spatial representations, without mechanically preserving the English provide-insight construction.",
+      "assertions": [
+        "The translation conveys the same epistemic strength as the source.",
+        "The Japanese is organized naturally rather than word-for-word around 'provide insight'.",
+        "The output does not add claims about mechanisms that are absent from the source."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "神経心理学の文章を校正して。専門用語は変えないで。『この症例では、エピソード記憶と手続き記憶の二重解離が示された。』",
+      "expected_output": "The established term '二重解離' is preserved; the skill does not replace specialized vocabulary with plainer Japanese merely to sound more natural.",
+      "assertions": [
+        "The term '二重解離' is preserved.",
+        "The output remains suitable for neuropsychology writing.",
+        "The claim is not simplified into a less precise everyday description."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "この説明を自然な日本語に直して。『ユーザー文脈整合化機構によって応答自然度を向上させる。』ここで使っている熟語は正式な専門用語ではありません。",
+      "expected_output": "The revision explains the intended operation in ordinary Japanese instead of preserving or inventing pseudo-technical compounds.",
+      "assertions": [
+        "The output does not treat the ad hoc compounds as established terminology.",
+        "The intended relationship between context and more natural responses is expressed clearly.",
+        "The rewrite does not introduce new unsupported jargon."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "SNS投稿の校正。記号の使い方も含めて自分の文体なので、明確に変なところだけ直して。『新しいやつ、かなり良い——というか今まで欲しかったのこれ！ たぶん明日から普通に使う。』",
+      "expected_output": "The existing punctuation, emphasis, and conversational rhythm are preserved unless they create a concrete readability problem.",
+      "assertions": [
+        "The em dash and exclamation mark are not removed merely to conform to a generic Japanese style rule.",
+        "The conversational rhythm and enthusiasm are preserved.",
+        "The output does not normalize the post into explanatory prose."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "このメモを読みやすくして。ただし箇条書きと体言止めはこの文書全体のスタイルなので維持して。『課題：初期表示の遅延。原因：API呼び出しの直列化。対応：並列化とキャッシュ導入。』",
+      "expected_output": "The revision respects the requested note style and does not expand fragments into full sentences solely because full sentences are more conventional in prose.",
+      "assertions": [
+        "The bullet-like compact structure and nominal endings are preserved.",
+        "The causal relationship remains understandable.",
+        "The output does not rewrite the note into paragraph-style prose without a concrete need."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "小説の地の文です。古風な語り口は意図的なので、意味を変える誤りだけ直して。『されど彼は答えず、ただ暮れゆく空を見ていた。』",
+      "expected_output": "The intentional archaic literary register is preserved; the skill does not modernize it under a generic notion of natural Japanese.",
+      "assertions": [
+        "The archaic expression 'されど' is not modernized merely for standardness.",
+        "The literary cadence is preserved.",
+        "No new interpretation or narrative fact is added."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "既存ドキュメントの一文だけ直して。周囲はずっと『Web』『API』『UI』のように英字表記です。『ウェブAPIのUIを更新する。』表記だけ周囲に合わせて。",
+      "expected_output": "The output follows the local document convention, using 'Web' while preserving the rest of the sentence unless another concrete issue exists.",
+      "assertions": [
+        "The output uses 'Web' to match the surrounding document convention.",
+        "The skill follows local style evidence rather than a universal preferred spelling.",
+        "No unrelated rewriting is introduced."
+      ]
+    }
+  ]
+}
