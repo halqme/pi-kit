@@ -1,0 +1,59 @@
+{
+  "skill_name": "cognitive-rhythm-writing",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Revise this technical article section so it is easier to keep reading. Keep the claims and terminology unchanged. The current draft explains a cache, then another cache, then another optimization in three similarly structured paragraphs, and only at the end explains why latency still spikes under burst load.",
+      "expected_output": "The revision improves the progression across paragraphs by making the unresolved latency problem meaningful earlier and letting the later explanation resolve it, without inventing uncertainty or changing the technical claims.",
+      "assertions": [
+        "The output changes paragraph-level progression rather than merely alternating sentence lengths or adding decorative transitions.",
+        "The burst-load latency issue is integrated as a real organizing concern rather than fabricated suspense.",
+        "Technical claims and terminology are preserved.",
+        "The output does not narrate the writing technique used."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "次の研究紹介を、内容や慎重さは変えずに最後まで読みやすい流れへ直して。前半は実験条件の説明が続き、中盤で結果を列挙し、最後にだけ『入力表現が変わると成績が大きく変動した』という研究上の意味が出てきます。",
+      "expected_output": "The revision creates a clearer cognitive progression between setup, observations, and interpretation while preserving the original epistemic strength and Japanese register.",
+      "assertions": [
+        "The research significance is connected to the preceding setup and results instead of appearing as an isolated final remark.",
+        "The output does not strengthen the evidence into a claim that the model definitively lacks a spatial representation.",
+        "The Japanese register remains appropriate for a research introduction.",
+        "No artificial rhetorical question or unsupported conflict is added."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Turn these notes into a readable tutorial section: first show the simplest working request, then explain the failure mode caused by retries, then show the idempotency-key fix. Keep it practical and do not make it sound dramatic.",
+      "expected_output": "The tutorial uses the real problem-and-resolution structure already present in the material and lets examples, explanation, and fix provide the rhythm naturally.",
+      "assertions": [
+        "The progression from working case to retry failure to idempotency fix is clear.",
+        "Examples and explanation serve distinct cognitive functions instead of being flattened into equivalent paragraphs.",
+        "The output does not manufacture suspense, surprise, or a rhetorical crisis.",
+        "The practical instructional tone is preserved."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Polish this API reference entry for POST /jobs. It needs a one-sentence summary, parameter table, response schema, error codes, and one example. Make it easy to scan.",
+      "expected_output": "The skill should not reshape the reference entry into continuous narrative prose or introduce cognitive-rhythm devices because the artifact is optimized for lookup and scanning.",
+      "assertions": [
+        "The reference-oriented structure is preserved.",
+        "The output does not add narrative questions, delayed resolutions, or essay-like transitions.",
+        "Scanability remains more important than continuous-reading rhythm."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "This essay already moves cleanly from a concrete scene to an interpretation, then to a counterexample, and finally to a narrower conclusion. Please improve the cognitive rhythm, but do not change anything unless it actually helps.",
+      "expected_output": "The revision is conservative when the existing progression already works; it does not add variation merely to demonstrate the technique.",
+      "assertions": [
+        "The output preserves an already effective progression unless a concrete issue is identified.",
+        "No fixed short-long-short sentence pattern is imposed.",
+        "No extra question, uncertainty, or contrast is invented solely for stylistic variety.",
+        "Meaning and voice remain stable."
+      ]
+    }
+  ]
+}
