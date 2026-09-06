@@ -18,7 +18,8 @@ Prefer the smallest conventional solution that satisfies the current requirement
 3. Delete, inline, or reuse code when doing so preserves the current contract. Do not create speculative extension points, configuration, wrappers, helpers, dependencies, or fallback paths for hypothetical future needs.
 4. For non-trivial generated code, or when the diff adds substantial logic, abstractions, helpers, dependencies, configuration, or indirection, run independent Adversarial and Fool reviews in fresh Pi subprocesses through `background_process`, preferably in parallel with `start_many`. Do not simulate these reviews in the parent context.
 5. Treat reviewers as critics, not implementers. They return findings only; the parent decides which findings are valid and performs any edits.
-6. Apply accepted findings, then run the repository's existing checks appropriate to the changed behavior. Simplification is incomplete if it breaks required behavior or leaves unjustified complexity.
+6. A reviewer counts as completed only after `background_process` reports a successful exit and the parent retrieves a non-empty final report from its stdout. `started`, `running`, process exit alone, or a stopped reviewer do not satisfy the review requirement. Wait for the automatic completion notification instead of polling; then use `check` once to acquire the report. If a reviewer exits without a usable report, rerun that review rather than claiming it completed.
+7. Apply accepted findings, then run the repository's existing checks appropriate to the changed behavior. Simplification is incomplete if it breaks required behavior or leaves unjustified complexity.
 
 ## Independent reviews
 
@@ -28,13 +29,13 @@ Give the reviewer the requested outcome, acceptance criteria, repository access,
 
 Ask it to assume every addition is unnecessary until a current requirement justifies it. It should look for opportunities to delete, inline, reuse, or replace code with existing repository mechanisms, standard-library functionality, platform primitives, or existing dependencies.
 
-It must not propose new features or architecture. It reports concrete findings and the requirement each challenged addition fails to justify.
+It must not propose new features or architecture. It reports concrete findings and the requirement each challenged addition fails to justify. Its final response must contain a report even when it finds nothing; in that case, state that no findings survived review.
 
 ### Fool review
 
 Give the reviewer repository access and the resulting diff, but do not provide the implementation discussion, discarded alternatives, or rationale that exists only in the parent's context.
 
-Ask it to review as a maintainer encountering the change without author context. It should flag code whose purpose depends on hidden assumptions, cleverness, unusual idioms, or knowledge that is not recoverable from the repository and diff.
+Ask it to review as a maintainer encountering the change without author context. It should flag code whose purpose depends on hidden assumptions, cleverness, unusual idioms, or knowledge that is not recoverable from the repository and diff. Its final response must contain a report even when it finds nothing; in that case, state that no findings survived review.
 
 A shorter implementation that is materially harder to understand is not simpler.
 
