@@ -130,11 +130,13 @@ export function registerDelegate(pi: ExtensionAPI): void {
     name: "delegate",
     label: "Delegate",
     description:
-      "Run a child Pi in an isolated git worktree and branch. Delegation is for self-contained work with explicit acceptance criteria; the parent remains responsible for verification and integration.",
+      "Run a child Pi in an isolated git worktree and branch. Delegation is for self-contained work with explicit acceptance criteria; the parent remains responsible for verification and integration. Worker completion is delivered automatically; do not poll status to wait for it.",
     promptGuidelines: [
       "Delegate only independently verifiable work. Keep unresolved architecture and product decisions with the parent.",
       "Each worker receives its own git worktree and branch; never share a mutating worktree between delegates.",
+      "After starting a delegate, continue independent work and do not poll status to wait for completion. The worker will notify the parent when it exits; use status only for explicit progress or output inspection.",
       "A finished child process is not completion evidence. Inspect its branch and verify before integration.",
+      "If isolated-worktree tooling is missing, follow applicable AGENTS.md and existing repository setup instructions, manifests, lockfiles, and scripts. Do not invent Pi-specific bootstrap configuration.",
       "Integrate accepted delegate output as one squashed change, then rerun verification in the parent worktree before committing.",
     ],
     parameters: Type.Union([
@@ -179,6 +181,8 @@ export function registerDelegate(pi: ExtensionAPI): void {
             ? `Acceptance:\n${acceptance.map((item) => `- ${item}`).join("\n")}`
             : "",
           "Work only in this worktree. Keep the implementation scoped to the task.",
+          "Read applicable AGENTS.md and existing repository setup instructions before changing code.",
+          "If required tooling or dependencies are unavailable because this isolated worktree lacks ignored or generated state, infer and run the repository's existing setup/install command from its instructions, manifests, lockfiles, and scripts. Do not add Pi-specific bootstrap files or change project configuration just to prepare the worktree.",
           "Run relevant verification. Commit coherent changes on the current branch before finishing.",
           "Report changed files, checks run, failures, and remaining risks in your final response.",
         ]
@@ -219,10 +223,26 @@ export function registerDelegate(pi: ExtensionAPI): void {
         };
         await saveDelegate(paths.metadata, metadata);
         child.on("exit", async (code, signal) => {
+          if (metadata.status === "stopped") return;
           metadata.status = "finished";
           metadata.exitCode = code;
           metadata.exitSignal = signal;
           await saveDelegate(paths.metadata, metadata).catch(() => undefined);
+          pi.sendMessage(
+            {
+              customType: "delegate-completion",
+              content: [
+                `[delegate] ${metadata.id} finished`,
+                `Task: ${metadata.task}`,
+                `Branch: ${metadata.branch}`,
+                `Exit: ${code === null ? signal ?? "unknown" : code}`,
+                "Completion received. Continue the pending task; inspect the delegate branch and verify before integration. Do not poll status unless progress or output is explicitly needed.",
+              ].join("\n"),
+              display: true,
+              details: metadata,
+            },
+            { triggerTurn: true, deliverAs: "followUp" },
+          );
         });
         child.unref();
         await stdoutHandle.close();
