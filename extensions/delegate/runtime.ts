@@ -222,8 +222,10 @@ export function registerDelegate(pi: ExtensionAPI): void {
           updatedAt: now,
         };
         await saveDelegate(paths.metadata, metadata);
-        child.on("exit", async (code, signal) => {
-          if (metadata.status === "stopped") return;
+        let completionHandled = false;
+        const handleCompletion = async (code: number | null, signal: NodeJS.Signals | null) => {
+          if (completionHandled || metadata.status === "stopped") return;
+          completionHandled = true;
           metadata.status = "finished";
           metadata.exitCode = code;
           metadata.exitSignal = signal;
@@ -243,7 +245,11 @@ export function registerDelegate(pi: ExtensionAPI): void {
             },
             { triggerTurn: true, deliverAs: "followUp" },
           );
-        });
+        };
+        child.once("exit", handleCompletion);
+        if (child.exitCode !== null || child.signalCode !== null) {
+          await handleCompletion(child.exitCode, child.signalCode);
+        }
         child.unref();
         await stdoutHandle.close();
         await stderrHandle.close();
