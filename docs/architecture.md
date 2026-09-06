@@ -49,4 +49,4 @@ Stable behavior belongs in tools and runtime state. `AGENTS.md` therefore contai
 
 `session-metrics` reconstructs runtime behavior from Pi session JSONL without active instrumentation. In addition to generic tool/action metrics, it records the `context`, `code`, `task`, `delegate`, and `verify` surfaces and verification provenance so harness changes can be compared against historical trajectories.
 
-The package manifest is the authoritative capability boundary. There is no compatibility layer for the removed planning, committee, or standalone retrieval/editing tools.
+The package manifest is the authoritative capability boundary.
