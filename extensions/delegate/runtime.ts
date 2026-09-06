@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rm, rmdir, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -98,6 +98,33 @@ async function tail(path: string, maximum = 8_000): Promise<string> {
   }
 }
 
+async function removeWorktree(metadata: DelegateMetadata): Promise<boolean> {
+  try {
+    await git(metadata.repoRoot, ["worktree", "remove", "--force", metadata.worktree]);
+    return false;
+  } catch (removeError) {
+    await rm(metadata.worktree, { recursive: true, force: true });
+    await git(metadata.repoRoot, ["worktree", "prune"]);
+    const listed = await git(metadata.repoRoot, ["worktree", "list", "--porcelain"]);
+    if (listed.split("\n").some((line) => line === `worktree ${metadata.worktree}`)) {
+      throw removeError;
+    }
+    return true;
+  }
+}
+
+async function removeEmptyParents(path: string, levels: number): Promise<void> {
+  let current = dirname(path);
+  for (let index = 0; index < levels; index += 1) {
+    try {
+      await rmdir(current);
+    } catch {
+      return;
+    }
+    current = dirname(current);
+  }
+}
+
 export function registerDelegate(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "delegate",
@@ -108,6 +135,7 @@ export function registerDelegate(pi: ExtensionAPI): void {
       "Delegate only independently verifiable work. Keep unresolved architecture and product decisions with the parent.",
       "Each worker receives its own git worktree and branch; never share a mutating worktree between delegates.",
       "A finished child process is not completion evidence. Inspect its branch and verify before integration.",
+      "Integrate accepted delegate output as one squashed change, then rerun verification in the parent worktree before committing.",
     ],
     parameters: Type.Union([
       Type.Object({
@@ -118,6 +146,7 @@ export function registerDelegate(pi: ExtensionAPI): void {
       }),
       Type.Object({ action: Type.Literal("status"), id: Type.String({ minLength: 1 }) }),
       Type.Object({ action: Type.Literal("stop"), id: Type.String({ minLength: 1 }) }),
+      Type.Object({ action: Type.Literal("integrate"), id: Type.String({ minLength: 1 }) }),
       Type.Object({
         action: Type.Literal("cleanup"),
         id: Type.String({ minLength: 1 }),
@@ -216,14 +245,66 @@ export function registerDelegate(pi: ExtensionAPI): void {
         return jsonResult(metadata);
       }
 
+      if (params.action === "integrate") {
+        if (alive) throw new Error("Delegate is still running; wait or stop it before integration.");
+        if (metadata.status !== "finished") {
+          throw new Error(`Delegate is ${metadata.status}; only finished delegates can be integrated.`);
+        }
+        const delegateStatus = await git(metadata.worktree, ["status", "--porcelain"]);
+        if (delegateStatus) {
+          throw new Error("Delegate worktree has uncommitted changes; commit them before integration.");
+        }
+        const parentStatus = await git(repository.root, ["status", "--porcelain"]);
+        if (parentStatus) {
+          throw new Error(
+            "Parent worktree must be clean before delegate integration so the squashed change stays isolated.",
+          );
+        }
+        try {
+          await git(repository.root, ["merge", "--squash", metadata.branch]);
+        } catch (error) {
+          await git(repository.root, ["reset", "--hard", "HEAD"]).catch(() => "");
+          throw error;
+        }
+        const staged = await git(repository.root, ["diff", "--cached", "--name-status"]);
+        if (!staged) {
+          throw new Error("Delegate has no new changes to integrate against the current parent HEAD.");
+        }
+        return jsonResult({
+          integrated: metadata.id,
+          branch: metadata.branch,
+          staged,
+          commitCreated: false,
+          next: "Run parent verification, commit the staged squashed change, then cleanup the delegate.",
+        });
+      }
+
       if (params.action === "cleanup") {
         if (alive) throw new Error("Delegate is still running; stop it before cleanup.");
-        await git(metadata.repoRoot, ["worktree", "remove", "--force", metadata.worktree]);
-        if (params.deleteBranch) await git(metadata.repoRoot, ["branch", "-D", metadata.branch]);
+        const recoveredStaleWorktree = await removeWorktree(metadata);
+        let branchDeleted = false;
+        if (params.deleteBranch) {
+          const branch = await git(metadata.repoRoot, ["branch", "--list", metadata.branch]);
+          if (branch) {
+            await git(metadata.repoRoot, ["branch", "-D", metadata.branch]);
+            branchDeleted = true;
+          }
+        }
+        await Promise.all([
+          rm(paths.metadata, { force: true }),
+          rm(metadata.stdoutPath, { force: true }),
+          rm(metadata.stderrPath, { force: true }),
+        ]);
+        await Promise.all([
+          removeEmptyParents(metadata.worktree, 2),
+          removeEmptyParents(paths.metadata, 2),
+        ]);
         return jsonResult({
           cleaned: metadata.id,
           branch: metadata.branch,
-          branchDeleted: params.deleteBranch ?? false,
+          branchDeleted,
+          recoveredStaleWorktree,
+          artifactsRemoved: true,
         });
       }
 

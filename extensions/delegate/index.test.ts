@@ -16,5 +16,8 @@ test("registers one isolated delegation tool", () => {
   const actions = variants
     .map((variant: any) => variant.properties?.action?.const)
     .filter((value: unknown) => typeof value === "string");
-  assert.deepEqual(new Set(actions), new Set(["start", "status", "stop", "cleanup"]));
+  assert.deepEqual(
+    new Set(actions),
+    new Set(["start", "status", "stop", "integrate", "cleanup"]),
+  );
 });
