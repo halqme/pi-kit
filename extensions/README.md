@@ -13,8 +13,4 @@ Pi Kitのextensionは、モデルに見せる境界を少なく保ちます。
 - `background_process`
 - `browser_inspector`
 - `session_metrics`
-- `statusline`
-- `suggest_reload`
 - `terminal`
-
-過去のplan/planner/runner/loop/grill、committee agent、standalone lexical/structural toolは互換surfaceとして保持しません。
