@@ -33,6 +33,7 @@
       "./extensions/repository/index.ts",
       "./extensions/task/index.ts",
       "./extensions/delegate/index.ts",
+      "./extensions/ask/index.ts",
       "./extensions/background-process/index.ts",
       "./extensions/browser-inspector/index.ts",
       "./extensions/session-metrics/index.ts",

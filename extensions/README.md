@@ -10,6 +10,7 @@ Pi Kitのextensionは、モデルに見せる境界を少なく保ちます。
 
 汎用utility:
 
+- `ask`
 - `background_process`
 - `browser_inspector`
 - `session_metrics`

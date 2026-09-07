@@ -24,6 +24,7 @@ The arrows describe common evidence and authority flow. They are not prerequisit
 
 ```text
 extensions/
+  ask/
   background-process/
   browser-inspector/
   delegate/
@@ -45,6 +46,6 @@ Every runtime workspace now lives under `extensions/`; there is no separate `pac
 
 The repository extension exposes only `context` and `code`. The old standalone Astrolabe and BM25 tool surfaces are gone; their useful structural and lexical mechanisms are internal implementation details under `src/syntax` and `src/context`.
 
-Additional independent utilities remain available through the extensions listed above. Offline session analysis is provided by the `session-metrics` CLI in `extensions/session-metrics`.
+Additional independent utilities remain available through the extensions listed above. `ask` provides synchronous structured user decisions in the interactive TUI; offline session analysis is provided by the `session-metrics` CLI in `extensions/session-metrics`.
 
 See [`docs/architecture.md`](docs/architecture.md) for the design rationale and runtime contracts.
