@@ -60,6 +60,28 @@
         "The response does not invent previous behavior, rejected alternatives, or correction history.",
         "The result remains concise and appropriate for a code comment."
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "architecture documentation を更新して。最初は Redis を使う案でかなり詳しく議論し、その後 Kafka に変更して数段落検討し、さらに NATS に変えたが、最終的には外部 broker を使わず process-local queue で worker 間の処理を直列化する設計になった。queue はプロセス終了時に破棄され、永続化はしない。現在の構成を説明する短い節を書いて。",
+      "expected_output": "The final section describes the process-local queue, serialization behavior, process-local lifetime, and lack of persistence without carrying Redis, Kafka, or NATS into the artifact as correction residue.",
+      "assertions": [
+        "The output accurately describes the process-local queue as the current mechanism.",
+        "The output preserves the current-state details that processing is serialized and the queue is not persisted across process termination.",
+        "The output does not mention Redis, Kafka, or NATS solely because they appeared in the correction history.",
+        "The output does not use unnecessary contrastive correction framing such as 'rather than', 'instead of', or 'no longer' to describe discarded architectures."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "migration note を書いて。初期案では `retryCount` を削除する予定だったが、その案は撤回した。現在の v3 では `retryCount` は残り、既定値だけ 3 から 5 に変わる。また、v2 で追加された `retryDelayMs` は v3 でもそのまま使える。利用者が移行時に知る必要がある変更だけを説明して。",
+      "expected_output": "The migration note retains the v2-to-v3 default-value change because it matters to users, preserves retryDelayMs continuity where useful, and omits the abandoned plan to remove retryCount because that proposal is not part of the released migration history.",
+      "assertions": [
+        "The output states that retryCount remains available in v3 and that its default changes from 3 to 5.",
+        "The output does not present the abandoned plan to remove retryCount as part of the migration history.",
+        "The output preserves the relevant fact that retryDelayMs remains usable when that helps the migration note.",
+        "The output distinguishes reader-relevant historical change from incidental correction history."
+      ]
     }
   ]
 }
