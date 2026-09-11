@@ -5,29 +5,29 @@ description: Use this skill when revising persistent artifacts after factual cor
 
 # Apply Correction
 
-Treat correction history as reasoning input and the artifact as a description of the resulting state. Resolve the correction fully, then render from the resolved state rather than from the correction dialogue.
+Treat correction history as reasoning input and the materialized current state as the semantic authority for the artifact. Resolve what is true now, then render from that state rather than asking the renderer to suppress obsolete content from the correction dialogue.
 
 ## Workflow
 
-1. **Resolve in scratch space.** Before editing the artifact, explicitly work through the correction, rejected interpretation, or superseded wording. This scratch output may use direct contrast and may name discarded content as often as needed. Its purpose is to finish the correction process, not to provide reusable prose.
-2. **Materialize the current state.** Convert the resolution into a compact authoritative representation of what is true now: facts, behavior, interfaces, invariants, requirements, relationships, or intended wording. Represent the resulting state rather than summarizing the conversation that produced it.
-3. **Cross a context boundary when possible.** Render the artifact in a fresh model call, child agent, or equivalent isolated context. Pass the authoritative current state, the minimum source context needed to place the edit, and the artifact's purpose and style. Keep the scratch correction discussion on the reasoning side of the boundary.
-4. **Render the affected artifact from the current state.** Write for a reader encountering the present system or fact directly. For comments, describe current behavior, intent, invariants, or useful rationale. For documentation and prose, state the resulting facts and relationships. Preserve unrelated surrounding material when editing an existing artifact.
+1. **Resolve the current state.** Determine the facts, behavior, interfaces, invariants, requirements, relationships, or intended wording that are authoritative now. When rendering will remain in the same model context, avoid restating discarded values more than necessary to resolve the correction. If an already-available isolated context will be used for rendering, scratch resolution may be more explicit because that scratch history will not cross the boundary.
+2. **Materialize an authoritative state.** Convert the resolution into the smallest representation that preserves the semantics needed by the artifact. Represent the resulting state, not the conversation that produced it. Use a fact set, interface contract, behavior table, compact object, or other structured form when that reduces accidental carry-over.
+3. **Switch generation authority.** Treat the materialized state as the semantic source of truth for the affected artifact. The correction dialogue may remain available as reasoning history, but it is no longer authoritative for generation. If the harness already provides a fresh model call, child agent, or equivalent isolated context, pass the materialized state plus only the source context needed to place the edit; isolation strengthens the boundary but is not required for the Skill to work.
+4. **Render the artifact from the current state.** Write for a reader encountering the present system or fact directly. For comments, describe current behavior, intent, invariants, or useful rationale. For documentation and prose, state the resulting facts and relationships. Preserve unrelated surrounding material when editing an existing artifact.
 5. **Review for correction residue.** Read the result as a reader who never saw the correction. Any remaining contrast, rejected alternative, previous interpretation, or conversational aside must contribute information that the artifact itself needs. When it exists only because of the editing history, reconstruct that passage from the authoritative current state and review again.
 
 ## Materializing current state
 
-Treat the correction history like an event log and the authoritative state like its materialized view. The renderer needs the materialized view; the event log belongs to the correction phase.
-
-Prefer structured state when it reduces accidental carry-over. Use the smallest representation that preserves the semantics needed for the artifact, for example a set of facts, an interface contract, a behavior table, or a compact object.
+Treat the correction history like an event log and the authoritative state like a materialized view. The event log explains how the current state was reached; the artifact should normally be generated from the materialized view.
 
 A useful test is: **would this representation make complete sense to someone who never saw the correction?** If so, it is suitable renderer input.
 
-## Context boundary
+Do not over-compress the state. Preserve rationale, uncertainty, constraints, and other nuance when they are required to render the artifact faithfully. The goal is to remove obsolete authority, not useful semantics.
 
-A genuine fresh context is the default when the harness supports it because it removes discarded wording from the renderer's immediate generation context.
+## Same-context and isolated rendering
 
-When isolation is unavailable, first write the authoritative current state as a distinct scratch result. Then rewrite the affected artifact region using that state as the semantic source and perform the residue review as a separate pass.
+Same-context rendering is a normal supported path. In that path, keep discarded content minimally stated during resolution, make the authoritative state explicit, then render from it and perform the residue review.
+
+When an isolated renderer is already available, use it to strengthen the separation: resolve the correction, materialize the current state, cross the boundary, then render from only that state and the minimum source context. Do not require new runtime machinery solely for this Skill.
 
 ## History-sensitive artifacts
 
@@ -42,4 +42,5 @@ Finish when all of the following hold:
 - The artifact agrees with the authoritative current state.
 - A reader can understand the affected passage without access to the correction conversation.
 - Remaining historical or contrastive language serves the artifact's subject.
-- The final wording would remain materially the same if the scratch correction dialogue were discarded before rendering.
+- The renderer relies on the materialized current state rather than obsolete conversational state.
+- Meaningful rationale, uncertainty, constraints, and terminology needed by the artifact are preserved.
