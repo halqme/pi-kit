@@ -43,6 +43,7 @@
     "skills": [
       "./skills/apply-correction",
       "./skills/cognitive-rhythm-writing",
+      "./skills/consistency-review",
       "./skills/diagnose-problem",
       "./skills/git-workflow",
       "./skills/implement-change",
