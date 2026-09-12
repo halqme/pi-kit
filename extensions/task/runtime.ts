@@ -2,12 +2,21 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import { jsonResult } from "./shared.ts";
-
-const TASK_ENTRY = "task-state";
-const VERIFY_ENTRY = "verification-evidence";
+import {
+  captureWorkspaceBaseline,
+  registerTaskResourceTracking,
+  taskReviewResources,
+  WORKSPACE_ENTRY,
+} from "./resources.ts";
+import {
+  customEntries,
+  jsonResult,
+  latestCustom,
+  TASK_ENTRY,
+  VERIFY_ENTRY,
+} from "./shared.ts";
 
 const runnableProvenance = new Set<Provenance>([
   "existing_test",
@@ -84,23 +93,6 @@ interface VerificationEvidence {
   summary: string;
   detail?: string;
   at: string;
-}
-
-function latestCustom<T>(ctx: ExtensionContext, customType: string): T | undefined {
-  for (const candidate of [...ctx.sessionManager.getEntries()].reverse()) {
-    if (!candidate || typeof candidate !== "object") continue;
-    const entry = candidate as { type?: unknown; customType?: unknown; data?: unknown };
-    if (entry.type === "custom" && entry.customType === customType) return entry.data as T;
-  }
-  return undefined;
-}
-
-function customEntries<T>(ctx: ExtensionContext, customType: string): T[] {
-  return ctx.sessionManager.getEntries().flatMap((candidate) => {
-    if (!candidate || typeof candidate !== "object") return [];
-    const entry = candidate as { type?: unknown; customType?: unknown; data?: unknown };
-    return entry.type === "custom" && entry.customType === customType ? [entry.data as T] : [];
-  });
 }
 
 function isStrongEvidence(evidence: VerificationEvidence): boolean {
@@ -233,14 +225,17 @@ export function registerVerification(pi: ExtensionAPI): void {
 }
 
 export function registerTask(pi: ExtensionAPI): void {
+  registerTaskResourceTracking(pi);
+
   pi.registerTool({
     name: "task",
     label: "Task",
     description:
-      "Maintain one adaptive task as goal, disposable plan, observations, checkpoints, blockers, and evidence-backed completion. Planning is optional and revisable; completion requires a successful check executed through verify.run.",
+      "Maintain one adaptive task as goal, disposable plan, observations, checkpoints, blockers, resource provenance, and evidence-backed completion. Planning is optional and revisable; completion requires a successful check executed through verify.run.",
     promptGuidelines: [
       "Ground the repository before committing to a detailed plan; plans are hypotheses and may be replaced as observations change.",
       "Use checkpoint when the current plan or understanding materially changes, not after every tool call.",
+      "Use review_context to hand an independent consistency reviewer a compact task, resource-provenance, workspace-delta, and verification packet. Resource history records what was observed or mutated; it does not prove related artifacts are consistent.",
       "Do not finish solely because planned steps were executed. Compare the requested outcome with the workspace and executed verification evidence.",
     ],
     parameters: Type.Union([
@@ -259,6 +254,7 @@ export function registerTask(pi: ExtensionAPI): void {
       Type.Object({ action: Type.Literal("block"), reason: Type.String({ minLength: 1 }) }),
       Type.Object({ action: Type.Literal("resume"), summary: Type.Optional(Type.String()) }),
       Type.Object({ action: Type.Literal("status") }),
+      Type.Object({ action: Type.Literal("review_context") }),
       Type.Object({ action: Type.Literal("finish"), summary: Type.String({ minLength: 1 }) }),
       Type.Object({ action: Type.Literal("stop"), reason: Type.String({ minLength: 1 }) }),
     ]),
@@ -284,10 +280,33 @@ export function registerTask(pi: ExtensionAPI): void {
           updatedAt: now,
         };
         pi.appendEntry(TASK_ENTRY, state);
+        const baseline = await captureWorkspaceBaseline(ctx.cwd, state.id).catch(() => undefined);
+        if (baseline) pi.appendEntry(WORKSPACE_ENTRY, baseline);
         return jsonResult(state);
       }
 
       if (!current) throw new Error("No task state. Start a task first.");
+
+      if (params.action === "review_context") {
+        const evidence = customEntries<VerificationEvidence>(ctx, VERIFY_ENTRY).filter(
+          (item) => item.taskId === current.id,
+        );
+        const resources = await taskReviewResources(ctx, current.id);
+        const latestCheckpoint = current.checkpoints.at(-1);
+        return jsonResult({
+          task: {
+            id: current.id,
+            goal: current.goal,
+            acceptance: current.acceptance,
+            status: current.status,
+            ...(latestCheckpoint ? { latestCheckpoint } : {}),
+            ...(current.blocker ? { blocker: current.blocker } : {}),
+          },
+          resources,
+          verification: evidence,
+        });
+      }
+
       const state: TaskState = { ...current, checkpoints: [...current.checkpoints] };
       const now = new Date().toISOString();
 
