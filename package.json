@@ -36,6 +36,7 @@
       "./extensions/ask/index.ts",
       "./extensions/background-process/index.ts",
       "./extensions/browser-inspector/index.ts",
+      "./extensions/macos-talk/index.ts",
       "./extensions/session-metrics/index.ts",
       "./extensions/terminal/index.ts"
     ],

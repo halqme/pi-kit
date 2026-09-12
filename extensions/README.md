@@ -13,5 +13,6 @@ Pi Kitのextensionは、モデルに見せる境界を少なく保ちます。
 - `ask`
 - `background_process`
 - `browser_inspector`
+- `macos_talk` — AppleScript/JXAを`osascript`へ直接渡すmacOS automation boundary。foregroundを必要以上に奪わないscriptを優先する。
 - `session_metrics`
 - `terminal`

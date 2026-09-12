@@ -57,6 +57,18 @@
         "typescript": "catalog:",
       },
     },
+    "extensions/macos-talk": {
+      "name": "@halqme/macos-talk",
+      "dependencies": {
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "extensions/repository": {
       "name": "@halqme/repository",
       "dependencies": {
@@ -199,6 +211,8 @@
     "@halqme/browser-inspector": ["@halqme/browser-inspector@workspace:extensions/browser-inspector"],
 
     "@halqme/delegate": ["@halqme/delegate@workspace:extensions/delegate"],
+
+    "@halqme/macos-talk": ["@halqme/macos-talk@workspace:extensions/macos-talk"],
 
     "@halqme/repository": ["@halqme/repository@workspace:extensions/repository"],
 
