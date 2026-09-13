@@ -146,7 +146,7 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
       "Mutate supported existing source through the repository structural engine. edit accepts either a structural continuation for a complete node replacement or path/oldText/newText for one exact unique target; rename uses language-server workspace edits.",
     promptGuidelines: [
       "Prefer code for supported existing source mutations. If context already produced a continuation, pass it unchanged for the stronger structural edit path. Otherwise use path/oldText/newText when the intended exact text occurs once; do not call context solely to qualify for code.",
-      "Use ordinary file editing for new files, generated/configuration files, and unsupported languages.",
+      "Use ordinary file editing for new files and unsupported languages; supported source, including configuration or generated source, follows the extension-based structural route.",
       "After mutation, run executable checks through verify.run before task.finish.",
     ],
     parameters: Type.Union([
