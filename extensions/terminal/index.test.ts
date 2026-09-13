@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import extension, {
   appendedWatchOutput,
   parseExitCode,
+  promptSetupCommand,
   runTerminalPollForTests,
   setTerminalRuntimeForTests,
 } from "./index.ts";
@@ -21,6 +22,14 @@ test("unknown and out-of-range exit codes become null", () => {
   assert.equal(parseExitCode("255"), 255);
   assert.equal(parseExitCode("256"), null);
   assert.equal(parseExitCode("unknown"), null);
+});
+
+test("zsh prompt setup clears prompt hooks and pane history", () => {
+  const command = promptSetupCommand("/bin/zsh", "pi-terminal-test");
+  assert.match(command, /PROMPT='' PS1='' RPROMPT='' RPS1=''/);
+  assert.match(command, /precmd_functions=\(\)/);
+  assert.match(command, /unfunction precmd/);
+  assert.match(command, /tmux clear-history -t 'pi-terminal-test'/);
 });
 
 test("public tool reports busy and unknown terminals and rolls back failed create", async () => {
@@ -79,6 +88,10 @@ test("public tool reports busy and unknown terminals and rolls back failed creat
     ctx,
   );
   assert.equal(created.details.status, "started");
+  const newSessionIndex = tmuxCalls.findIndex((call) => call[0] === "new-session");
+  assert.match(tmuxCalls[newSessionIndex + 1]?.[4] ?? "", /tmux clear-history/);
+  assert.deepEqual(tmuxCalls[newSessionIndex + 2], ["send-keys", "-t", created.details.session, "Enter"]);
+  assert.equal(tmuxCalls[newSessionIndex + 3]?.[4], "sh");
   const keyResult = await registered.execute(
     "keys",
     { action: "send", name: "x", keys: ["Tab", "C-l", "Left", "Right"] },

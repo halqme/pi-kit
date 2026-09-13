@@ -71,6 +71,21 @@ async function tmux(args: string[]): Promise<string> {
   return runtime.tmux(args);
 }
 
+export function promptSetupCommand(shell: string | undefined, session: string): string {
+  const shellName = shell?.split("/").at(-1)?.toLowerCase();
+  const clearPane = `tmux clear-history -t '${session}' >/dev/null 2>&1; printf '\\033[H\\033[2J\\033[3J'`;
+  if (shellName === "zsh") {
+    return `PROMPT='' PS1='' RPROMPT='' RPS1='' PS2='' RPS2='' PROMPT_EOL_MARK=''; precmd_functions=(); unfunction precmd >/dev/null 2>&1; ${clearPane}`;
+  }
+  if (shellName === "bash") {
+    return `PS1='' PS2='' PS4=''; unset PROMPT_COMMAND; ${clearPane}`;
+  }
+  if (shellName === "fish") {
+    return `functions -e fish_prompt; functions -e fish_right_prompt; ${clearPane}`;
+  }
+  return `PS1=''; PS2=''; export PS1 PS2; ${clearPane}`;
+}
+
 export function appendedWatchOutput(previous: string, current: string): string | undefined {
   if (!current.startsWith(previous)) return undefined;
   return current.slice(previous.length);
@@ -511,6 +526,14 @@ export default function terminalExtension(pi: ExtensionAPI): void {
           try {
             await tmux(["new-session", "-d", "-s", session, "-c", params.cwd ?? ctx.cwd]);
             sessionCreated = true;
+            await tmux([
+              "send-keys",
+              "-t",
+              session,
+              "-l",
+              promptSetupCommand(process.env.SHELL, session),
+            ]);
+            await tmux(["send-keys", "-t", session, "Enter"]);
             await tmux(["send-keys", "-t", session, "-l", params.command]);
             await tmux(["send-keys", "-t", session, "Enter"]);
           } catch (error) {
