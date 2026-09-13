@@ -6,7 +6,7 @@ description: Implement, modify, refactor, or remove project artifacts. Use for n
 # Implement a Change
 
 1. Establish the requested outcome and observable acceptance criteria. For non-trivial work, start `task`; do not invent a detailed plan before repository evidence exists.
-2. Acquire only the context needed to identify the relevant boundary. Use `context.find` when the location is unknown, then structural `context` actions for concrete source targets. Expand retrieval only when the current evidence is insufficient.
+2. Acquire only the context needed to identify the relevant boundary. Use `context.find` when the location is unknown, then structural `context` actions for concrete source targets. Expand retrieval only when the current evidence is insufficient. Prefer one targeted observation over repeated broad reads, batch independent observations with `multi_tool_use.parallel`, constrain output, and diagnose tool errors before retrying.
 3. Keep the current plan disposable. Record a `task.checkpoint` when new evidence changes the intended implementation, not after every tool call.
 4. Apply the smallest coherent mutation. For supported existing source, prefer `code`: reuse a continuation when `context` already produced one, otherwise use the exact path/text edit form when it identifies one unique change. Do not call `context` only to make `code` available. Use ordinary file editing for new files, configuration, generated content, and unsupported languages.
 5. Use `delegate` only for a self-contained workstream with independent acceptance criteria. The child works in an isolated worktree and branch. Its report or process exit is not proof of correctness; inspect and verify the branch before integration.
