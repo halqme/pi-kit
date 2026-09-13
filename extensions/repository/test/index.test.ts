@@ -38,7 +38,7 @@ test("exposes repository capabilities and keeps code reachable without context",
 
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    ["context", "code"],
+    ["context", "code", "edit"],
   );
   assert.equal(
     tools.some((tool) => tool.name === "astrolabe"),
@@ -51,8 +51,10 @@ test("exposes repository capabilities and keeps code reachable without context",
 
   const context = tools.find((tool) => tool.name === "context");
   const code = tools.find((tool) => tool.name === "code");
+  const edit = tools.find((tool) => tool.name === "edit");
   assert.ok(context);
   assert.ok(code);
+  assert.ok(edit);
 
   const dir = await mkdtemp(join(tmpdir(), "repository-surface-"));
   await writeFile(join(dir, "sample.ts"), "export const answer = 1;\n", "utf8");
@@ -94,6 +96,52 @@ test("exposes repository capabilities and keeps code reachable without context",
   assert.equal(mutation.data?.mode, "text");
   assert.equal(mutation.data?.targetType, "variable_declarator");
   assert.equal(await readFile(join(dir, "sample.ts"), "utf8"), "export const answer = 2;\n");
+
+  for (const handler of shutdown) await handler();
+});
+
+test("the public edit path validates supported source and falls back for other files", async () => {
+  const { tools, shutdown } = setupRepositoryTools();
+  const edit = tools.find((tool) => tool.name === "edit");
+  assert.ok(edit);
+
+  const dir = await mkdtemp(join(tmpdir(), "repository-edit-"));
+  const sourcePath = join(dir, "sample.ts");
+  const notesPath = join(dir, "notes.md");
+  await writeFile(sourcePath, "export const answer = 1;\n", "utf8");
+  await writeFile(notesPath, "before\n", "utf8");
+  const signal = new AbortController().signal;
+
+  const edited = await edit.execute(
+    "edit-supported",
+    { path: "sample.ts", edits: [{ oldText: "answer = 1", newText: "answer = 2" }] },
+    signal,
+    undefined,
+    { cwd: dir },
+  );
+  assert.match(edited.content[0]?.text ?? "", /syntax validated/);
+  assert.equal(await readFile(sourcePath, "utf8"), "export const answer = 2;\n");
+
+  await assert.rejects(() =>
+    edit.execute(
+      "edit-invalid-syntax",
+      { path: "sample.ts", edits: [{ oldText: "answer = 2", newText: "answer =" }] },
+      signal,
+      undefined,
+      { cwd: dir },
+    ),
+  );
+  assert.equal(await readFile(sourcePath, "utf8"), "export const answer = 2;\n");
+
+  const fallback = await edit.execute(
+    "edit-config",
+    { path: "notes.md", edits: [{ oldText: "before", newText: "after" }] },
+    signal,
+    undefined,
+    { cwd: dir },
+  );
+  assert.match(fallback.content[0]?.text ?? "", /Successfully replaced/);
+  assert.equal(await readFile(notesPath, "utf8"), "after\n");
 
   for (const handler of shutdown) await handler();
 });

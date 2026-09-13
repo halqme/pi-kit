@@ -14,6 +14,7 @@ user goal ────────────> task ─────> verify ─
 
 - `context` acquires repository evidence through lexical and structural retrieval.
 - `code` performs validated mutation of supported existing source. A structural continuation is the strongest target when `context` already produced one; an exact unique text target can enter the same structural mutation engine directly.
+- The repository extension also routes single built-in `edit` replacements in supported source through that validator automatically, without requiring prompt or `AGENTS.md` instructions.
 - `task` keeps lightweight goal, checkpoint, blocker, and completion state.
 - `verify` distinguishes executed checks from reported evidence; only executed strong checks can unlock completion.
 - `delegate` runs independent child Pi work in isolated Git worktrees and branches.

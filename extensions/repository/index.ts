@@ -1,9 +1,13 @@
 import { StringEnum, Type } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  createEditToolDefinition,
+  type EditToolInput,
+  type ExtensionAPI,
+} from "@earendil-works/pi-coding-agent";
 
 import installStructuralEngine from "./src/syntax/engine.ts";
 import installLexicalEngine from "./src/context/lexical.ts";
-import { supportedLanguageIds } from "./src/syntax/language-profile.ts";
+import { adapterForPath, supportedLanguageIds } from "./src/syntax/language-profile.ts";
 import type { TextToolResult } from "./src/shared.ts";
 
 type CapturedTool = {
@@ -41,9 +45,34 @@ function captureTool(pi: ExtensionAPI, installer: Installer, expectedName: strin
   return captured;
 }
 
+function normalizePath(path: string): string {
+  return path.startsWith("@") ? path.slice(1) : path;
+}
+
+function structuralEditRequest(params: EditToolInput) {
+  if (params.edits.length !== 1 || !adapterForPath(normalizePath(params.path))) return undefined;
+  const edit = params.edits[0];
+  if (!edit) return undefined;
+  return {
+    action: "edit" as const,
+    path: params.path,
+    oldText: edit.oldText,
+    newText: edit.newText,
+  };
+}
+
 export default function repositoryExtension(pi: ExtensionAPI): void {
   const structural = captureTool(pi, installStructuralEngine, "astrolabe");
   const lexical = captureTool(pi, installLexicalEngine, "bm25_search");
+  const fallbackEdit = createEditToolDefinition("");
+  const fallbackEdits = new Map<string, typeof fallbackEdit>([["", fallbackEdit]]);
+  const fallbackEditFor = (cwd: string) => {
+    const existing = fallbackEdits.get(cwd);
+    if (existing) return existing;
+    const created = createEditToolDefinition(cwd);
+    fallbackEdits.set(cwd, created);
+    return created;
+  };
   const continuationSchema = Type.Object({ token: Type.String() });
 
   pi.registerTool({
@@ -140,6 +169,30 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
     ]),
     async execute(id, params, signal, update, ctx) {
       return structural.execute(id, params, signal, update, ctx);
+    },
+  });
+
+  pi.registerTool({
+    ...fallbackEdit,
+    description:
+      "Edit a file with exact replacements. Single replacements in supported source files are syntax-validated automatically; unsupported files and multi-edit calls use the standard editor.",
+    promptGuidelines: [
+      "Use edit for exact replacements; single edits in supported source files are validated against the syntax tree automatically.",
+      "Use code when a structural continuation or semantic rename is available.",
+    ],
+    async execute(id, params, signal, update, ctx) {
+      const request = structuralEditRequest(params);
+      if (!request) return fallbackEditFor(ctx.cwd).execute(id, params, signal, update, ctx);
+      await structural.execute(id, request, signal, update, ctx);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Successfully replaced 1 block in ${params.path}; syntax validated.`,
+          },
+        ],
+        details: { diff: "", patch: "" },
+      };
     },
   });
 }
