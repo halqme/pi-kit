@@ -4,4 +4,4 @@ set -eu
 repository_root=$(git rev-parse --show-toplevel)
 
 bun run format:check
-bun run check
+bun run lint
