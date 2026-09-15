@@ -1,6 +1,6 @@
 ---
 name: write-commit-message
-description: Use this skill when drafting, choosing, or revising a Git commit message from a concrete change, diff, or already-resolved commit scope. Render commit-specific what and why in the repository's established style; use place-knowledges first when deciding where knowledge belongs, and Git workflow guidance for operations. Do not use it for staging, committing, pushing, splitting changes, release notes, changelogs, or pull-request descriptions.
+description: Use this skill when drafting, choosing, or revising a Git commit message from a concrete, coherent change and its resolved scope. Express the commit-specific what and why in the repository's established style. Do not use it to decide where project knowledge should live, edit repository artifacts, or perform Git operations.
 ---
 
 # Write a Commit Message
@@ -11,24 +11,17 @@ conversation.
 ## Contract
 
 - **Input:** the exact logical change being committed and, when available, its
-  diff, nearby commit history, and a placement decision from `place-knowledges`.
+  diff, nearby commit history, and resolved decisions about what belongs in the
+  message.
 - **Output:** one commit message with a subject and an optional body. Return
   only the message unless the user asks for explanation or alternatives.
 - **Boundary:** describe the actual commit, not the whole task or pull
-  request. Do not decide where knowledge belongs, stage files, commit, push,
-  or decide how to split changes.
+  request. Do not decide where project knowledge belongs, edit artifacts, stage
+  files, commit, push, or decide how to split changes.
 - **Failure:** if the change or commit scope is missing, ambiguous, or mixes
-  unrelated concerns, do not invent a message. Ask for the missing scope or
-  flag that the changes should be separated first. If artifact placement is
-  unresolved, hand that question to `place-knowledges` first.
-
-## Responsibility boundary
-
-`place-knowledges` allocates facts and rationale across artifacts. This skill
-renders only the commit-specific subject and optional body after that decision
-is made. If both skills apply, resolve placement first and pass through only the
-current facts and rationale that belong to this commit; do not copy the
-placement plan into the message. Use `git-workflow` for Git mutations.
+  unrelated concerns, do not invent a message. Ask for a resolved scope before
+  writing; keep information that belongs in a durable project artifact out of
+  the message.
 
 ## Workflow
 
@@ -44,8 +37,8 @@ placement plan into the message. Use `git-workflow` for Git mutations.
    - the body, when needed, says **why it changed**, including constraints,
      compatibility impact, or a non-obvious trade-off.
 4. Confirm that the supplied scope is one coherent commit. If it is not,
-   do not write an umbrella message; hand the scope decision to `git-workflow`
-   and wait for a resolved commit boundary.
+   do not write an umbrella message; wait for a resolved commit boundary before
+   drafting.
 5. Run the final check below, then return the message exactly as it should be
    used.
 

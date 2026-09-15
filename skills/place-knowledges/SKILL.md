@@ -1,6 +1,6 @@
 ---
 name: place-knowledges
-description: Use this skill when deciding where knowledge from a code change, correction, or review belongs—code, tests, comments, documentation, schemas, configuration, examples, decision records, or commit messages. Produce a minimal placement plan before editing when information could be duplicated or lost. Do not use it to draft a commit message, perform Git operations, or replace a focused documentation, testing, or implementation workflow.
+description: Use this skill when deciding where knowledge from a code change, correction, or review belongs—code, tests, comments, documentation, schemas, configuration, examples, decision records, or commit messages. Produce a minimal placement plan before editing when information could be duplicated or lost. Do not use it to draft prose, choose a commit message, or perform edits or Git operations.
 ---
 
 # Place Knowledge
@@ -14,25 +14,16 @@ system remains understandable after the change context is forgotten.
   change or diff, and the artifacts that may need to preserve it.
 - **Output:** a concise placement plan identifying each knowledge item, its
   authoritative home, any justified projections, and the action required.
-- **Side effects:** none. This skill decides placement; an implementation,
-  documentation, or testing workflow performs the edits, and Git workflow
-  guidance performs Git operations.
+- **Side effects:** none. This skill decides placement; the workflow that owns
+  each artifact performs any resulting edit or repository operation.
 - **Failure:** if the current state, authority, or intended audience is
   ambiguous, inspect the relevant artifacts and ask or stop rather than
   guessing or duplicating information everywhere.
 
-## Responsibility boundary
+## Scope
 
-- **This skill:** classifies knowledge and chooses its authoritative artifact.
-- **`write-commit-message`:** renders one commit subject and optional body from
-  an already-resolved commit scope and commit-specific rationale. It does not
-  decide where knowledge belongs.
-- **`git-workflow`:** stages, commits, publishes, or otherwise mutates Git
-  state.
-
-When both placement and commit-message work are needed, resolve placement first.
-Pass only the current facts and the rationale that belongs in that commit to
-`write-commit-message`; do not copy the placement plan into the commit message.
+This skill answers **where should this information live?** It does not draft or
+edit the chosen artifact, summarize a commit, or execute a repository operation.
 
 ## Workflow
 
@@ -79,5 +70,5 @@ Pass only the current facts and the rationale that belongs in that commit to
    - unresolved ownership or audience decisions are surfaced instead of
      silently assigned.
 
-Return the placement plan and any unresolved decision. Do not write the commit
-message or modify files as part of this skill.
+Return the placement plan and any unresolved decision. Do not write prose or
+modify files as part of this skill.
