@@ -103,20 +103,29 @@ export function validateQuestionDefinitions(questions: GeneratedQuestion[]): voi
     const seen = new Set<string>();
     for (const option of question.options) {
       if (seen.has(option.value)) {
-        throw new Error(`question ${questionIndex + 1} has duplicate option value: ${option.value}`);
+        throw new Error(
+          `question ${questionIndex + 1} has duplicate option value: ${option.value}`,
+        );
       }
       seen.add(option.value);
     }
 
     if (question.type === "multiple") {
       const required = question.required ?? true;
-      const minSelections = Math.max(required ? 1 : 0, question.minSelections ?? (required ? 1 : 0));
+      const minSelections = Math.max(
+        required ? 1 : 0,
+        question.minSelections ?? (required ? 1 : 0),
+      );
       const maxSelections = question.maxSelections ?? question.options.length;
       if (minSelections > maxSelections) {
-        throw new Error(`question ${questionIndex + 1} has minSelections greater than maxSelections`);
+        throw new Error(
+          `question ${questionIndex + 1} has minSelections greater than maxSelections`,
+        );
       }
       if (maxSelections > question.options.length) {
-        throw new Error(`question ${questionIndex + 1} has maxSelections greater than options.length`);
+        throw new Error(
+          `question ${questionIndex + 1} has maxSelections greater than options.length`,
+        );
       }
     }
   }

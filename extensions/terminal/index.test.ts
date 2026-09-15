@@ -90,7 +90,12 @@ test("public tool reports busy and unknown terminals and rolls back failed creat
   assert.equal(created.details.status, "started");
   const newSessionIndex = tmuxCalls.findIndex((call) => call[0] === "new-session");
   assert.match(tmuxCalls[newSessionIndex + 1]?.[4] ?? "", /tmux clear-history/);
-  assert.deepEqual(tmuxCalls[newSessionIndex + 2], ["send-keys", "-t", created.details.session, "Enter"]);
+  assert.deepEqual(tmuxCalls[newSessionIndex + 2], [
+    "send-keys",
+    "-t",
+    created.details.session,
+    "Enter",
+  ]);
   assert.equal(tmuxCalls[newSessionIndex + 3]?.[4], "sh");
   const keyResult = await registered.execute(
     "keys",

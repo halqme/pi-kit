@@ -128,7 +128,10 @@ test("syntax_inspect rejects unsupported files and allows whole-file source read
     ),
     /unsupported_language/,
   );
-  assert.equal(await inspect({ path: "sample.ts", view: "source" }, dir, new HandleStore()), source);
+  assert.equal(
+    await inspect({ path: "sample.ts", view: "source" }, dir, new HandleStore()),
+    source,
+  );
   clearFileCache(path);
 });
 

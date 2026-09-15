@@ -205,7 +205,8 @@ export class AskComponent implements Component, Focusable {
     const state = this.states[questionIndex];
     if (!question || !state || state.type !== question.type) return [];
 
-    const active = questionIndex === this.currentQuestion && optionIndex === this.optionCursors[questionIndex];
+    const active =
+      questionIndex === this.currentQuestion && optionIndex === this.optionCursors[questionIndex];
     const cursor = active && !this.editingOther ? this.theme.fg("accent", "❯") : " ";
 
     let label: string;
@@ -370,7 +371,8 @@ export class AskComponent implements Component, Focusable {
     const failure = validateSubmission(this.questions, this.states);
     if (failure) {
       this.currentQuestion = failure.questionIndex;
-      this.editingOther = this.isOtherSelected(failure.questionIndex) && failure.message.includes("Other");
+      this.editingOther =
+        this.isOtherSelected(failure.questionIndex) && failure.message.includes("Other");
       this.error = failure.message;
       this.syncInputFocus();
       this.requestRender();

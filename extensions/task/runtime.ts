@@ -10,13 +10,7 @@ import {
   taskReviewResources,
   WORKSPACE_ENTRY,
 } from "./resources.ts";
-import {
-  customEntries,
-  jsonResult,
-  latestCustom,
-  TASK_ENTRY,
-  VERIFY_ENTRY,
-} from "./shared.ts";
+import { customEntries, jsonResult, latestCustom, TASK_ENTRY, VERIFY_ENTRY } from "./shared.ts";
 
 const runnableProvenance = new Set<Provenance>([
   "existing_test",

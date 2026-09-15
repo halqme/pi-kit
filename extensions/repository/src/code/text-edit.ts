@@ -26,9 +26,7 @@ function smallestContainingNamedNode(root: Node, startIndex: number, endIndex: n
   for (;;) {
     const child = current.namedChildren.find(
       (candidate) =>
-        candidate !== null &&
-        candidate.startIndex <= startIndex &&
-        candidate.endIndex >= endIndex,
+        candidate !== null && candidate.startIndex <= startIndex && candidate.endIndex >= endIndex,
     );
     if (!child) return current;
     current = child;
@@ -41,7 +39,9 @@ export async function editTextDetailed(
   handles: HandleStore,
 ): Promise<TextEditResult> {
   if (params.oldText.length === 0) {
-    return { message: "old_text_required: oldText must be non-empty so the edit has an exact target." };
+    return {
+      message: "old_text_required: oldText must be non-empty so the edit has an exact target.",
+    };
   }
 
   const path = await resolveExistingPath(cwd, normalizedPath(params.path));
@@ -54,7 +54,8 @@ export async function editTextDetailed(
     }
     if (file.source.indexOf(params.oldText, startIndex + params.oldText.length) >= 0) {
       return {
-        message: "old_text_not_unique: oldText occurs more than once; provide a larger exact match.",
+        message:
+          "old_text_not_unique: oldText occurs more than once; provide a larger exact match.",
       };
     }
 

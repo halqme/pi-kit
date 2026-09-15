@@ -237,7 +237,7 @@ export function registerDelegate(pi: ExtensionAPI): void {
                 `[delegate] ${metadata.id} finished`,
                 `Task: ${metadata.task}`,
                 `Branch: ${metadata.branch}`,
-                `Exit: ${code === null ? signal ?? "unknown" : code}`,
+                `Exit: ${code === null ? (signal ?? "unknown") : code}`,
                 "Completion received. Continue the pending task; inspect the delegate branch and verify before integration. Do not poll status unless progress or output is explicitly needed.",
               ].join("\n"),
               display: true,
@@ -272,13 +272,18 @@ export function registerDelegate(pi: ExtensionAPI): void {
       }
 
       if (params.action === "integrate") {
-        if (alive) throw new Error("Delegate is still running; wait or stop it before integration.");
+        if (alive)
+          throw new Error("Delegate is still running; wait or stop it before integration.");
         if (metadata.status !== "finished") {
-          throw new Error(`Delegate is ${metadata.status}; only finished delegates can be integrated.`);
+          throw new Error(
+            `Delegate is ${metadata.status}; only finished delegates can be integrated.`,
+          );
         }
         const delegateStatus = await git(metadata.worktree, ["status", "--porcelain"]);
         if (delegateStatus) {
-          throw new Error("Delegate worktree has uncommitted changes; commit them before integration.");
+          throw new Error(
+            "Delegate worktree has uncommitted changes; commit them before integration.",
+          );
         }
         const parentStatus = await git(repository.root, ["status", "--porcelain"]);
         if (parentStatus) {
@@ -294,7 +299,9 @@ export function registerDelegate(pi: ExtensionAPI): void {
         }
         const staged = await git(repository.root, ["diff", "--cached", "--name-status"]);
         if (!staged) {
-          throw new Error("Delegate has no new changes to integrate against the current parent HEAD.");
+          throw new Error(
+            "Delegate has no new changes to integrate against the current parent HEAD.",
+          );
         }
         return jsonResult({
           integrated: metadata.id,

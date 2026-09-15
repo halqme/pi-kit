@@ -79,7 +79,8 @@ export default function macosTalkExtension(pi: ExtensionAPI): void {
         .split("\n")
         .map((line) => line.trim())
         .find(Boolean);
-      const preview = firstLine && firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine;
+      const preview =
+        firstLine && firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine;
       return new Text(
         `${theme.fg("toolTitle", theme.bold(TOOL_NAME))} ${theme.fg("accent", language)}${preview ? ` ${theme.fg("dim", preview)}` : ""}`,
         0,

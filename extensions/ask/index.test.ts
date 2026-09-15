@@ -114,7 +114,14 @@ test("collects single, multiple, other, confirm, and omits unanswered optional q
   assert.equal(first?.type, "single");
   assert.equal(second?.type, "multiple");
   assert.equal(third?.type, "confirm");
-  if (!first || first.type !== "single" || !second || second.type !== "multiple" || !third || third.type !== "confirm") {
+  if (
+    !first ||
+    first.type !== "single" ||
+    !second ||
+    second.type !== "multiple" ||
+    !third ||
+    third.type !== "confirm"
+  ) {
     throw new Error("unexpected state shape");
   }
 

@@ -319,8 +319,13 @@ async function changedSinceBaseline(
   return changed;
 }
 
-function uniquePaths(events: TaskResourceEvent[], operation: TaskResourceEvent["operation"]): string[] {
-  return [...new Set(events.filter((event) => event.operation === operation).map((event) => event.path))].sort();
+function uniquePaths(
+  events: TaskResourceEvent[],
+  operation: TaskResourceEvent["operation"],
+): string[] {
+  return [
+    ...new Set(events.filter((event) => event.operation === operation).map((event) => event.path)),
+  ].sort();
 }
 
 export async function taskReviewResources(

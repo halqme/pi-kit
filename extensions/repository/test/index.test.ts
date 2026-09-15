@@ -203,7 +203,10 @@ test("bare source inspection degrades large files to outline", async () => {
   assert.ok(context);
 
   const dir = await mkdtemp(join(tmpdir(), "repository-large-source-"));
-  const source = Array.from({ length: 500 }, (_, index) => `export const value${index} = ${index};`).join("\n");
+  const source = Array.from(
+    { length: 500 },
+    (_, index) => `export const value${index} = ${index};`,
+  ).join("\n");
   await writeFile(join(dir, "large.ts"), `${source}\n`, "utf8");
   const signal = new AbortController().signal;
 

@@ -13,15 +13,23 @@ import {
 const OptionSchema = Type.Object(
   {
     label: Type.String({ minLength: 1, description: "Short label shown to the user" }),
-    value: Type.String({ minLength: 1, description: "Stable machine-readable value returned to the model" }),
-    description: Type.Optional(Type.String({ minLength: 1, description: "Optional short explanation" })),
+    value: Type.String({
+      minLength: 1,
+      description: "Stable machine-readable value returned to the model",
+    }),
+    description: Type.Optional(
+      Type.String({ minLength: 1, description: "Optional short explanation" }),
+    ),
   },
   { additionalProperties: false },
 );
 
 const SingleQuestionSchema = Type.Object(
   {
-    question: Type.String({ minLength: 1, description: "Self-contained question shown to the user" }),
+    question: Type.String({
+      minLength: 1,
+      description: "Self-contained question shown to the user",
+    }),
     type: Type.Literal("single"),
     options: Type.Array(OptionSchema, { minItems: 2, maxItems: 10 }),
     required: Type.Optional(Type.Boolean({ default: true })),
@@ -32,7 +40,10 @@ const SingleQuestionSchema = Type.Object(
 
 const MultipleQuestionSchema = Type.Object(
   {
-    question: Type.String({ minLength: 1, description: "Self-contained question shown to the user" }),
+    question: Type.String({
+      minLength: 1,
+      description: "Self-contained question shown to the user",
+    }),
     type: Type.Literal("multiple"),
     options: Type.Array(OptionSchema, { minItems: 2, maxItems: 10 }),
     required: Type.Optional(Type.Boolean({ default: true })),
@@ -51,7 +62,11 @@ const ConfirmQuestionSchema = Type.Object(
   { additionalProperties: false },
 );
 
-const QuestionSchema = Type.Union([SingleQuestionSchema, MultipleQuestionSchema, ConfirmQuestionSchema]);
+const QuestionSchema = Type.Union([
+  SingleQuestionSchema,
+  MultipleQuestionSchema,
+  ConfirmQuestionSchema,
+]);
 
 export default function askExtension(pi: ExtensionAPI): void {
   let askActive = false;
@@ -111,15 +126,16 @@ export default function askExtension(pi: ExtensionAPI): void {
 
       askActive = true;
       try {
-        const result = await ctx.ui.custom<AskResult>((tui, theme, _keybindings, done) =>
-          new AskComponent({
-            questions,
-            states,
-            tui,
-            theme,
-            done,
-            ...(signal ? { signal } : {}),
-          }),
+        const result = await ctx.ui.custom<AskResult>(
+          (tui, theme, _keybindings, done) =>
+            new AskComponent({
+              questions,
+              states,
+              tui,
+              theme,
+              done,
+              ...(signal ? { signal } : {}),
+            }),
         );
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
