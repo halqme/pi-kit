@@ -50,7 +50,19 @@ async function runCommand(
 }
 
 async function git(cwd: string, args: string[]): Promise<string> {
-  return (await runCommand(cwd, "git", args)).stdout;
+  return (await runCommand(cwd, "git", ["-c", "commit.gpgSign=false", ...args])).stdout;
+}
+
+function unsignedGitEnvironment(): NodeJS.ProcessEnv {
+  // Append the override so existing command-line Git config entries survive.
+  const configuredCount = Number(process.env.GIT_CONFIG_COUNT);
+  const index = Number.isInteger(configuredCount) && configuredCount >= 0 ? configuredCount : 0;
+  return {
+    ...process.env,
+    GIT_CONFIG_COUNT: String(index + 1),
+    [`GIT_CONFIG_KEY_${index}`]: "commit.gpgSign",
+    [`GIT_CONFIG_VALUE_${index}`]: "false",
+  };
 }
 
 async function repositoryInfo(cwd: string): Promise<{ root: string; commonDir: string }> {
@@ -195,7 +207,7 @@ export function registerDelegate(pi: ExtensionAPI): void {
           cwd: worktree,
           detached: true,
           stdio: ["ignore", stdoutHandle.fd, stderrHandle.fd],
-          env: process.env,
+          env: unsignedGitEnvironment(),
         });
         if (!child.pid) {
           await stdoutHandle.close();

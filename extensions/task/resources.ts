@@ -212,7 +212,7 @@ export function registerTaskResourceTracking(pi: ExtensionAPI): void {
 }
 
 async function git(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await exec("git", args, {
+  const { stdout } = await exec("git", ["-c", "commit.gpgSign=false", ...args], {
     cwd,
     encoding: "utf8",
     maxBuffer: 8 * 1024 * 1024,

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { delimiter, isAbsolute, join, resolve } from "node:path";
 import test from "node:test";
 
 import extension from "./index.ts";
@@ -17,6 +17,7 @@ function registeredDelegate(): any {
     registerTool(tool: unknown) {
       tools.push(tool);
     },
+    sendMessage() {},
   } as any);
   return tools[0];
 }
@@ -29,6 +30,88 @@ async function exists(path: string): Promise<boolean> {
     return false;
   }
 }
+
+function parsed(result: any): any {
+  return JSON.parse(result.content[0]?.text ?? "{}");
+}
+
+async function waitForFinished(delegate: any, id: string, ctx: any): Promise<any> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const status = parsed(
+      await delegate.execute("status", { action: "status", id }, undefined, undefined, ctx),
+    );
+    if (status.status === "finished") return status;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));
+  }
+  throw new Error(`Delegate ${id} did not finish in time.`);
+}
+
+test("worker commits ignore the repository's signing configuration", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "pi-kit-delegate-signing-"));
+  const originalPath = process.env.PATH;
+  t.after(async () => {
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const repo = join(root, "repo");
+  const bin = join(root, "bin");
+  const fakePi = join(bin, "pi");
+  const failingGpg = join(bin, "gpg-fails");
+  await mkdir(repo, { recursive: true });
+  await mkdir(bin, { recursive: true });
+  await writeFile(
+    fakePi,
+    `#!/usr/bin/env node
+import { writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+writeFileSync("worker.txt", "worker\\n");
+execFileSync("git", ["add", "worker.txt"]);
+execFileSync("git", ["commit", "-m", "worker"]);
+`,
+    "utf8",
+  );
+  await chmod(fakePi, 0o755);
+  await writeFile(failingGpg, "#!/bin/sh\nexit 1\n", "utf8");
+  await chmod(failingGpg, 0o755);
+
+  git(repo, ["init", "-b", "main"]);
+  git(repo, ["config", "user.name", "Pi Kit Test"]);
+  git(repo, ["config", "user.email", "pi-kit@example.invalid"]);
+  git(repo, ["config", "commit.gpgSign", "false"]);
+  await writeFile(join(repo, "value.txt"), "base\n", "utf8");
+  git(repo, ["add", "value.txt"]);
+  git(repo, ["commit", "-m", "base"]);
+  git(repo, ["config", "commit.gpgSign", "true"]);
+  git(repo, ["config", "gpg.program", failingGpg]);
+
+  process.env.PATH = [bin, originalPath].filter(Boolean).join(delimiter);
+  const delegate = registeredDelegate();
+  const ctx = { cwd: repo };
+  const started = parsed(
+    await delegate.execute(
+      "start",
+      { action: "start", task: "make a worker commit" },
+      undefined,
+      undefined,
+      ctx,
+    ),
+  );
+  const status = await waitForFinished(delegate, started.id, ctx);
+
+  assert.equal(status.status, "finished");
+  assert.equal(git(status.worktree, ["log", "-1", "--format=%G?"]), "N");
+
+  await delegate.execute(
+    "cleanup",
+    { action: "cleanup", id: started.id, deleteBranch: true },
+    undefined,
+    undefined,
+    ctx,
+  );
+});
 
 test("squash integration stages one candidate and cleanup removes delegate artifacts", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "pi-kit-delegate-"));
