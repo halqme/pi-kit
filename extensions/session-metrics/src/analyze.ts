@@ -86,6 +86,7 @@ export function createMetrics(): SessionMetrics {
       wallClockMs: 0,
       errors: 0,
       retries: 0,
+      errorFree: 0,
       successes: 0,
     },
     runtime: createRuntimeMetrics(),
@@ -242,7 +243,9 @@ function createAccumulator() {
         result.logicalOperations.returnedTokens += operationReturnedTokens;
         result.logicalOperations.errors += operationErrors;
         result.logicalOperations.retries += operationRetries;
-        result.logicalOperations.successes += operationErrors === 0 ? 1 : 0;
+        const errorFree = operationErrors === 0 ? 1 : 0;
+        result.logicalOperations.errorFree += errorFree;
+        result.logicalOperations.successes += errorFree;
         if (operationLastAt !== undefined)
           result.logicalOperations.wallClockMs += operationLastAt - operationStartedAt;
         operationStartedAt = undefined;
@@ -369,7 +372,9 @@ function createAccumulator() {
         result.logicalOperations.returnedTokens += operationReturnedTokens;
         result.logicalOperations.errors += operationErrors;
         result.logicalOperations.retries += operationRetries;
-        result.logicalOperations.successes += operationErrors === 0 ? 1 : 0;
+        const errorFree = operationErrors === 0 ? 1 : 0;
+        result.logicalOperations.errorFree += errorFree;
+        result.logicalOperations.successes += errorFree;
         if (operationLastAt !== undefined)
           result.logicalOperations.wallClockMs += operationLastAt - operationStartedAt;
       }
@@ -489,6 +494,7 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.logicalOperations.wallClockMs += source.logicalOperations.wallClockMs;
   target.logicalOperations.errors += source.logicalOperations.errors;
   target.logicalOperations.retries += source.logicalOperations.retries;
+  target.logicalOperations.errorFree += source.logicalOperations.errorFree;
   target.logicalOperations.successes += source.logicalOperations.successes;
   mergeRuntimeMetrics(target.runtime, source.runtime);
   target.errors += source.errors;
