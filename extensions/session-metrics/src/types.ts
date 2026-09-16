@@ -19,6 +19,41 @@ export interface ToolMetrics {
   maxDurationMs: number;
 }
 
+export type ErrorClass =
+  | "execution_failure"
+  | "agent_misuse"
+  | "expected_failure"
+  | "precondition";
+
+export interface RuntimeFingerprint {
+  revision: string;
+  fingerprint: string;
+  dirty: boolean;
+  capturedAt?: string;
+}
+
+export interface SessionDiagnostics {
+  errors: {
+    total: number;
+    classified: number;
+    unknown: number;
+    byClass: Record<ErrorClass, number>;
+  };
+  fingerprints: RuntimeFingerprint[];
+}
+
+export interface SessionDiagnosticsSummary {
+  errors: SessionDiagnostics["errors"];
+  revisions: Record<
+    string,
+    {
+      revision: string;
+      dirty: boolean;
+      sessions: number;
+    }
+  >;
+}
+
 export interface LogicalOperationMetrics {
   operations: number;
   toolCalls: number;
@@ -134,6 +169,7 @@ export interface MetricsReport extends MetricSummary {
   weekly: Record<string, MetricSummary>;
   monthly: Record<string, MetricSummary>;
   projects: Record<string, MetricSummary>;
+  diagnostics?: SessionDiagnosticsSummary;
   resources?: ResourceMetrics;
   source?: SourceDiagnostic;
 }
