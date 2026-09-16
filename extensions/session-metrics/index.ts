@@ -4,15 +4,30 @@ import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { addCurrentResources, buildReport, selectReport, type QueryView } from "./src/index.ts";
+import { RUNTIME_FINGERPRINT_ENTRY } from "./src/diagnostics.ts";
+import { currentRuntimeFingerprint } from "./src/runtime-fingerprint.ts";
 
 const SESSIONS_ROOT = join(homedir(), ".pi", "agent", "sessions");
 
 export default function sessionMetricsExtension(pi: ExtensionAPI): void {
+  pi.on("session_start", async (_event, ctx) => {
+    const fingerprint = await currentRuntimeFingerprint();
+    if (!fingerprint) return;
+    const alreadyRecorded = ctx.sessionManager.getEntries().some((candidate) => {
+      if (!candidate || typeof candidate !== "object") return false;
+      const entry = candidate as { type?: unknown; customType?: unknown; data?: unknown };
+      if (entry.type !== "custom" || entry.customType !== RUNTIME_FINGERPRINT_ENTRY) return false;
+      const data = entry.data as { fingerprint?: unknown } | undefined;
+      return data?.fingerprint === fingerprint.fingerprint;
+    });
+    if (!alreadyRecorded) pi.appendEntry(RUNTIME_FINGERPRINT_ENTRY, fingerprint);
+  });
+
   pi.registerTool({
     name: "session_metrics",
     label: "Session Metrics",
     description:
-      "Read Pi session JSONL logs and summarize usage, cache, models, skills, tools, tool actions, errors, and current Pi resource status without instrumenting the active session.",
+      "Read Pi session JSONL logs and summarize usage, cache, models, skills, tools, tool actions, errors, and current Pi resource status without instrumenting tool execution. The extension records a lightweight Pi Kit revision fingerprint at session start so historical reports can separate harness revisions.",
     parameters: Type.Object({
       view: Type.Optional(
         Type.Union([
@@ -29,6 +44,7 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
           Type.Literal("tools"),
           Type.Literal("tool-actions"),
           Type.Literal("logical-operations"),
+          Type.Literal("runtime"),
         ]),
       ),
       since: Type.Optional(Type.String({ description: "UTC date filter, YYYY-MM-DD." })),
