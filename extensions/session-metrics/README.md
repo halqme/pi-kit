@@ -19,7 +19,7 @@ session解析、skill/tool action集計、現在のPi resource discoveryはい�
 - `skills`: skillのread / explicit invocationと現在status
 - `tools`: tool別calls / errors / result tokens / latencyと現在status
 - `tool-actions`: string `action`を持つtool inputのaction別統計
-- `logical-operations`: turn単位のtool call / token / wall clock / error / retry / error-free統計。`errorFree`がtool-result errorなしで完了したoperation数で、旧`successes`は互換用aliasとして同じ値を返すだけでtask successを意味しない
+- `logical-operations`: turn単位のtool call / token / wall clock / error / retry / error-free operation統計（旧`successes`はdeprecated alias）
 - `all`: 選択済みの全MetricsReport。`diagnostics.errors`に4分類とunknown、`diagnostics.revisions`にfingerprint別session数を含む
 
 `since`、`limit`、`sessionsPath`を指定できます。`since`を指定した場合、diagnosticsも同じsession集合に対して集計されます。結果は常に`query`と選択済み`data`を持つcanonical JSONです。`sessionsPath`が存在しない、または読み取り中にエラーになった場合は、実行を失敗させず、空の`data`とトップレベルの`source`診断を返します。`source`にはpath、`status`（`missing`または`error`）、エラーコード、メッセージが含まれます。存在する空ディレクトリには診断が付かないため、入力欠落と区別できます。不正な`since`はこれまでどおりエラーになります。
