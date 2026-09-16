@@ -3,7 +3,9 @@ import { adapter as denoAdapter } from "./languages/deno/config.ts";
 import { adapter as goAdapter } from "./languages/go/config.ts";
 import { adapter as javascriptAdapter } from "./languages/javascript/config.ts";
 import { adapter as pythonAdapter } from "./languages/python/config.ts";
+import { adapter as swiftAdapter } from "./languages/swift/config.ts";
 import { adapter as typescriptAdapter } from "./languages/typescript/config.ts";
+import { adapter as vueAdapter } from "./languages/vue/config.ts";
 
 export type LanguageId = string;
 
@@ -34,7 +36,7 @@ export interface LanguageAdapter {
   lspLanguageId?: string;
   outlineQuery: string;
   labelsQuery: string;
-  searchQueries: Record<SyntaxSearchKind, string>;
+  searchQueries: Partial<Record<SyntaxSearchKind, string>>;
   declarationNodeTypes: ReadonlySet<string>;
   importantNodeTypes: ReadonlySet<string>;
 }
@@ -44,7 +46,9 @@ const adapters: readonly LanguageAdapter[] = [
   goAdapter,
   javascriptAdapter,
   pythonAdapter,
+  swiftAdapter,
   typescriptAdapter,
+  vueAdapter,
 ];
 const adaptersById = new Map(adapters.map((adapter) => [adapter.id, adapter]));
 export const supportedLanguageIds = adapters.map((adapter) => adapter.id) as [string, ...string[]];

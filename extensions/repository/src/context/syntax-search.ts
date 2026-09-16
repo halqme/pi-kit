@@ -41,11 +41,16 @@ function nodeText(file: ParsedFile, node: Node | null): string {
 }
 
 function importSource(file: ParsedFile, node: Node): string {
+  if (node.type === "import_declaration") {
+    return nodeText(file, node)
+      .replace(/^import\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?/, "")
+      .trim();
+  }
   return nodeText(file, node.childForFieldName("source")).replace(/^['"]|['"]$/g, "");
 }
 
 function matchName(file: ParsedFile, node: Node): string {
-  if (node.type === "import_statement") {
+  if (node.type === "import_statement" || node.type === "import_declaration") {
     return importSource(file, node);
   }
   const name = node.childForFieldName("name");
@@ -54,6 +59,12 @@ function matchName(file: ParsedFile, node: Node): string {
   if (callee) {
     const property = callee.childForFieldName("property");
     return nodeText(file, property ?? callee);
+  }
+  if (node.type === "call_expression") {
+    const first = node.namedChildren[0];
+    if (first && ["identifier", "simple_identifier", "navigation_expression"].includes(first.type)) {
+      return nodeText(file, first);
+    }
   }
   return "";
 }
@@ -69,9 +80,11 @@ function collectMatches(
   params: SyntaxSearchParams,
   adapter: ReturnType<typeof requireAdapterForPath>,
 ): SearchMatch[] {
+  const querySource = adapter.searchQueries[params.kind];
+  if (!querySource) return [];
   let query: Query | undefined;
   try {
-    query = new Query(file.tree.language, adapter.searchQueries[params.kind]);
+    query = new Query(file.tree.language, querySource);
     const matches = new Map<number, SearchMatch>();
     for (const capture of query.captures(file.tree.rootNode)) {
       if (capture.name === "result") {

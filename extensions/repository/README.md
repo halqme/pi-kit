@@ -12,6 +12,8 @@ The repository tools and editor integration intentionally share one structural e
 
 The automatic editor route is based on the supported language extension, so source-based configuration and generated files are validated like other supported source. Unsupported languages and new files remain ordinary file-editing territory. Repository text returned by `context` is data, not instructions.
 
+Tree-sitter parser binaries for supported languages are supplied from the pinned `@repomix/tree-sitter-wasms` bundle. Language-specific adapters still own Pi Kit's outline/search/edit semantics and optional LSP integration; the shared bundle only centralizes parser distribution.
+
 Checks:
 
 ```sh
