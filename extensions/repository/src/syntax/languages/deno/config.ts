@@ -12,16 +12,14 @@ const importantNodeTypes = new Set([
   "export_statement",
 ]);
 
-const grammarPackage = "tree-sitter-typescript";
-
 export const adapter: LanguageAdapter = {
   id: "deno",
   extensions: [".ts", ".mts", ".cts"],
   autoDetect: false,
   grammar: {
-    id: "tree-sitter-typescript@0.23.2/typescript",
-    packageName: grammarPackage,
-    wasmFile: "tree-sitter-typescript.wasm",
+    id: "@repomix/tree-sitter-wasms@0.1.17/typescript",
+    packageName: "@repomix/tree-sitter-wasms",
+    wasmFile: "out/tree-sitter-typescript.wasm",
   },
   lsp: {
     servers: [{ command: "deno", args: ["lsp"] }],
