@@ -61,6 +61,9 @@ export interface LogicalOperationMetrics {
   wallClockMs: number;
   errors: number;
   retries: number;
+  /** Logical operations that completed without any tool-result error. */
+  errorFree: number;
+  /** @deprecated Use errorFree. This field never represented task success. */
   successes: number;
 }
 
