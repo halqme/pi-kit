@@ -4,9 +4,9 @@ export const adapter: LanguageAdapter = {
   id: "python",
   extensions: [".py", ".pyw"],
   grammar: {
-    id: "tree-sitter-python@0.25.0",
-    packageName: "tree-sitter-python",
-    wasmFile: "tree-sitter-python.wasm",
+    id: "@repomix/tree-sitter-wasms@0.1.17/python",
+    packageName: "@repomix/tree-sitter-wasms",
+    wasmFile: "out/tree-sitter-python.wasm",
   },
   lsp: {
     servers: [
