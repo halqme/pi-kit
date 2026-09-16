@@ -4,9 +4,9 @@ export const adapter: LanguageAdapter = {
   id: "javascript",
   extensions: [".js", ".mjs", ".cjs"],
   grammar: {
-    id: "tree-sitter-javascript@0.25.0",
-    packageName: "tree-sitter-javascript",
-    wasmFile: "tree-sitter-javascript.wasm",
+    id: "@repomix/tree-sitter-wasms@0.1.17/javascript",
+    packageName: "@repomix/tree-sitter-wasms",
+    wasmFile: "out/tree-sitter-javascript.wasm",
   },
   lsp: { servers: [{ command: "typescript-language-server", args: ["--stdio"] }] },
   outlineQuery,
