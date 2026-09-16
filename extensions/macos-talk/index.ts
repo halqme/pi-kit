@@ -32,9 +32,15 @@ function languageLabel(language: OsaLanguage): string {
   return language === "applescript" ? "AppleScript" : "JXA";
 }
 
-function resultDetails(result: OsaRunResult): OsaRunResult & { value?: unknown } {
+function resultDetails(
+  result: OsaRunResult,
+): OsaRunResult & { value?: unknown; errorClass?: "execution_failure" } {
   const value = parseJsonStdout(result.stdout);
-  return value === undefined ? result : { ...result, value };
+  return {
+    ...result,
+    ...(value === undefined ? {} : { value }),
+    ...(result.ok ? {} : { errorClass: "execution_failure" as const }),
+  };
 }
 
 export default function macosTalkExtension(pi: ExtensionAPI): void {
@@ -108,9 +114,9 @@ export default function macosTalkExtension(pi: ExtensionAPI): void {
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       if (runtime.platform !== "darwin") {
-        throw new Error("macos_talk requires macOS");
+        throw new Error("agent_misuse: macos_talk requires macOS");
       }
-      if (!params.script.trim()) throw new Error("script must not be empty");
+      if (!params.script.trim()) throw new Error("agent_misuse: script must not be empty");
 
       const language = (params.language ?? "applescript") as OsaLanguage;
       const execution = await runtime.run({
