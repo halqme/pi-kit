@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import sessionMetricsExtension from "../index.ts";
 
-test("registers one passive session metrics tool without session hooks", () => {
+test("registers one metrics tool and only the revision fingerprint session hook", () => {
   const tools: Array<{ name: string }> = [];
   const hooks: string[] = [];
   const pi = {
@@ -18,13 +18,14 @@ test("registers one passive session metrics tool without session hooks", () => {
     tools.map((tool) => tool.name),
     ["session_metrics"],
   );
-  assert.deepEqual(hooks, []);
+  assert.deepEqual(hooks, ["session_start"]);
 });
 
 test("returns an empty report with a missing-source diagnostic from execute", async () => {
   const missing = "/definitely/missing/pi-session-metrics";
   let tool: { execute: (...args: any[]) => Promise<unknown> } | undefined;
   sessionMetricsExtension({
+    on() {},
     registerTool(value: typeof tool) {
       tool = value;
     },
