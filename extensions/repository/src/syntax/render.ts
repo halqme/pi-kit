@@ -63,7 +63,10 @@ function namedLabel(node: Node, file: ParsedFile, context: RenderContext): strin
     ? context.labels.get(node.id)
     : node.namedChildren.find(
         (child) =>
-          child && ["identifier", "type_identifier", "property_identifier"].includes(child.type),
+          child &&
+          ["identifier", "simple_identifier", "type_identifier", "property_identifier"].includes(
+            child.type,
+          ),
       );
   return typeof named === "string" ? named : named ? compact(sourceOf(file, named)) : "";
 }
@@ -73,9 +76,12 @@ function declarationSummary(node: Node, file: ParsedFile, context: RenderContext
   const name = namedLabel(node, file, context);
 
   if (
-    ["function_declaration", "generator_function_declaration", "method_definition"].includes(
-      node.type,
-    )
+    [
+      "function_declaration",
+      "protocol_function_declaration",
+      "generator_function_declaration",
+      "method_definition",
+    ].includes(node.type)
   ) {
     const body = node.childForFieldName("body");
     const signature = compact(
@@ -108,9 +114,16 @@ function declarationSummary(node: Node, file: ParsedFile, context: RenderContext
     return `${classification} ${readableHeader}${memberText}`;
   }
 
-  if (node.type === "import_statement") {
+  if (node.type === "import_statement" || node.type === "import_declaration") {
     return `${classification} ${compact(sourceOf(file, node))}`;
   }
+
+  const vueSection = {
+    template_element: "template",
+    script_element: "script",
+    style_element: "style",
+  }[node.type];
+  if (vueSection) return `${classification} <${vueSection}>`;
 
   return `${classification}${name ? ` ${name}` : ""}`;
 }
