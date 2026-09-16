@@ -61,11 +61,12 @@ function runtimeFingerprint(entry: RecordValue): RuntimeFingerprint | undefined 
   const revision = string(data?.revision);
   const fingerprint = string(data?.fingerprint);
   if (!revision || !fingerprint) return undefined;
+  const capturedAt = string(data?.capturedAt);
   return {
     revision,
     fingerprint,
     dirty: data?.dirty === true,
-    ...(string(data?.capturedAt) ? { capturedAt: string(data?.capturedAt) } : {}),
+    ...(capturedAt ? { capturedAt } : {}),
   };
 }
 
