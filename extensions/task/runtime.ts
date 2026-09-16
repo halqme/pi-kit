@@ -119,8 +119,7 @@ async function executeCheck(
       args,
       { cwd, encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: timeoutMs },
       (error, stdout, stderr) => {
-        const exitCode =
-          error === null ? 0 : typeof error.code === "number" ? error.code : null;
+        const exitCode = error === null ? 0 : typeof error.code === "number" ? error.code : null;
         complete({
           passed: exitCode !== null && expectedExitCodes.includes(exitCode),
           exitCode,

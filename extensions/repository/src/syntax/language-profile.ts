@@ -5,6 +5,7 @@ import { adapter as javascriptAdapter } from "./languages/javascript/config.ts";
 import { adapter as pythonAdapter } from "./languages/python/config.ts";
 import { adapter as swiftAdapter } from "./languages/swift/config.ts";
 import { adapter as typescriptAdapter } from "./languages/typescript/config.ts";
+import { adapter as tsxAdapter } from "./languages/tsx/config.ts";
 import { adapter as vueAdapter } from "./languages/vue/config.ts";
 
 export type LanguageId = string;
@@ -48,12 +49,12 @@ const adapters: readonly LanguageAdapter[] = [
   pythonAdapter,
   swiftAdapter,
   typescriptAdapter,
+  tsxAdapter,
   vueAdapter,
 ];
 const adaptersById = new Map(adapters.map((adapter) => [adapter.id, adapter]));
 export const supportedLanguageIds = adapters.map((adapter) => adapter.id) as [string, ...string[]];
 export const supportedLanguageDescription = supportedLanguageIds.join(", ");
-const explicitlyUnsupportedExtensions = new Set([".tsx"]);
 
 export function adapterForLanguage(language: LanguageId): LanguageAdapter {
   const adapter = adaptersById.get(language);
@@ -71,7 +72,6 @@ export function adapterForIdentity(
 
 export function adapterForPath(path: string, language?: LanguageId): LanguageAdapter | undefined {
   const extension = extname(path).toLowerCase();
-  if (explicitlyUnsupportedExtensions.has(extension)) return undefined;
   if (language) return adaptersById.get(language);
   return adapters.find(
     (adapter) => adapter.autoDetect !== false && adapter.extensions.includes(extension),

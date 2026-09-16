@@ -109,7 +109,7 @@ test("syntax_inspect supports an explicit language override for an unknown exten
   clearFileCache(path);
 });
 
-test("syntax_inspect rejects unsupported files and allows whole-file source reads", async () => {
+test("syntax_inspect rejects unsupported files, parses TSX, and reads source", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-inspect-"));
   await writeFile(join(dir, "sample.rs"), "fn main() {}\n");
   await writeFile(join(dir, "sample.tsx"), "export const App = () => <div />;\n");
@@ -120,13 +120,9 @@ test("syntax_inspect rejects unsupported files and allows whole-file source read
     inspect({ path: "sample.rs", view: "outline" }, dir, new HandleStore()),
     /unsupported_language/,
   );
-  await assert.rejects(
-    inspect(
-      { path: "sample.tsx", language: "typescript", view: "outline" },
-      dir,
-      new HandleStore(),
-    ),
-    /unsupported_language/,
+  assert.match(
+    await inspect({ path: "sample.tsx", view: "outline" }, dir, new HandleStore()),
+    /declaration function App/,
   );
   assert.equal(
     await inspect({ path: "sample.ts", view: "source" }, dir, new HandleStore()),

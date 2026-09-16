@@ -62,7 +62,10 @@ function matchName(file: ParsedFile, node: Node): string {
   }
   if (node.type === "call_expression") {
     const first = node.namedChildren[0];
-    if (first && ["identifier", "simple_identifier", "navigation_expression"].includes(first.type)) {
+    if (
+      first &&
+      ["identifier", "simple_identifier", "navigation_expression"].includes(first.type)
+    ) {
       return nodeText(file, first);
     }
   }

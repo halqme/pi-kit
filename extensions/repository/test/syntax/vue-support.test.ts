@@ -50,9 +50,6 @@ button { font-weight: 600; }
   assert.match(rendered, /<script>/);
   assert.match(rendered, /<template>/);
   assert.match(rendered, /<style>/);
-  assert.deepEqual(
-    await syntaxSearchDetailed({ path, kind: "function" }, dir, handles),
-    [],
-  );
+  assert.deepEqual(await syntaxSearchDetailed({ path, kind: "function" }, dir, handles), []);
   clearFileCache(path);
 });

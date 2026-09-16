@@ -19,11 +19,7 @@ export interface ToolMetrics {
   maxDurationMs: number;
 }
 
-export type ErrorClass =
-  | "execution_failure"
-  | "agent_misuse"
-  | "expected_failure"
-  | "precondition";
+export type ErrorClass = "execution_failure" | "agent_misuse" | "expected_failure" | "precondition";
 
 export interface RuntimeFingerprint {
   revision: string;
