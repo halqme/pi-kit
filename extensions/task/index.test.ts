@@ -74,6 +74,54 @@ test("an executed passing check permits completion", async () => {
   assert.equal(parsed(result).status, "done");
 });
 
+test("an expected non-zero exit is successful verification evidence", async () => {
+  const { tools, ctx } = harness();
+  const task = tools.get("task");
+  const verify = tools.get("verify");
+  await call(task, { action: "start", goal: "negative test" }, ctx);
+  const verification = parsed(
+    await call(
+      verify,
+      {
+        action: "run",
+        provenance: "existing_test",
+        command: process.execPath,
+        args: ["-e", "process.exit(7)"],
+        expectedExitCodes: [7],
+        summary: "expected failure case",
+      },
+      ctx,
+    ),
+  );
+
+  assert.equal(verification.evidence.passed, true);
+  assert.equal(verification.exitCode, 7);
+  assert.deepEqual(verification.expectedExitCodes, [7]);
+  const result = await call(task, { action: "finish", summary: "done" }, ctx);
+  assert.equal(parsed(result).status, "done");
+});
+
+test("an unexpected exit remains a verification error", async () => {
+  const { tools, ctx } = harness();
+  const verify = tools.get("verify");
+  await assert.rejects(
+    () =>
+      call(
+        verify,
+        {
+          action: "run",
+          provenance: "existing_test",
+          command: process.execPath,
+          args: ["-e", "process.exit(3)"],
+          expectedExitCodes: [0, 2],
+          summary: "wrong exit",
+        },
+        ctx,
+      ),
+    /execution_failure: wrong exit failed \(exit 3; expected 0, 2\)/,
+  );
+});
+
 test("review_context reports successful explicit resource activity", async () => {
   const { tools, ctx, emit } = harness();
   const task = tools.get("task");
