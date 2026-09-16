@@ -61,6 +61,7 @@ test("executes AppleScript by default and exposes JSON stdout as value", async (
   assert.equal(request?.cwd, "/tmp/project");
   assert.equal(result.isError, undefined);
   assert.deepEqual(result.details.value, { running: true, windows: 2 });
+  assert.equal(result.details.errorClass, undefined);
   assert.match(result.content[0]?.text ?? "", /"running": true/);
 });
 
@@ -98,6 +99,7 @@ test("passes JXA through unchanged and preserves execution failure I/O", async (
   assert.equal(request?.script, script);
   assert.equal(request?.timeoutMs, 5_000);
   assert.equal(result.isError, true);
+  assert.equal(result.details.errorClass, "execution_failure");
   assert.equal(result.details.stdout, "partial output");
   assert.equal(result.details.stderr, "execution error: not permitted (-1743)");
   assert.equal(result.details.value, undefined);
@@ -117,7 +119,7 @@ test("rejects use outside macOS before executing a script", async (t) => {
 
   await assert.rejects(
     tool.execute("call-3", { script: "return 1" }, undefined, undefined, ctx),
-    /requires macOS/,
+    /agent_misuse: macos_talk requires macOS/,
   );
   assert.equal(called, false);
 });

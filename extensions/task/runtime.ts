@@ -97,7 +97,7 @@ function commandCwd(root: string, requested?: string): string {
   const cwd = requested?.trim() ? resolve(root, requested) : root;
   const fromRoot = relative(root, cwd);
   if (fromRoot === "" || (!fromRoot.startsWith("..") && !isAbsolute(fromRoot))) return cwd;
-  throw new Error("verify.run cwd must stay within the current project root.");
+  throw new Error("agent_misuse: verify.run cwd must stay within the current project root.");
 }
 
 async function executeCheck(
@@ -105,15 +105,25 @@ async function executeCheck(
   command: string,
   args: string[],
   timeoutMs: number,
-): Promise<{ passed: boolean; stdout: string; stderr: string; error?: string }> {
+  expectedExitCodes: number[],
+): Promise<{
+  passed: boolean;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  error?: string;
+}> {
   return new Promise((complete) => {
     execFile(
       command,
       args,
       { cwd, encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: timeoutMs },
       (error, stdout, stderr) => {
+        const exitCode =
+          error === null ? 0 : typeof error.code === "number" ? error.code : null;
         complete({
-          passed: error === null,
+          passed: exitCode !== null && expectedExitCodes.includes(exitCode),
+          exitCode,
           stdout: stdout.trim(),
           stderr: stderr.trim(),
           ...(error ? { error: error.message } : {}),
@@ -131,6 +141,7 @@ export function registerVerification(pi: ExtensionAPI): void {
       "Execute verification checks or record supporting evidence with provenance. task.finish trusts only checks executed by verify.run; manually reported evidence remains supporting context and cannot self-certify completion.",
     promptGuidelines: [
       "Use run for existing tests, compiler/typechecker/linter checks, or structural audits. Commands are argv-based and do not use a shell.",
+      "For a negative test whose success condition is a non-zero process exit, set expectedExitCodes instead of wrapping the command in a shell that converts the exit status.",
       "Use record for user feedback, CI observations, review-agent findings, agent-authored tests, or other evidence that was observed elsewhere.",
       "A reported typecheck or test result is not strong completion evidence; rerun the relevant check with verify.run when practical.",
     ],
@@ -142,6 +153,14 @@ export function registerVerification(pi: ExtensionAPI): void {
         args: Type.Optional(Type.Array(Type.String(), { maxItems: 100 })),
         cwd: Type.Optional(Type.String()),
         timeoutMs: Type.Optional(Type.Integer({ minimum: 100, maximum: 30 * 60 * 1000 })),
+        expectedExitCodes: Type.Optional(
+          Type.Array(Type.Integer({ minimum: 0, maximum: 255 }), {
+            minItems: 1,
+            maxItems: 16,
+            uniqueItems: true,
+            description: "Process exit codes that count as a passing check; defaults to [0].",
+          }),
+        ),
         summary: Type.Optional(Type.String()),
         taskId: Type.Optional(Type.String()),
       }),
@@ -162,7 +181,14 @@ export function registerVerification(pi: ExtensionAPI): void {
         const command = params.command.trim();
         const args = params.args ?? [];
         const cwd = commandCwd(ctx.cwd, params.cwd);
-        const result = await executeCheck(cwd, command, args, params.timeoutMs ?? 5 * 60 * 1000);
+        const expectedExitCodes = params.expectedExitCodes ?? [0];
+        const result = await executeCheck(
+          cwd,
+          command,
+          args,
+          params.timeoutMs ?? 5 * 60 * 1000,
+          expectedExitCodes,
+        );
         const summary = params.summary?.trim() || `${command} ${args.join(" ")}`.trim();
         const evidence: VerificationEvidence = {
           id: randomUUID(),
@@ -176,12 +202,22 @@ export function registerVerification(pi: ExtensionAPI): void {
         pi.appendEntry(VERIFY_ENTRY, evidence);
         if (!result.passed) {
           throw new Error(
-            [`${summary} failed.`, result.error, result.stderr || result.stdout]
+            [
+              `execution_failure: ${summary} failed (exit ${result.exitCode ?? "unavailable"}; expected ${expectedExitCodes.join(", ")}).`,
+              result.error,
+              result.stderr || result.stdout,
+            ]
               .filter(Boolean)
               .join("\n"),
           );
         }
-        return jsonResult({ evidence, stdout: result.stdout, stderr: result.stderr });
+        return jsonResult({
+          evidence,
+          exitCode: result.exitCode,
+          expectedExitCodes,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        });
       }
       if (params.action === "record") {
         const evidence: VerificationEvidence = {
@@ -259,7 +295,7 @@ export function registerTask(pi: ExtensionAPI): void {
       if (params.action === "start") {
         if (current && (current.status === "active" || current.status === "blocked")) {
           throw new Error(
-            `Task '${current.id}' is still ${current.status}; finish or stop it first.`,
+            `precondition: Task '${current.id}' is still ${current.status}; finish or stop it first.`,
           );
         }
         const now = new Date().toISOString();
@@ -279,7 +315,7 @@ export function registerTask(pi: ExtensionAPI): void {
         return jsonResult(state);
       }
 
-      if (!current) throw new Error("No task state. Start a task first.");
+      if (!current) throw new Error("precondition: No task state. Start a task first.");
 
       if (params.action === "review_context") {
         const evidence = customEntries<VerificationEvidence>(ctx, VERIFY_ENTRY).filter(
@@ -305,7 +341,8 @@ export function registerTask(pi: ExtensionAPI): void {
       const now = new Date().toISOString();
 
       if (params.action === "checkpoint") {
-        if (state.status !== "active") throw new Error(`Task is ${state.status}, not active.`);
+        if (state.status !== "active")
+          throw new Error(`precondition: Task is ${state.status}, not active.`);
         state.checkpoints.push({
           at: now,
           summary: params.summary.trim(),
@@ -318,23 +355,26 @@ export function registerTask(pi: ExtensionAPI): void {
             : {}),
         });
       } else if (params.action === "block") {
-        if (state.status !== "active") throw new Error(`Task is ${state.status}, not active.`);
+        if (state.status !== "active")
+          throw new Error(`precondition: Task is ${state.status}, not active.`);
         state.status = "blocked";
         state.blocker = params.reason.trim();
       } else if (params.action === "resume") {
-        if (state.status !== "blocked") throw new Error(`Task is ${state.status}, not blocked.`);
+        if (state.status !== "blocked")
+          throw new Error(`precondition: Task is ${state.status}, not blocked.`);
         state.status = "active";
         delete state.blocker;
         if (params.summary?.trim())
           state.checkpoints.push({ at: now, summary: params.summary.trim() });
       } else if (params.action === "stop") {
         if (state.status === "done" || state.status === "stopped") {
-          throw new Error(`Task is already ${state.status}.`);
+          throw new Error(`precondition: Task is already ${state.status}.`);
         }
         state.status = "stopped";
         state.completionSummary = params.reason.trim();
       } else if (params.action === "finish") {
-        if (state.status !== "active") throw new Error(`Task is ${state.status}, not active.`);
+        if (state.status !== "active")
+          throw new Error(`precondition: Task is ${state.status}, not active.`);
         const evidence = customEntries<VerificationEvidence>(ctx, VERIFY_ENTRY).filter(
           (item) => item.taskId === state.id,
         );
@@ -344,13 +384,13 @@ export function registerTask(pi: ExtensionAPI): void {
         }
         if (![...latestStrong.values()].some((item) => item.passed)) {
           throw new Error(
-            "A successful check executed through verify.run is required before task.finish.",
+            "precondition: A successful check executed through verify.run is required before task.finish.",
           );
         }
         const failures = [...latestStrong.values()].filter((item) => !item.passed);
         if (failures.length > 0) {
           throw new Error(
-            `Executed verification still has failing evidence: ${failures
+            `precondition: Executed verification still has failing evidence: ${failures
               .map((item) => `${item.provenance}: ${item.summary}`)
               .join("; ")}`,
           );

@@ -10,7 +10,9 @@ While a task is active, the extension records successful explicit file observati
 
 `verify` distinguishes checks executed by the runtime from supporting observations reported by the model. `task.finish` requires at least one successful executable check from `verify.run`, and rejects completion while the latest executed evidence for a provenance is failing. A consistency review can be recorded with `verify.record` using `review_agent`; it remains supporting evidence and does not replace executable checks.
 
-Use `verify.run` for existing tests, compiler/typechecker/linter checks, and executable structural audits. Use `verify.record` for CI observations, user feedback, review findings, or other evidence produced elsewhere.
+Use `verify.run` for existing tests, compiler/typechecker/linter checks, and executable structural audits. The default passing process exit is `0`. For a negative test whose correct behavior is a non-zero exit, pass `expectedExitCodes` (for example `[1]`) instead of wrapping the command in a shell that converts the expected failure into exit `0`. Use `verify.record` for CI observations, user feedback, review findings, or other evidence produced elsewhere.
+
+Runtime errors that Pi Kit can classify carry stable prefixes such as `execution_failure:`, `agent_misuse:`, and `precondition:` so session metrics can distinguish operational failures from tool misuse and invalid state transitions without guessing from arbitrary error prose.
 
 Checks:
 

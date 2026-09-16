@@ -8,6 +8,14 @@ export {
   mergeMetrics,
 } from "./analyze.ts";
 export {
+  analyzeDiagnosticLine,
+  analyzeSessionDiagnostics,
+  createSessionDiagnostics,
+  createSessionDiagnosticsSummary,
+  mergeSessionDiagnostics,
+  RUNTIME_FINGERPRINT_ENTRY,
+} from "./diagnostics.ts";
+export {
   eventsFromLine,
   eventsFromLines,
   normalizeUsage,
@@ -29,14 +37,19 @@ export {
   discoverPiResources,
   type PiResourceInventory,
 } from "./resources.ts";
+export { currentRuntimeFingerprint } from "./runtime-fingerprint.ts";
 export type {
+  ErrorClass,
   LogicalOperationMetrics,
   MetricsReport,
   MetricSummary,
   ResourceMetrics,
   ResourceSource,
   ResourceStatus,
+  RuntimeFingerprint,
   RuntimeOperationMetrics,
+  SessionDiagnostics,
+  SessionDiagnosticsSummary,
   SessionMetrics,
   SkillMetrics,
   SkillResourceMetrics,

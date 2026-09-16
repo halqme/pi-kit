@@ -5,7 +5,13 @@ import {
   type MetricsReport,
   type SessionMetrics,
 } from "./analyze.ts";
+import {
+  analyzeSessionDiagnostics,
+  createSessionDiagnosticsSummary,
+  mergeSessionDiagnostics,
+} from "./diagnostics.ts";
 import { sessionFiles } from "./files.ts";
+import type { SessionDiagnostics } from "./types.ts";
 
 function validateSince(since?: string): void {
   if (
@@ -19,9 +25,15 @@ function validateSince(since?: string): void {
 /** Builds a deterministic report directly from Pi session JSONL files. */
 export async function buildReport(sessionsPath: string, since?: string): Promise<MetricsReport> {
   validateSince(since);
-  const sessions: SessionMetrics[] = [];
+  const sessions: Array<{ metrics: SessionMetrics; diagnostics: SessionDiagnostics }> = [];
   try {
-    for (const path of await sessionFiles(sessionsPath)) sessions.push(await analyzeFile(path));
+    for (const path of await sessionFiles(sessionsPath)) {
+      const [metrics, diagnostics] = await Promise.all([
+        analyzeFile(path),
+        analyzeSessionDiagnostics(path),
+      ]);
+      sessions.push({ metrics, diagnostics });
+    }
   } catch (error) {
     const code =
       error && typeof error === "object" && "code" in error && typeof error.code === "string"
@@ -37,9 +49,15 @@ export async function buildReport(sessionsPath: string, since?: string): Promise
     return report;
   }
   const selected = sessions
-    .filter((session) => !since || (session.timestamp ?? "") >= since)
-    .sort((left, right) => (right.timestamp ?? "").localeCompare(left.timestamp ?? ""));
+    .filter(({ metrics }) => !since || (metrics.timestamp ?? "") >= since)
+    .sort((left, right) =>
+      (right.metrics.timestamp ?? "").localeCompare(left.metrics.timestamp ?? ""),
+    );
   const report = createReport();
-  for (const session of selected) addToReport(report, session);
+  report.diagnostics = createSessionDiagnosticsSummary();
+  for (const session of selected) {
+    addToReport(report, session.metrics);
+    mergeSessionDiagnostics(report.diagnostics, session.diagnostics);
+  }
   return report;
 }
