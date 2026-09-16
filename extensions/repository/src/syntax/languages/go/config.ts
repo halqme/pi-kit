@@ -4,9 +4,9 @@ export const adapter: LanguageAdapter = {
   id: "go",
   extensions: [".go"],
   grammar: {
-    id: "tree-sitter-go@0.25.0",
-    packageName: "tree-sitter-go",
-    wasmFile: "tree-sitter-go.wasm",
+    id: "@repomix/tree-sitter-wasms@0.1.17/go",
+    packageName: "@repomix/tree-sitter-wasms",
+    wasmFile: "out/tree-sitter-go.wasm",
   },
   lsp: { servers: [{ command: "gopls" }] },
   outlineQuery,
