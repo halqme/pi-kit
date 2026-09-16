@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { realpath } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
@@ -7,10 +8,20 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   captureWorkspaceBaseline,
   registerTaskResourceTracking,
+  resolveProjectRoot,
   taskReviewResources,
+  taskWorkspaceRevision,
+  taskWorkspaceState,
   WORKSPACE_ENTRY,
 } from "./resources.ts";
-import { customEntries, jsonResult, latestCustom, TASK_ENTRY, VERIFY_ENTRY } from "./shared.ts";
+import {
+  customEntries,
+  jsonResult,
+  latestCustom,
+  REVIEW_ENTRY,
+  TASK_ENTRY,
+  VERIFY_ENTRY,
+} from "./shared.ts";
 
 const runnableProvenance = new Set<Provenance>([
   "existing_test",
@@ -86,6 +97,15 @@ interface VerificationEvidence {
   passed: boolean;
   summary: string;
   detail?: string;
+  reviewRequestId?: string;
+  at: string;
+}
+
+interface TaskReviewRequest {
+  version: 1;
+  id: string;
+  taskId: string;
+  workspaceRevision?: string;
   at: string;
 }
 
@@ -93,10 +113,24 @@ function isStrongEvidence(evidence: VerificationEvidence): boolean {
   return evidence.origin === "executed" && runnableProvenance.has(evidence.provenance);
 }
 
-function commandCwd(root: string, requested?: string): string {
-  const cwd = requested?.trim() ? resolve(root, requested) : root;
-  const fromRoot = relative(root, cwd);
-  if (fromRoot === "" || (!fromRoot.startsWith("..") && !isAbsolute(fromRoot))) return cwd;
+async function commandCwd(sessionCwd: string, root: string, requested?: string): Promise<string> {
+  if (!requested?.trim()) return sessionCwd;
+  const raw = requested.trim();
+  const candidates = isAbsolute(raw)
+    ? [resolve(raw)]
+    : [...new Set([resolve(sessionCwd, raw), resolve(root, raw)])];
+  const realRoot = await realpath(root);
+  for (const cwd of candidates) {
+    try {
+      const realCwd = await realpath(cwd);
+      const fromRoot = relative(realRoot, realCwd);
+      if (fromRoot === "" || (!fromRoot.startsWith("..") && !isAbsolute(fromRoot))) {
+        return cwd;
+      }
+    } catch {
+      continue;
+    }
+  }
   throw new Error("agent_misuse: verify.run cwd must stay within the current project root.");
 }
 
@@ -170,6 +204,7 @@ export function registerVerification(pi: ExtensionAPI): void {
         summary: Type.String({ minLength: 1 }),
         detail: Type.Optional(Type.String()),
         taskId: Type.Optional(Type.String()),
+        reviewRequestId: Type.Optional(Type.String()),
       }),
       Type.Object({ action: Type.Literal("assess"), taskId: Type.Optional(Type.String()) }),
     ]),
@@ -179,7 +214,8 @@ export function registerVerification(pi: ExtensionAPI): void {
       if (params.action === "run") {
         const command = params.command.trim();
         const args = params.args ?? [];
-        const cwd = commandCwd(ctx.cwd, params.cwd);
+        const root = await resolveProjectRoot(ctx.cwd);
+        const cwd = await commandCwd(ctx.cwd, root, params.cwd);
         const expectedExitCodes = params.expectedExitCodes ?? [0];
         const result = await executeCheck(
           cwd,
@@ -219,6 +255,22 @@ export function registerVerification(pi: ExtensionAPI): void {
         });
       }
       if (params.action === "record") {
+        const reviewRequestId = params.reviewRequestId?.trim();
+        if (params.provenance === "review_agent") {
+          if (!taskId || !reviewRequestId) {
+            throw new Error(
+              "agent_misuse: review_agent evidence requires an active task and reviewRequestId from task.review_context.",
+            );
+          }
+          const request = customEntries<TaskReviewRequest>(ctx, REVIEW_ENTRY).find(
+            (item) => item.id === reviewRequestId && item.taskId === taskId,
+          );
+          if (!request) {
+            throw new Error(
+              "precondition: reviewRequestId does not identify a review request for the current task.",
+            );
+          }
+        }
         const evidence: VerificationEvidence = {
           id: randomUUID(),
           ...(taskId ? { taskId } : {}),
@@ -227,6 +279,7 @@ export function registerVerification(pi: ExtensionAPI): void {
           passed: params.passed,
           summary: params.summary.trim(),
           ...(params.detail?.trim() ? { detail: params.detail.trim() } : {}),
+          ...(reviewRequestId ? { reviewRequestId } : {}),
           at: new Date().toISOString(),
         };
         pi.appendEntry(VERIFY_ENTRY, evidence);
@@ -264,7 +317,8 @@ export function registerTask(pi: ExtensionAPI): void {
     promptGuidelines: [
       "Ground the repository before committing to a detailed plan; plans are hypotheses and may be replaced as observations change.",
       "Use checkpoint when the current plan or understanding materially changes, not after every tool call.",
-      "Use review_context to hand an independent consistency reviewer a compact task, resource-provenance, workspace-delta, and verification packet. Resource history records what was observed or mutated; it does not prove related artifacts are consistent.",
+      "Use review_context to hand an independent consistency reviewer a compact task, resource-provenance, workspace-delta, and verification packet. Calling it creates a review request that must be satisfied by a matching review_agent report before finish.",
+      "When a task starts from a clean Git workspace, finish requires the workspace to be clean again. Commit intended task changes or revert unintended ones before finishing.",
       "Do not finish solely because planned steps were executed. Compare the requested outcome with the workspace and executed verification evidence.",
     ],
     parameters: Type.Union([
@@ -322,6 +376,15 @@ export function registerTask(pi: ExtensionAPI): void {
         );
         const resources = await taskReviewResources(ctx, current.id);
         const latestCheckpoint = current.checkpoints.at(-1);
+        const workspaceRevision = await taskWorkspaceRevision(ctx, current.id);
+        const reviewRequest: TaskReviewRequest = {
+          version: 1,
+          id: randomUUID(),
+          taskId: current.id,
+          ...(workspaceRevision ? { workspaceRevision } : {}),
+          at: new Date().toISOString(),
+        };
+        pi.appendEntry(REVIEW_ENTRY, reviewRequest);
         return jsonResult({
           task: {
             id: current.id,
@@ -333,6 +396,7 @@ export function registerTask(pi: ExtensionAPI): void {
           },
           resources,
           verification: evidence,
+          reviewRequest: { id: reviewRequest.id, at: reviewRequest.at },
         });
       }
 
@@ -392,6 +456,45 @@ export function registerTask(pi: ExtensionAPI): void {
             `precondition: Executed verification still has failing evidence: ${failures
               .map((item) => `${item.provenance}: ${item.summary}`)
               .join("; ")}`,
+          );
+        }
+
+        const latestReviewRequest = customEntries<TaskReviewRequest>(ctx, REVIEW_ENTRY)
+          .filter((item) => item.taskId === state.id)
+          .at(-1);
+        if (latestReviewRequest) {
+          const workspaceRevision = await taskWorkspaceRevision(ctx, state.id);
+          if (
+            latestReviewRequest.workspaceRevision !== undefined &&
+            workspaceRevision !== latestReviewRequest.workspaceRevision
+          ) {
+            throw new Error(
+              "precondition: Workspace changed after task.review_context; request and complete a fresh independent consistency review.",
+            );
+          }
+          const report = [...evidence]
+            .reverse()
+            .find(
+              (item) =>
+                item.provenance === "review_agent" &&
+                item.reviewRequestId === latestReviewRequest.id,
+            );
+          if (!report) {
+            throw new Error(
+              `precondition: Independent consistency review '${latestReviewRequest.id}' has no review_agent report.`,
+            );
+          }
+          if (!report.passed) {
+            throw new Error(
+              `precondition: Independent consistency review still has unresolved findings: ${report.summary}`,
+            );
+          }
+        }
+
+        const workspace = await taskWorkspaceState(ctx, state.id);
+        if (workspace?.startedClean && workspace.currentDirty.length > 0) {
+          throw new Error(
+            `precondition: Task started from a clean Git workspace and still has uncommitted changes: ${workspace.currentDirty.join(", ")}. Commit intended task changes or revert unintended ones before task.finish.`,
           );
         }
         state.status = "done";

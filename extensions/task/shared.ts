@@ -2,6 +2,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const TASK_ENTRY = "task-state";
 export const VERIFY_ENTRY = "verification-evidence";
+export const REVIEW_ENTRY = "task-review-request";
 
 export interface TextToolResult {
   content: Array<{ type: "text"; text: string }>;
