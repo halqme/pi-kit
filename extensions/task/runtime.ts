@@ -318,7 +318,7 @@ export function registerTask(pi: ExtensionAPI): void {
       "Ground the repository before committing to a detailed plan; plans are hypotheses and may be replaced as observations change.",
       "Use checkpoint when the current plan or understanding materially changes, not after every tool call.",
       "Use review_context to hand an independent consistency reviewer a compact task, resource-provenance, workspace-delta, and verification packet. Calling it creates a review request that must be satisfied by a matching review_agent report before finish.",
-      "When a task starts from a clean Git workspace, finish requires the workspace to be clean again. Commit intended task changes or revert unintended ones before finishing.",
+      "When a task starts inside a Git worktree, any task-local changes are part of the task contract and must be committed before finish. Pre-existing unrelated dirty files may remain untouched. Outside Git, no commit is required.",
       "Do not finish solely because planned steps were executed. Compare the requested outcome with the workspace and executed verification evidence.",
     ],
     parameters: Type.Union([
@@ -492,9 +492,14 @@ export function registerTask(pi: ExtensionAPI): void {
         }
 
         const workspace = await taskWorkspaceState(ctx, state.id);
-        if (workspace?.startedClean && workspace.currentDirty.length > 0) {
+        if (workspace?.uncommittedTaskChanges.length) {
           throw new Error(
-            `precondition: Task started from a clean Git workspace and still has uncommitted changes: ${workspace.currentDirty.join(", ")}. Commit intended task changes or revert unintended ones before task.finish.`,
+            `precondition: Git-managed task still has uncommitted task changes: ${workspace.uncommittedTaskChanges.join(", ")}. Commit the intended task changes or revert them before task.finish.`,
+          );
+        }
+        if (workspace?.taskCommitRequired && !workspace.taskCommitPresent) {
+          throw new Error(
+            "precondition: Git-managed task changed the workspace but no task commit was created. Commit the verified task changes before task.finish.",
           );
         }
         state.status = "done";

@@ -278,7 +278,7 @@ test("review_context requires a matching independent reviewer report", async () 
   assert.equal(parsed(await call(task, { action: "finish", summary: "done" }, ctx)).status, "done");
 });
 
-test("project-root deltas are visible and clean-start tasks must commit before finish", async () => {
+test("Git-managed tasks must commit task-local changes before finish", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-kit-task-root-"));
   const nested = join(root, "extensions", "delegate");
   const sibling = join(root, "sibling.ts");
@@ -343,13 +343,82 @@ test("project-root deltas are visible and clean-start tasks must commit before f
 
   await assert.rejects(
     () => call(task, { action: "finish", summary: "done" }, ctx),
-    /still has uncommitted changes: sibling\.ts/,
+    /uncommitted task changes: sibling\.ts/,
   );
   await exec("git", ["add", "sibling.ts"], { cwd: root });
   await exec(
     "git",
     ["-c", "commit.gpgSign=false", "commit", "--no-gpg-sign", "-m", "update sibling"],
     { cwd: root },
+  );
+  assert.equal(parsed(await call(task, { action: "finish", summary: "done" }, ctx)).status, "done");
+});
+
+test("Git-managed tasks may leave unrelated pre-existing dirty files untouched", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-kit-task-dirty-root-"));
+  const taskFile = join(root, "task.ts");
+  const unrelated = join(root, "notes.txt");
+  await writeFile(taskFile, "export const value = 1;\n");
+  await writeFile(unrelated, "baseline\n");
+  await exec("git", ["init"], { cwd: root });
+  await exec("git", ["config", "user.name", "Pi Kit Test"], { cwd: root });
+  await exec("git", ["config", "user.email", "pi-kit@example.invalid"], { cwd: root });
+  await exec("git", ["add", "."], { cwd: root });
+  await exec("git", ["-c", "commit.gpgSign=false", "commit", "--no-gpg-sign", "-m", "fixture"], {
+    cwd: root,
+  });
+  await writeFile(unrelated, "user work\n");
+
+  const { tools, ctx } = harness(root);
+  const task = tools.get("task");
+  const verify = tools.get("verify");
+  await call(task, { action: "start", goal: "change task file" }, ctx);
+  await writeFile(taskFile, "export const value = 2;\n");
+  await call(
+    verify,
+    {
+      action: "run",
+      provenance: "existing_test",
+      command: process.execPath,
+      args: ["-e", "process.exit(0)"],
+      summary: "check",
+    },
+    ctx,
+  );
+  await assert.rejects(
+    () => call(task, { action: "finish", summary: "done" }, ctx),
+    /uncommitted task changes: task\.ts/,
+  );
+  await exec("git", ["add", "task.ts"], { cwd: root });
+  await exec(
+    "git",
+    ["-c", "commit.gpgSign=false", "commit", "--no-gpg-sign", "-m", "update task"],
+    { cwd: root },
+  );
+  assert.equal(parsed(await call(task, { action: "finish", summary: "done" }, ctx)).status, "done");
+  const status = await exec("git", ["status", "--short"], { cwd: root });
+  assert.match(status.stdout, /notes\.txt/);
+});
+
+test("non-Git tasks do not require a commit", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-kit-task-non-git-"));
+  const file = join(root, "note.txt");
+  await writeFile(file, "before\n");
+  const { tools, ctx } = harness(root);
+  const task = tools.get("task");
+  const verify = tools.get("verify");
+  await call(task, { action: "start", goal: "edit a plain directory" }, ctx);
+  await writeFile(file, "after\n");
+  await call(
+    verify,
+    {
+      action: "run",
+      provenance: "existing_test",
+      command: process.execPath,
+      args: ["-e", "process.exit(0)"],
+      summary: "check",
+    },
+    ctx,
   );
   assert.equal(parsed(await call(task, { action: "finish", summary: "done" }, ctx)).status, "done");
 });
