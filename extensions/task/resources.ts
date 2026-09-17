@@ -346,11 +346,13 @@ async function changedSinceBaseline(
 }
 
 export interface TaskWorkspaceState {
-  startedClean: boolean;
   baselineHead?: string;
   currentHead?: string;
   currentDirty: string[];
   changedDuringTask: string[];
+  uncommittedTaskChanges: string[];
+  taskCommitRequired: boolean;
+  taskCommitPresent: boolean;
 }
 
 export async function taskWorkspaceState(
@@ -364,12 +366,24 @@ export async function taskWorkspaceState(
   const currentHead = await git(baseline.root, ["rev-parse", "HEAD"])
     .then((value) => value.trim() || undefined)
     .catch(() => undefined);
+  const currentDirty = await dirtyPaths(baseline.root);
+  const changedDuringTask = await changedSinceBaseline(ctx.cwd, baseline);
+  const changed = new Set(changedDuringTask);
+  const uncommittedTaskChanges = currentDirty.filter((path) => changed.has(normalized(path)));
+  const taskCommitRequired = changedDuringTask.length > 0;
+  const taskCommitPresent = taskCommitRequired
+    ? baseline.head
+      ? currentHead !== undefined && currentHead !== baseline.head
+      : currentHead !== undefined
+    : true;
   return {
-    startedClean: baseline.dirty.length === 0,
     ...(baseline.head ? { baselineHead: baseline.head } : {}),
     ...(currentHead ? { currentHead } : {}),
-    currentDirty: await dirtyPaths(baseline.root),
-    changedDuringTask: await changedSinceBaseline(ctx.cwd, baseline),
+    currentDirty,
+    changedDuringTask,
+    uncommittedTaskChanges,
+    taskCommitRequired,
+    taskCommitPresent,
   };
 }
 
