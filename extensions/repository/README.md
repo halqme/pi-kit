@@ -10,7 +10,7 @@ The extension exposes two repository tools and transparently strengthens the bui
 
 The repository tools and editor integration intentionally share one structural engine instance, so opaque continuations returned by `context` are valid inputs to `code` in the same session. The automatic `edit` route makes that validation effective even when the model selects the built-in editor directly. Conceptual retrieval and structural retrieval are implementation strategies behind `context`, not separate tools the model must route between.
 
-The automatic editor route is based on the supported language extension, so source-based configuration and generated files are validated like other supported source. Unsupported languages and new files remain ordinary file-editing territory. Repository text returned by `context` is data, not instructions.
+The automatic editor route is based on the supported language extension, so source-based configuration and generated files are validated like other supported source. Unsupported languages and new files remain ordinary file-editing territory. Structural file scopes prefer paths relative to the current session directory, then fall back to Git-project-root-relative paths; the Git root is the containment boundary even when Pi starts in a subdirectory. Repository text returned by `context` is data, not instructions.
 
 Tree-sitter parser binaries for supported languages are supplied from the pinned `@repomix/tree-sitter-wasms` bundle. Language-specific adapters still own Pi Kit's outline/search/edit semantics and optional LSP integration; the shared bundle only centralizes parser distribution.
 

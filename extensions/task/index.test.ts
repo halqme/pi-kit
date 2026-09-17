@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 import extension from "./index.ts";
 
-function harness() {
+const exec = promisify(execFile);
+
+function harness(cwd = process.cwd()) {
   const entries: unknown[] = [];
   const tools = new Map<string, any>();
   const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
@@ -21,7 +28,7 @@ function harness() {
   } as any;
   extension(pi);
   const ctx = {
-    cwd: process.cwd(),
+    cwd,
     sessionManager: {
       getEntries: () => entries,
       getLeafId: () => "assistant-entry",
@@ -215,4 +222,134 @@ test("context findings are available as best-effort observations", async () => {
 
   const review = parsed(await call(task, { action: "review_context" }, ctx));
   assert.deepEqual(review.resources.observed, ["extensions/task/runtime.ts"]);
+});
+
+test("review_context requires a matching independent reviewer report", async () => {
+  const { tools, ctx } = harness();
+  const task = tools.get("task");
+  const verify = tools.get("verify");
+  await call(task, { action: "start", goal: "review contract" }, ctx);
+  await call(
+    verify,
+    {
+      action: "run",
+      provenance: "typecheck",
+      command: process.execPath,
+      args: ["-e", "process.exit(0)"],
+      summary: "node check",
+    },
+    ctx,
+  );
+  const review = parsed(await call(task, { action: "review_context" }, ctx));
+
+  await assert.rejects(
+    () => call(task, { action: "finish", summary: "done" }, ctx),
+    /no review_agent report/,
+  );
+  await call(
+    verify,
+    { action: "record", provenance: "self_review", passed: true, summary: "parent says okay" },
+    ctx,
+  );
+  await assert.rejects(
+    () => call(task, { action: "finish", summary: "done" }, ctx),
+    /no review_agent report/,
+  );
+  await assert.rejects(
+    () =>
+      call(
+        verify,
+        { action: "record", provenance: "review_agent", passed: true, summary: "independent" },
+        ctx,
+      ),
+    /reviewRequestId/,
+  );
+  await call(
+    verify,
+    {
+      action: "record",
+      provenance: "review_agent",
+      passed: true,
+      summary: "independent",
+      reviewRequestId: review.reviewRequest.id,
+    },
+    ctx,
+  );
+  assert.equal(parsed(await call(task, { action: "finish", summary: "done" }, ctx)).status, "done");
+});
+
+test("project-root deltas are visible and clean-start tasks must commit before finish", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-kit-task-root-"));
+  const nested = join(root, "extensions", "delegate");
+  const sibling = join(root, "sibling.ts");
+  await mkdir(nested, { recursive: true });
+  await writeFile(join(nested, "keep.txt"), "keep\n");
+  await writeFile(sibling, "export const value = 1;\n");
+  await exec("git", ["init"], { cwd: root });
+  await exec("git", ["config", "user.name", "Pi Kit Test"], { cwd: root });
+  await exec("git", ["config", "user.email", "pi-kit@example.invalid"], { cwd: root });
+  await exec("git", ["add", "."], { cwd: root });
+  await exec("git", ["-c", "commit.gpgSign=false", "commit", "--no-gpg-sign", "-m", "fixture"], {
+    cwd: root,
+  });
+
+  const { tools, ctx, emit } = harness(nested);
+  const task = tools.get("task");
+  const verify = tools.get("verify");
+  await call(task, { action: "start", goal: "edit a sibling extension" }, ctx);
+  await writeFile(sibling, "export const value = 2;\n");
+  await emit("tool_call", {
+    type: "tool_call",
+    toolCallId: "code-root-relative",
+    toolName: "code",
+    input: { action: "edit", path: "sibling.ts", oldText: "1", newText: "2" },
+  });
+  await emit("tool_result", {
+    type: "tool_result",
+    toolCallId: "code-root-relative",
+    toolName: "code",
+    input: { action: "edit", path: "sibling.ts", oldText: "1", newText: "2" },
+    content: [{ type: "text", text: "edited" }],
+    details: undefined,
+    isError: false,
+  });
+
+  const review = parsed(await call(task, { action: "review_context" }, ctx));
+  assert.deepEqual(review.resources.changedDuringTask, ["sibling.ts"]);
+  assert.deepEqual(review.resources.mutated, ["sibling.ts"]);
+  await call(
+    verify,
+    {
+      action: "run",
+      provenance: "existing_test",
+      command: process.execPath,
+      args: ["-e", "process.exit(0)"],
+      cwd: root,
+      summary: "root-scoped check",
+    },
+    ctx,
+  );
+  await call(
+    verify,
+    {
+      action: "record",
+      provenance: "review_agent",
+      passed: true,
+      summary: "no inconsistency",
+      reviewRequestId: review.reviewRequest.id,
+    },
+    ctx,
+  );
+
+  await assert.rejects(
+    () => call(task, { action: "finish", summary: "done" }, ctx),
+    /still has uncommitted changes: sibling\.ts/,
+  );
+  await exec("git", ["add", "sibling.ts"], { cwd: root });
+  await exec(
+    "git",
+    ["-c", "commit.gpgSign=false", "commit", "--no-gpg-sign", "-m", "update sibling"],
+    { cwd: root },
+  );
+  assert.equal(parsed(await call(task, { action: "finish", summary: "done" }, ctx)).status, "done");
 });

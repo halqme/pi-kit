@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -83,9 +84,13 @@ function normalized(path: string): string {
   return path.replaceAll("\\", "/");
 }
 
-function pathWithin(cwd: string, rawPath: string): string | undefined {
-  const absolute = resolve(cwd, rawPath);
-  const fromRoot = relative(cwd, absolute);
+function pathWithin(root: string, cwd: string, rawPath: string): string | undefined {
+  const candidates = isAbsolute(rawPath)
+    ? [resolve(rawPath)]
+    : [...new Set([resolve(cwd, rawPath), resolve(root, rawPath)])];
+  const absolute = candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
+  if (!absolute) return undefined;
+  const fromRoot = relative(root, absolute);
   if (!fromRoot || fromRoot.startsWith("..") || isAbsolute(fromRoot)) return undefined;
   return normalized(fromRoot);
 }
@@ -127,13 +132,14 @@ function capturesForTool(
   content: unknown,
   details: unknown,
   cwd: string,
+  root: string,
 ): Capture[] {
   const captures: Capture[] = [];
   const action = string(input.action);
   const push = (operation: Capture["operation"], rawPath: unknown) => {
     const value = string(rawPath);
     if (!value) return;
-    const path = pathWithin(cwd, value);
+    const path = pathWithin(root, cwd, value);
     if (!path) return;
     captures.push({ operation, path, ...(action ? { action } : {}) });
   };
@@ -169,6 +175,15 @@ function activeTask(ctx: ExtensionContext): TaskRef | undefined {
   return task?.status === "active" ? task : undefined;
 }
 
+function workspaceBaseline(
+  ctx: ExtensionContext,
+  taskId: string,
+): TaskWorkspaceBaseline | undefined {
+  return [...customEntries<TaskWorkspaceBaseline>(ctx, WORKSPACE_ENTRY)]
+    .reverse()
+    .find((item) => item.taskId === taskId);
+}
+
 export function registerTaskResourceTracking(pi: ExtensionAPI): void {
   const pending = new Map<string, PendingCall>();
 
@@ -185,6 +200,7 @@ export function registerTaskResourceTracking(pi: ExtensionAPI): void {
     if (event.isError || !trackedTools.has(event.toolName)) return undefined;
     const task = activeTask(ctx);
     if (!task) return undefined;
+    const root = workspaceBaseline(ctx, task.id)?.root ?? (await resolveProjectRoot(ctx.cwd));
 
     for (const capture of capturesForTool(
       event.toolName,
@@ -192,6 +208,7 @@ export function registerTaskResourceTracking(pi: ExtensionAPI): void {
       event.content,
       event.details,
       ctx.cwd,
+      root,
     )) {
       const resource: TaskResourceEvent = {
         version: 1,
@@ -229,6 +246,19 @@ function nulPaths(output: string): string[] {
     .map(normalized);
 }
 
+async function gitRoot(cwd: string): Promise<string | undefined> {
+  try {
+    const root = (await git(cwd, ["rev-parse", "--show-toplevel"])).trim();
+    return root ? resolve(root) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function resolveProjectRoot(cwd: string): Promise<string> {
+  return (await gitRoot(cwd)) ?? resolve(cwd);
+}
+
 async function dirtyPaths(root: string): Promise<string[]> {
   const [unstaged, staged, untracked] = await Promise.all([
     git(root, ["diff", "--name-only", "-z", "--"]),
@@ -250,12 +280,7 @@ export async function captureWorkspaceBaseline(
   cwd: string,
   taskId: string,
 ): Promise<TaskWorkspaceBaseline | undefined> {
-  let root: string;
-  try {
-    root = (await git(cwd, ["rev-parse", "--show-toplevel"])).trim();
-  } catch {
-    return undefined;
-  }
+  const root = await gitRoot(cwd);
   if (!root) return undefined;
 
   const head = await git(root, ["rev-parse", "HEAD"])
@@ -276,17 +301,18 @@ export async function captureWorkspaceBaseline(
   };
 }
 
-function displayPath(cwd: string, root: string, path: string): string | undefined {
-  return pathWithin(cwd, resolve(root, path));
+function displayPath(root: string, path: string): string | undefined {
+  const absolute = resolve(root, path);
+  const fromRoot = relative(root, absolute);
+  if (!fromRoot || fromRoot.startsWith("..") || isAbsolute(fromRoot)) return undefined;
+  return normalized(fromRoot);
 }
 
 async function changedSinceBaseline(
   cwd: string,
   baseline: TaskWorkspaceBaseline,
 ): Promise<string[]> {
-  const currentRoot = await git(cwd, ["rev-parse", "--show-toplevel"])
-    .then((value) => value.trim())
-    .catch(() => "");
+  const currentRoot = await gitRoot(cwd);
   if (!currentRoot || resolve(currentRoot) !== resolve(baseline.root)) return [];
 
   const candidates = new Set<string>();
@@ -313,10 +339,54 @@ async function changedSinceBaseline(
       const current = await fileDigest(baseline.root, path);
       if (current === initial.get(path)) continue;
     }
-    const display = displayPath(cwd, baseline.root, path);
+    const display = displayPath(baseline.root, path);
     if (display) changed.push(display);
   }
   return changed;
+}
+
+export interface TaskWorkspaceState {
+  startedClean: boolean;
+  baselineHead?: string;
+  currentHead?: string;
+  currentDirty: string[];
+  changedDuringTask: string[];
+}
+
+export async function taskWorkspaceState(
+  ctx: ExtensionContext,
+  taskId: string,
+): Promise<TaskWorkspaceState | undefined> {
+  const baseline = workspaceBaseline(ctx, taskId);
+  if (!baseline) return undefined;
+  const currentRoot = await gitRoot(ctx.cwd);
+  if (!currentRoot || resolve(currentRoot) !== resolve(baseline.root)) return undefined;
+  const currentHead = await git(baseline.root, ["rev-parse", "HEAD"])
+    .then((value) => value.trim() || undefined)
+    .catch(() => undefined);
+  return {
+    startedClean: baseline.dirty.length === 0,
+    ...(baseline.head ? { baselineHead: baseline.head } : {}),
+    ...(currentHead ? { currentHead } : {}),
+    currentDirty: await dirtyPaths(baseline.root),
+    changedDuringTask: await changedSinceBaseline(ctx.cwd, baseline),
+  };
+}
+
+export async function taskWorkspaceRevision(
+  ctx: ExtensionContext,
+  taskId: string,
+): Promise<string | undefined> {
+  const baseline = workspaceBaseline(ctx, taskId);
+  const state = await taskWorkspaceState(ctx, taskId);
+  if (!baseline || !state) return undefined;
+  const files = await Promise.all(
+    state.changedDuringTask.map(async (path) => ({
+      path,
+      digest: await fileDigest(baseline.root, path),
+    })),
+  );
+  return JSON.stringify(files);
 }
 
 function uniquePaths(
@@ -335,15 +405,13 @@ export async function taskReviewResources(
   const events = customEntries<TaskResourceEvent>(ctx, RESOURCE_ENTRY).filter(
     (event) => event.taskId === taskId,
   );
-  const baseline = [...customEntries<TaskWorkspaceBaseline>(ctx, WORKSPACE_ENTRY)]
-    .reverse()
-    .find((item) => item.taskId === taskId);
+  const baseline = workspaceBaseline(ctx, taskId);
   const changedDuringTask = baseline
     ? await changedSinceBaseline(ctx.cwd, baseline).catch(() => [])
     : uniquePaths(events, "mutate");
   const preexistingDirty = baseline
     ? baseline.dirty.flatMap((file) => {
-        const path = displayPath(ctx.cwd, baseline.root, file.path);
+        const path = displayPath(baseline.root, file.path);
         return path ? [path] : [];
       })
     : [];
