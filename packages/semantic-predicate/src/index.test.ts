@@ -1,4 +1,5 @@
-import assert from "node:assert/strict";\nimport { describe, test } from "node:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 import {
   createOpenRouterSemanticEvaluator,
   parseSemanticDecisionResponse,
@@ -24,7 +25,7 @@ describe("parseSemanticDecisionResponse", () => {
       },
     );
 
-    expect(result.answers.scope_drift).toEqual({
+    assert.deepEqual(result.answers.scope_drift, {
       type: "noul",
       noul: 0.82,
     });
@@ -62,24 +63,26 @@ describe("parseSemanticDecisionResponse", () => {
   });
 
   test("rejects out-of-range Noul probabilities", () => {
-    expect(() =>
-      parseSemanticDecisionResponse(
-        {
-          answers: {
-            gap: {
-              type: "noul",
-              noul: 1.2,
+    assert.throws(
+      () =>
+        parseSemanticDecisionResponse(
+          {
+            answers: {
+              gap: {
+                type: "noul",
+                noul: 1.2,
+              },
             },
           },
-        },
-        {
-          gap: {
-            type: "noul",
-            instructions: "Is there a verification gap?",
+          {
+            gap: {
+              type: "noul",
+              instructions: "Is there a verification gap?",
+            },
           },
-        },
-      ),
-    ).toThrow("between 0 and 1");
+        ),
+      /between 0 and 1/,
+    );
   });
 });
 
@@ -130,7 +133,7 @@ describe("createOpenRouterSemanticEvaluator", () => {
     const result = await evaluate({ state, questions });
 
     assert.equal(requestUrl, "https://openrouter.ai/api/alpha/decisions");
-    expect(requestBody).toEqual({
+    assert.deepEqual(requestBody, {
       model: "typesafe/jev-1.13",
       state,
       questions,
