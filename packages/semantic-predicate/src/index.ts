@@ -1,130 +1,211 @@
-export type SemanticPredicate = {
-  description: string;
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type NoulQuestion = {
+  type: "noul";
+  instructions: JsonValue;
+  criteria?: {
+    true: JsonValue;
+    false: JsonValue;
+  };
 };
 
-export type SemanticPredicateSet = Record<string, SemanticPredicate>;
+export type ChoiceQuestion = {
+  type: "choice";
+  instructions: JsonValue;
+  criteria: Record<string, JsonValue>;
+};
 
-export type SemanticDecision = {
-  value: boolean;
-  probability: number;
+export type ScoreQuestion = {
+  type: "score";
+  instructions: JsonValue;
+  criteria: JsonValue[];
+};
+
+export type SemanticQuestion = NoulQuestion | ChoiceQuestion | ScoreQuestion;
+export type SemanticQuestionSet = Record<string, SemanticQuestion>;
+
+export type NoulAnswer = {
+  type: "noul";
+  noul: number;
+};
+
+export type ChoiceAnswer = {
+  type: "choice";
+  choice: string;
+  probabilities: Record<string, number>;
   confidence: number;
 };
 
-export type SemanticDecisionSet<T extends SemanticPredicateSet> = {
-  [K in keyof T]: SemanticDecision;
+export type ScoreAnswer = {
+  type: "score";
+  score: number;
+  legend: Record<string, JsonValue>;
+  probabilities: Record<string, number>;
+  confidence: number;
 };
 
-export type EvaluateInput<T extends SemanticPredicateSet> = {
-  state: unknown;
-  predicates: T;
+export type SemanticAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer;
+
+export type AnswerForQuestion<T extends SemanticQuestion> = T extends NoulQuestion
+  ? NoulAnswer
+  : T extends ChoiceQuestion
+    ? ChoiceAnswer
+    : T extends ScoreQuestion
+      ? ScoreAnswer
+      : never;
+
+export type AnswersForQuestions<T extends SemanticQuestionSet> = {
+  [K in keyof T]: AnswerForQuestion<T[K]>;
 };
 
-export type SemanticEvaluator = <T extends SemanticPredicateSet>(
+export type EvaluateInput<T extends SemanticQuestionSet> = {
+  state: JsonValue;
+  questions: T;
+};
+
+export type SemanticDecisionResponse<T extends SemanticQuestionSet> = {
+  model?: string;
+  answers: AnswersForQuestions<T>;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    [key: string]: JsonValue | undefined;
+  };
+  [key: string]: unknown;
+};
+
+export type SemanticEvaluator = <T extends SemanticQuestionSet>(
   input: EvaluateInput<T>,
-) => Promise<SemanticDecisionSet<T>>;
+) => Promise<SemanticDecisionResponse<T>>;
 
 export type OpenRouterEvaluatorOptions = {
   apiKey: string;
   model?: string;
   endpoint?: string;
   fetch?: typeof globalThis.fetch;
+  headers?: Record<string, string>;
 };
 
-type OpenRouterResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string | null;
-    };
-  }>;
-};
-
-const clampProbability = (value: unknown, field: string): number => {
+const probability = (value: unknown, field: string): number => {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new Error(`Invalid semantic decision ${field}`);
+    throw new Error(`Invalid probability: ${field}`);
   }
   if (value < 0 || value > 1) {
-    throw new Error(`Semantic decision ${field} must be between 0 and 1`);
+    throw new Error(`${field} must be between 0 and 1`);
   }
   return value;
 };
 
-export const parseSemanticDecisions = <T extends SemanticPredicateSet>(
-  raw: unknown,
-  predicates: T,
-): SemanticDecisionSet<T> => {
-  if (!raw || typeof raw !== "object") throw new Error("Invalid semantic decision response");
-  const root = raw as { results?: unknown };
-  if (!root.results || typeof root.results !== "object") {
-    throw new Error("Semantic decision response is missing results");
+const probabilities = (value: unknown, field: string): Record<string, number> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid probability distribution: ${field}`);
   }
 
-  const results = root.results as Record<string, unknown>;
-  const parsed: Record<string, SemanticDecision> = {};
-
-  for (const name of Object.keys(predicates)) {
-    const candidate = results[name];
-    if (!candidate || typeof candidate !== "object") {
-      throw new Error(`Semantic decision response is missing predicate: ${name}`);
-    }
-    const decision = candidate as {
-      value?: unknown;
-      probability?: unknown;
-      confidence?: unknown;
-    };
-    if (typeof decision.value !== "boolean") {
-      throw new Error(`Invalid semantic decision value for ${name}`);
-    }
-    parsed[name] = {
-      value: decision.value,
-      probability: clampProbability(decision.probability, `${name}.probability`),
-      confidence: clampProbability(decision.confidence, `${name}.confidence`),
-    };
-  }
-
-  return parsed as SemanticDecisionSet<T>;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, candidate]) => [
+      key,
+      probability(candidate, `${field}.${key}`),
+    ]),
+  );
 };
 
-const buildResponseSchema = (predicates: SemanticPredicateSet) => ({
-  type: "object",
-  properties: {
-    results: {
-      type: "object",
-      properties: Object.fromEntries(
-        Object.keys(predicates).map((name) => [
-          name,
-          {
-            type: "object",
-            properties: {
-              value: { type: "boolean" },
-              probability: { type: "number", minimum: 0, maximum: 1 },
-              confidence: { type: "number", minimum: 0, maximum: 1 },
-            },
-            required: ["value", "probability", "confidence"],
-            additionalProperties: false,
-          },
-        ]),
-      ),
-      required: Object.keys(predicates),
-      additionalProperties: false,
-    },
-  },
-  required: ["results"],
-  additionalProperties: false,
-});
+const parseAnswer = (raw: unknown, question: SemanticQuestion, id: string): SemanticAnswer => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`Missing answer for question: ${id}`);
+  }
+
+  const answer = raw as Record<string, unknown>;
+  if (answer.type !== question.type) {
+    throw new Error(`Unexpected answer type for question: ${id}`);
+  }
+
+  if (question.type === "noul") {
+    return {
+      type: "noul",
+      noul: probability(answer.noul, `${id}.noul`),
+    };
+  }
+
+  if (question.type === "choice") {
+    if (typeof answer.choice !== "string" || !(answer.choice in question.criteria)) {
+      throw new Error(`Invalid choice for question: ${id}`);
+    }
+
+    return {
+      type: "choice",
+      choice: answer.choice,
+      probabilities: probabilities(answer.probabilities, `${id}.probabilities`),
+      confidence: probability(answer.confidence, `${id}.confidence`),
+    };
+  }
+
+  if (typeof answer.score !== "number" || !Number.isFinite(answer.score)) {
+    throw new Error(`Invalid score for question: ${id}`);
+  }
+  if (!answer.legend || typeof answer.legend !== "object" || Array.isArray(answer.legend)) {
+    throw new Error(`Invalid score legend for question: ${id}`);
+  }
+
+  return {
+    type: "score",
+    score: answer.score,
+    legend: answer.legend as Record<string, JsonValue>,
+    probabilities: probabilities(answer.probabilities, `${id}.probabilities`),
+    confidence: probability(answer.confidence, `${id}.confidence`),
+  };
+};
+
+export const parseSemanticDecisionResponse = <T extends SemanticQuestionSet>(
+  raw: unknown,
+  questions: T,
+): SemanticDecisionResponse<T> => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Invalid semantic decision response");
+  }
+
+  const response = raw as Record<string, unknown>;
+  if (!response.answers || typeof response.answers !== "object" || Array.isArray(response.answers)) {
+    throw new Error("Semantic decision response is missing answers");
+  }
+
+  const rawAnswers = response.answers as Record<string, unknown>;
+  const parsedAnswers: Record<string, SemanticAnswer> = {};
+
+  for (const [id, question] of Object.entries(questions)) {
+    parsedAnswers[id] = parseAnswer(rawAnswers[id], question, id);
+  }
+
+  return {
+    ...response,
+    ...(typeof response.model === "string" ? { model: response.model } : {}),
+    answers: parsedAnswers as AnswersForQuestions<T>,
+    ...(response.usage && typeof response.usage === "object"
+      ? {
+          usage: response.usage as SemanticDecisionResponse<T>["usage"],
+        }
+      : {}),
+  };
+};
 
 export const createOpenRouterSemanticEvaluator = (
   options: OpenRouterEvaluatorOptions,
 ): SemanticEvaluator => {
-  const endpoint = options.endpoint ?? "https://openrouter.ai/api/v1/chat/completions";
-  const model = options.model ?? "~typesafe/jev-latest";
+  const endpoint = options.endpoint ?? "https://openrouter.ai/api/alpha/decisions";
+  const model = options.model ?? "typesafe/jev-1.13";
   const fetchImpl = options.fetch ?? globalThis.fetch;
 
-  return async <T extends SemanticPredicateSet>({
+  return async <T extends SemanticQuestionSet>({
     state,
-    predicates,
-  }: EvaluateInput<T>): Promise<SemanticDecisionSet<T>> => {
-    if (Object.keys(predicates).length === 0) {
-      return {} as SemanticDecisionSet<T>;
+    questions,
+  }: EvaluateInput<T>): Promise<SemanticDecisionResponse<T>> => {
+    if (Object.keys(questions).length === 0) {
+      return { model, answers: {} as AnswersForQuestions<T> };
     }
 
     const response = await fetchImpl(endpoint, {
@@ -132,31 +213,12 @@ export const createOpenRouterSemanticEvaluator = (
       headers: {
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",
+        ...options.headers,
       },
       body: JSON.stringify({
         model,
-        messages: [
-          {
-            role: "user",
-            content: JSON.stringify({
-              state,
-              questions: Object.fromEntries(
-                Object.entries(predicates).map(([name, predicate]) => [
-                  name,
-                  predicate.description,
-                ]),
-              ),
-            }),
-          },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "semantic_predicates",
-            strict: true,
-            schema: buildResponseSchema(predicates),
-          },
-        },
+        state,
+        questions,
       }),
     });
 
@@ -165,10 +227,6 @@ export const createOpenRouterSemanticEvaluator = (
       throw new Error(`OpenRouter semantic evaluation failed (${response.status}): ${body}`);
     }
 
-    const payload = (await response.json()) as OpenRouterResponse;
-    const content = payload.choices?.[0]?.message?.content;
-    if (!content) throw new Error("OpenRouter semantic evaluation returned no content");
-
-    return parseSemanticDecisions(JSON.parse(content), predicates);
+    return parseSemanticDecisionResponse(await response.json(), questions);
   };
 };
