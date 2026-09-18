@@ -54,6 +54,75 @@ test("session restore notifies and acknowledges an unchecked process once", asyn
   await events.get("session_shutdown")?.({ type: "session_shutdown", reason: "quit" }, ctx);
 });
 
+test("check hides running output unless inspection is explicit", async (t) => {
+  const sessionDir = await mkdtemp(join(tmpdir(), "pi-background-session-"));
+  t.after(() => rm(sessionDir, { recursive: true, force: true }));
+  let tool: { execute: (...args: unknown[]) => Promise<unknown> } | undefined;
+  const pi = {
+    registerTool(candidate: { execute: (...args: unknown[]) => Promise<unknown> }) {
+      tool = candidate;
+    },
+    on() {},
+    sendMessage() {},
+  } as unknown as ExtensionAPI;
+  const ctx = {
+    cwd: sessionDir,
+    isIdle: () => true,
+    ui: { setStatus() {} },
+    sessionManager: {
+      getSessionDir: () => sessionDir,
+      getSessionId: () => "session",
+      getSessionFile: () => join(sessionDir, "session.jsonl"),
+    },
+  } as unknown as ExtensionContext;
+
+  backgroundProcessExtension(pi);
+  const registeredTool = tool;
+  assert.ok(registeredTool);
+  const started = (await registeredTool.execute(
+    "start",
+    { action: "start", command: "printf progress; sleep 10", label: "progress" },
+    undefined,
+    undefined,
+    ctx,
+  )) as { details: { request: { id: string }; taskDir: string } };
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if ((await inspectProcess(started.details.taskDir)).phase === "running") break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal((await inspectProcess(started.details.taskDir)).phase, "running");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const statusOnly = (await registeredTool.execute(
+    "check-status",
+    { action: "check", id: started.details.request.id },
+    undefined,
+    undefined,
+    ctx,
+  )) as { content: Array<{ text?: string }>; details: { output?: unknown } };
+  assert.match(String(statusOnly.content[0]?.text), /Process is still running/);
+  assert.doesNotMatch(String(statusOnly.content[0]?.text), /stdout:|progress/);
+  assert.equal(statusOnly.details.output, undefined);
+
+  const inspected = (await registeredTool.execute(
+    "check-output",
+    { action: "check", id: started.details.request.id, inspectRunning: true },
+    undefined,
+    undefined,
+    ctx,
+  )) as { content: Array<{ text?: string }> };
+  assert.match(String(inspected.content[0]?.text), /stdout:\nprogress/);
+
+  await registeredTool.execute(
+    "stop",
+    { action: "stop", id: started.details.request.id },
+    undefined,
+    undefined,
+    ctx,
+  );
+});
+
 test("start_many reports mixed failures without requiring a retry", async (t) => {
   const sessionDir = await mkdtemp(join(tmpdir(), "pi-background-session-"));
   t.after(() => rm(sessionDir, { recursive: true, force: true }));
