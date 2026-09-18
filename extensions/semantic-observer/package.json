@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "bun run typecheck",
+    "check": "bun run typecheck && bun run test",
     "typecheck": "tsc --noEmit",
-    "dev": "pi -e ./index.ts"
+    "dev": "pi -e ./index.ts",
+    "test": "node --test"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "catalog:",
