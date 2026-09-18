@@ -1,63 +1,140 @@
 import { describe, expect, test } from "bun:test";
-import { parseSemanticDecisions } from "./index.ts";
+import {
+  createOpenRouterSemanticEvaluator,
+  parseSemanticDecisionResponse,
+} from "./index.ts";
 
-describe("parseSemanticDecisions", () => {
-  test("accepts complete bounded decisions", () => {
-    const result = parseSemanticDecisions(
+describe("parseSemanticDecisionResponse", () => {
+  test("parses a Noul without inventing a confidence field", () => {
+    const result = parseSemanticDecisionResponse(
       {
-        results: {
-          scopeDrift: {
-            value: true,
-            probability: 0.82,
-            confidence: 0.91,
+        model: "typesafe/jev-1.13",
+        answers: {
+          scope_drift: {
+            type: "noul",
+            noul: 0.82,
           },
         },
       },
       {
-        scopeDrift: {
-          description: "Has the work moved outside the requested scope?",
+        scope_drift: {
+          type: "noul",
+          instructions: "Has the work moved outside the requested scope?",
         },
       },
     );
 
-    expect(result.scopeDrift).toEqual({
-      value: true,
-      probability: 0.82,
-      confidence: 0.91,
+    expect(result.answers.scope_drift).toEqual({
+      type: "noul",
+      noul: 0.82,
     });
   });
 
-  test("rejects missing predicates", () => {
-    expect(() =>
-      parseSemanticDecisions(
-        { results: {} },
-        {
-          missingEvidence: {
-            description: "Is completion evidence missing?",
+  test("parses Choice distributions and confidence", () => {
+    const result = parseSemanticDecisionResponse(
+      {
+        answers: {
+          route: {
+            type: "choice",
+            choice: "review",
+            probabilities: {
+              continue: 0.25,
+              review: 0.75,
+            },
+            confidence: 0.5,
           },
         },
-      ),
-    ).toThrow("missing predicate");
+      },
+      {
+        route: {
+          type: "choice",
+          instructions: "Which route fits the state?",
+          criteria: {
+            continue: "Continue normally.",
+            review: "Request review.",
+          },
+        },
+      },
+    );
+
+    expect(result.answers.route.choice).toBe("review");
+    expect(result.answers.route.probabilities.review).toBe(0.75);
   });
 
-  test("rejects probabilities outside the unit interval", () => {
+  test("rejects out-of-range Noul probabilities", () => {
     expect(() =>
-      parseSemanticDecisions(
+      parseSemanticDecisionResponse(
         {
-          results: {
-            consistencyRisk: {
-              value: false,
-              probability: 1.2,
-              confidence: 0.5,
+          answers: {
+            gap: {
+              type: "noul",
+              noul: 1.2,
             },
           },
         },
         {
-          consistencyRisk: {
-            description: "Are the changes likely inconsistent with the repository?",
+          gap: {
+            type: "noul",
+            instructions: "Is there a verification gap?",
           },
         },
       ),
     ).toThrow("between 0 and 1");
+  });
+});
+
+describe("createOpenRouterSemanticEvaluator", () => {
+  test("uses the Decisions API with state and typed questions directly", async () => {
+    let requestUrl = "";
+    let requestBody: unknown;
+
+    const evaluate = createOpenRouterSemanticEvaluator({
+      apiKey: "test-key",
+      fetch: async (input, init) => {
+        requestUrl = String(input);
+        requestBody = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            model: "typesafe/jev-1.13",
+            answers: {
+              scope_drift: {
+                type: "noul",
+                noul: 0.2,
+              },
+            },
+            usage: {
+              input_tokens: 42,
+              output_tokens: 3,
+            },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      },
+    });
+
+    const state = {
+      request: "Only update the parser.",
+      changes: "Changed parser.ts.",
+    };
+
+    const questions = {
+      scope_drift: {
+        type: "noul" as const,
+        instructions: "Given `request` and `changes`, has the work moved outside the request?",
+      },
+    };
+
+    const result = await evaluate({ state, questions });
+
+    expect(requestUrl).toBe("https://openrouter.ai/api/alpha/decisions");
+    expect(requestBody).toEqual({
+      model: "typesafe/jev-1.13",
+      state,
+      questions,
+    });
+    expect(result.answers.scope_drift.noul).toBe(0.2);
   });
 });
