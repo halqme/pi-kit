@@ -266,5 +266,8 @@ export async function buildObservationState(
     Promise.resolve(contextEvidence(ctx, packet)),
   ]);
 
-  return projectObservationState(observation, packet, { diff, context });
+  return projectObservationState(observation, packet, {
+    ...(diff ? { diff } : {}),
+    context,
+  });
 }
