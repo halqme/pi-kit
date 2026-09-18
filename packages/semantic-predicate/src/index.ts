@@ -181,16 +181,18 @@ export const parseSemanticDecisionResponse = <T extends SemanticQuestionSet>(
     parsedAnswers[id] = parseAnswer(rawAnswers[id], question, id);
   }
 
-  return {
-    ...response,
-    ...(typeof response.model === "string" ? { model: response.model } : {}),
+  const parsed: SemanticDecisionResponse<T> = {
     answers: parsedAnswers as AnswersForQuestions<T>,
-    ...(response.usage && typeof response.usage === "object"
-      ? {
-          usage: response.usage as SemanticDecisionResponse<T>["usage"],
-        }
-      : {}),
   };
+
+  if (typeof response.model === "string") {
+    parsed.model = response.model;
+  }
+  if (response.usage && typeof response.usage === "object") {
+    parsed.usage = response.usage as NonNullable<SemanticDecisionResponse<T>["usage"]>;
+  }
+
+  return parsed;
 };
 
 export const createOpenRouterSemanticEvaluator = (
