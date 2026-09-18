@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";\nimport { describe, test } from "node:test";
 import {
   createOpenRouterSemanticEvaluator,
   parseSemanticDecisionResponse,
@@ -57,8 +57,8 @@ describe("parseSemanticDecisionResponse", () => {
       },
     );
 
-    expect(result.answers.route.choice).toBe("review");
-    expect(result.answers.route.probabilities.review).toBe(0.75);
+    assert.equal(result.answers.route.choice, "review");
+    assert.equal(result.answers.route.probabilities.review, 0.75);
   });
 
   test("rejects out-of-range Noul probabilities", () => {
@@ -129,12 +129,12 @@ describe("createOpenRouterSemanticEvaluator", () => {
 
     const result = await evaluate({ state, questions });
 
-    expect(requestUrl).toBe("https://openrouter.ai/api/alpha/decisions");
+    assert.equal(requestUrl, "https://openrouter.ai/api/alpha/decisions");
     expect(requestBody).toEqual({
       model: "typesafe/jev-1.13",
       state,
       questions,
     });
-    expect(result.answers.scope_drift.noul).toBe(0.2);
+    assert.equal(result.answers.scope_drift.noul, 0.2);
   });
 });
