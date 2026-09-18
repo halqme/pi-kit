@@ -9,10 +9,5 @@
     "check": "bun run typecheck && bun test",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
-  },
-  "devDependencies": {
-    "@types/bun": "catalog:",
-    "@types/node": "catalog:",
-    "typescript": "catalog:"
   }
 }
