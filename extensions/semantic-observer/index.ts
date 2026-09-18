@@ -4,7 +4,7 @@ import {
   createOpenRouterSemanticEvaluator,
   type JsonValue,
   type NoulQuestion,
-} from "@halqme/semantic-predicate";
+} from "../../packages/semantic-predicate/src/index.ts";
 
 const noul = (
   instructions: string,
