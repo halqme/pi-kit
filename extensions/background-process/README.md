@@ -4,12 +4,10 @@ Runs shell commands in detached supervisor processes and records their state out
 
 The `background_process` tool supports:
 
-For frequent lightweight review requests, start a detached Pi command here rather than an agent team. Use a non-interactive ephemeral process so it exits after producing the review, for example `pi -p --no-session --no-extensions --no-skills --no-prompt-templates --tools read,bash 'please review ...'`, then inspect its output after the process reports completion. Keep project context files enabled when repository-local instructions should still apply.
-
 - `start`: start a shell command with an optional label and cwd.
 - `start_many`: start multiple shell commands concurrently. Each item accepts `command`, plus optional `label` and `cwd`.
 - `list`: show pending, running, and unchecked jobs. Set `includeCompleted` for history.
-- `check`: show status plus bounded stdout/stderr tails without acknowledging the result. Use it for explicit progress or output requests, not to wait for completion.
+- `check`: return status and, after completion, bounded stdout/stderr tails without acknowledging the result. While a process is pending or running, output is hidden by default; set `inspectRunning: true` only for an explicit progress/output request, never to wait for completion.
 - `stop`: request TERM followed by KILL after a grace period.
 
 `start_many` validates and launches each item independently, so a blank command or launch failure does not prevent valid items from starting. A non-empty batch returns a structured result with `details.status` set to `started`, `partial`, or `failed`, plus `details.started` and `details.failed` (each failure includes its zero-based `index` and `error`). The same status and per-item failures are included in the text result, so callers should not retry the whole batch just because one item failed. Each started process remains independently inspectable and stoppable by its returned ID.
