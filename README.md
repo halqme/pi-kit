@@ -35,18 +35,21 @@ extensions/
       code/
       syntax/
   session-metrics/
+  semantic-observer/
   task/
   terminal/
+packages/
+  semantic-predicate/
 skills/
 prompts/
 docs/
 tsconfig.json
 ```
 
-Every runtime workspace now lives under `extensions/`; there is no separate `packages/` layer. `session-metrics` owns both the Pi extension and its offline CLI/analysis kernel. Multi-word extension directories use kebab-case, and the shared TypeScript configuration lives at the repository root.
+`extensions/` remains the home of Pi runtime integration. `packages/` is reserved for code that is meaningful without Pi; the experimental `semantic-predicate` package lives there so Jev/OpenRouter evaluation can be removed or reused without changing Pi runtime contracts. It is intentionally not a root workspace yet while the experiment is being evaluated. `session-metrics` continues to own both its Pi extension and offline CLI/analysis kernel. Multi-word extension directories use kebab-case, and the shared TypeScript configuration lives at the repository root.
 
 The repository extension exposes `context` and `code`, and transparently strengthens the built-in `edit` path for supported source files. The old standalone Astrolabe and BM25 tool surfaces are gone; their useful structural and lexical mechanisms are internal implementation details under `src/syntax` and `src/context`.
 
-Additional independent utilities remain available through the extensions listed above. `ask` provides synchronous structured user decisions in the interactive TUI; offline session analysis is provided by the `session-metrics` CLI in `extensions/session-metrics`.
+Additional independent utilities remain available through the extensions listed above. `ask` provides synchronous structured user decisions in the interactive TUI; offline session analysis is provided by the `session-metrics` CLI in `extensions/session-metrics`. `semantic-observer` is an experimental, explicitly invoked observer: it sends caller-supplied state to the standalone semantic predicate evaluator and returns advisory results without changing task, verification, or completion state.
 
 See [`docs/architecture.md`](docs/architecture.md) for the design rationale and runtime contracts.
