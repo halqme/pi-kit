@@ -4,8 +4,6 @@ Runs shell commands in detached supervisor processes and records their state out
 
 The `background_process` tool supports:
 
-For frequent lightweight review requests, start a detached Pi command here rather than an agent team. Use a non-interactive ephemeral process so it exits after producing the review, for example `pi -p --no-session --no-extensions --no-skills --no-prompt-templates --tools read,bash 'please review ...'`, then inspect its output after the process reports completion. Keep project context files enabled when repository-local instructions should still apply.
-
 - `start`: start a shell command with an optional label and cwd.
 - `start_many`: start multiple shell commands concurrently. Each item accepts `command`, plus optional `label` and `cwd`.
 - `list`: show pending, running, and unchecked jobs. Set `includeCompleted` for history.
