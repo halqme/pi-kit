@@ -4,7 +4,9 @@ import {
   createOpenRouterSemanticEvaluator,
   type JsonValue,
   type NoulQuestion,
+  type SemanticEvaluator,
 } from "../../packages/semantic-predicate/src/index.ts";
+import { buildObservationState, type ObservationId } from "./evidence.ts";
 
 const noul = (
   instructions: string,
@@ -21,17 +23,17 @@ const noul = (
 
 const QUESTIONS = {
   scopeDrift: noul(
-    "Given `request`, `task`, and `changes`, has the work materially moved beyond the requested outcome or the smallest necessary implementation scope?",
-    "The changes add behavior, refactoring, dependencies, or scope that is not needed for the request or task contract.",
-    "The changes stay within the request or are necessary to satisfy its task contract.",
+    "Using `task` as the scope authority and `changes` as runtime evidence, has the work materially moved beyond the requested outcome or the smallest necessary implementation scope? Treat `task.current_stage.working_plan` as a hypothesis, not as authority to expand scope.",
+    "The changes add behavior, refactoring, dependencies, or scope that is not needed for the task goal or acceptance criteria.",
+    "The changes stay within the task goal and acceptance criteria, or are necessary to satisfy them.",
   ),
   verificationGap: noul(
-    "Given `request`, `changes`, and `verification`, is there a meaningful gap between what changed and what the executed verification demonstrates?",
+    "Given `task`, `changes`, and executed `verification`, is there a meaningful gap between what changed and what the executed verification demonstrates?",
     "Important changed behavior or an important failure mode is not covered by the supplied executed verification.",
     "The supplied executed verification is relevant evidence for the important changed behavior and failure modes.",
   ),
   consistencyRisk: noul(
-    "Given `changes` and `repository_evidence`, do the changes appear inconsistent with relevant repository contracts, conventions, or related files?",
+    "Given `changes` and the previously observed `repository_evidence`, do the changes appear inconsistent with relevant repository contracts, conventions, or related code?",
     "The supplied repository evidence indicates a material inconsistency or likely integration mismatch.",
     "The changes are consistent with the supplied repository evidence, or the evidence does not indicate a material mismatch.",
   ),
@@ -39,116 +41,82 @@ const QUESTIONS = {
 
 type ObservationResult = {
   probability: number;
-  stateFields: string[];
   model?: string;
 };
 
-const state = (entries: Array<[string, string | undefined]>): JsonValue =>
-  Object.fromEntries(
-    entries.filter((entry): entry is [string, string] => entry[1] !== undefined),
-  );
+async function evaluateObservation(
+  evaluate: SemanticEvaluator,
+  observation: ObservationId,
+  state: JsonValue,
+): Promise<ObservationResult> {
+  if (observation === "scopeDrift") {
+    const response = await evaluate({
+      state,
+      questions: { scope_drift: QUESTIONS.scopeDrift },
+    });
+    return {
+      probability: response.answers.scope_drift.noul,
+      ...(response.model ? { model: response.model } : {}),
+    };
+  }
+
+  if (observation === "verificationGap") {
+    const response = await evaluate({
+      state,
+      questions: { verification_gap: QUESTIONS.verificationGap },
+    });
+    return {
+      probability: response.answers.verification_gap.noul,
+      ...(response.model ? { model: response.model } : {}),
+    };
+  }
+
+  const response = await evaluate({
+    state,
+    questions: { consistency_risk: QUESTIONS.consistencyRisk },
+  });
+  return {
+    probability: response.answers.consistency_risk.noul,
+    ...(response.model ? { model: response.model } : {}),
+  };
+}
 
 export default function semanticObserverExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "semantic_observe",
     label: "Semantic Observe",
     description:
-      "Run optional, non-authoritative Jev observations over compact evidence. Each judgment receives only the state fields it needs; returned probabilities are advisory and never change task, verification, or completion state.",
+      "Run optional, non-authoritative Jev observations over evidence already captured by Pi Kit task, repository, mutation, and verification runtime state. The caller chooses observations, not the evidence payload.",
     parameters: Type.Object({
-      request: Type.String({
-        description:
-          "The user's requested outcome, preferably copied or minimally normalized rather than paraphrased.",
-      }),
-      task: Type.Optional(
-        Type.String({
-          description:
-            "Current task contract or acceptance criteria when they materially clarify the request.",
-        }),
-      ),
-      changes: Type.String({
-        description:
-          "Compact primary evidence about the current changes: changed paths plus the smallest relevant diff excerpts or direct change facts. Prefer evidence over a narrative summary.",
-      }),
-      verification: Type.Optional(
-        Type.String({
-          description:
-            "Executed verification evidence and results. Do not include planned checks or self-review as if they had run.",
-        }),
-      ),
-      repositoryEvidence: Type.Optional(
-        Type.String({
-          description:
-            "Only repository evidence relevant to consistency: nearby contracts, conventions, related code, or retrieved context. Do not send broad repository dumps.",
-        }),
+      observations: Type.Array(
+        Type.Union([
+          Type.Literal("scopeDrift"),
+          Type.Literal("verificationGap"),
+          Type.Literal("consistencyRisk"),
+        ]),
+        {
+          minItems: 1,
+          maxItems: 3,
+          uniqueItems: true,
+          description: "Semantic judgments to run against Pi Kit runtime evidence.",
+        },
       ),
     }),
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params, _signal, _update, ctx) {
       const apiKey = process.env.OPENROUTER_API_KEY;
       if (!apiKey) {
         throw new Error("semantic_observe requires OPENROUTER_API_KEY");
       }
 
       const evaluate = createOpenRouterSemanticEvaluator({ apiKey });
-      const calls: Array<Promise<[string, ObservationResult]>> = [];
-
-      calls.push(
-        evaluate({
-          state: state([
-            ["request", params.request],
-            ["task", params.task],
-            ["changes", params.changes],
-          ]),
-          questions: { scope_drift: QUESTIONS.scopeDrift },
-        }).then((response) => [
-          "scopeDrift",
-          {
-            probability: response.answers.scope_drift.noul,
-            stateFields: ["request", ...(params.task ? ["task"] : []), "changes"],
-            ...(response.model ? { model: response.model } : {}),
-          },
-        ] as [string, ObservationResult]),
+      const observations = Object.fromEntries(
+        await Promise.all(
+          params.observations.map(async (observation) => {
+            const state = await buildObservationState(ctx, observation);
+            return [observation, await evaluateObservation(evaluate, observation, state)] as const;
+          }),
+        ),
       );
-
-      if (params.verification !== undefined) {
-        calls.push(
-          evaluate({
-            state: state([
-              ["request", params.request],
-              ["changes", params.changes],
-              ["verification", params.verification],
-            ]),
-            questions: { verification_gap: QUESTIONS.verificationGap },
-          }).then((response) => [
-            "verificationGap",
-            {
-              probability: response.answers.verification_gap.noul,
-              stateFields: ["request", "changes", "verification"],
-              ...(response.model ? { model: response.model } : {}),
-            },
-          ] as [string, ObservationResult]),
-        );
-      }
-
-      if (params.repositoryEvidence !== undefined) {
-        calls.push(
-          evaluate({
-            state: state([
-              ["changes", params.changes],
-              ["repository_evidence", params.repositoryEvidence],
-            ]),
-            questions: { consistency_risk: QUESTIONS.consistencyRisk },
-          }).then((response) => [
-            "consistencyRisk",
-            {
-              probability: response.answers.consistency_risk.noul,
-              stateFields: ["changes", "repository_evidence"],
-              ...(response.model ? { model: response.model } : {}),
-            },
-          ] as [string, ObservationResult]),
-        );
-      }
-
-      const observations = Object.fromEntries(await Promise.all(calls));
 
       return {
         content: [
@@ -159,6 +127,7 @@ export default function semanticObserverExtension(pi: ExtensionAPI): void {
         ],
         details: {
           advisory: true,
+          evidenceSource: "pi-runtime",
           observations: Object.keys(observations),
         },
       };
