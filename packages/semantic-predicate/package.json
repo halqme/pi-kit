@@ -14,5 +14,8 @@
   },
   "engines": {
     "node": ">=26.0.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
   }
 }
