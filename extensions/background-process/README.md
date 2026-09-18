@@ -9,7 +9,7 @@ For frequent lightweight review requests, start a detached Pi command here rathe
 - `start`: start a shell command with an optional label and cwd.
 - `start_many`: start multiple shell commands concurrently. Each item accepts `command`, plus optional `label` and `cwd`.
 - `list`: show pending, running, and unchecked jobs. Set `includeCompleted` for history.
-- `check`: show status plus bounded stdout/stderr tails without acknowledging the result. Use it for explicit progress or output requests, not to wait for completion.
+- `check`: return status and, after completion, bounded stdout/stderr tails without acknowledging the result. While a process is pending or running, output is hidden by default; set `inspectRunning: true` only for an explicit progress/output request, never to wait for completion.
 - `stop`: request TERM followed by KILL after a grace period.
 
 `start_many` validates and launches each item independently, so a blank command or launch failure does not prevent valid items from starting. A non-empty batch returns a structured result with `details.status` set to `started`, `partial`, or `failed`, plus `details.started` and `details.failed` (each failure includes its zero-based `index` and `error`). The same status and per-item failures are included in the text result, so callers should not retry the whole batch just because one item failed. Each started process remains independently inspectable and stoppable by its returned ID.
