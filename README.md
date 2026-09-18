@@ -46,10 +46,26 @@ docs/
 tsconfig.json
 ```
 
-`extensions/` remains the home of Pi runtime integration. `packages/` is reserved for code that is meaningful without Pi; the experimental `semantic-predicate` package lives there so Jev/OpenRouter evaluation can be removed or reused without changing Pi runtime contracts. It is intentionally not a root workspace yet while the experiment is being evaluated. `session-metrics` continues to own both its Pi extension and offline CLI/analysis kernel. Multi-word extension directories use kebab-case, and the shared TypeScript configuration lives at the repository root.
+`extensions/` remains the home of Pi runtime integration. `packages/` is reserved for code that is meaningful without Pi; both are root workspaces. The experimental `semantic-predicate` package lives under `packages/` so Jev/OpenRouter evaluation can be removed or reused without changing Pi runtime contracts. `session-metrics` continues to own both its Pi extension and offline CLI/analysis kernel. Multi-word extension directories use kebab-case, and the shared TypeScript configuration lives at the repository root.
 
 The repository extension exposes `context` and `code`, and transparently strengthens the built-in `edit` path for supported source files. The old standalone Astrolabe and BM25 tool surfaces are gone; their useful structural and lexical mechanisms are internal implementation details under `src/syntax` and `src/context`.
 
-Additional independent utilities remain available through the extensions listed above. `ask` provides synchronous structured user decisions in the interactive TUI; offline session analysis is provided by the `session-metrics` CLI in `extensions/session-metrics`. `semantic-observer` is an experimental, explicitly invoked observer: it sends caller-supplied state to the standalone semantic predicate evaluator and returns advisory results without changing task, verification, or completion state.
+Additional independent utilities remain available through the extensions listed above. `ask` provides synchronous structured user decisions in the interactive TUI; offline session analysis is provided by the `session-metrics` CLI in `extensions/session-metrics`. `semantic-observer` is an experimental, explicitly invoked observer: it sends compact structured evidence to the standalone semantic predicate evaluator and returns advisory probabilities without changing task, verification, or completion state.
+
+
+## Experimental semantic observation
+
+`semantic-observer` treats Jev as a sensor, not an authority. It uses OpenRouter's Decisions API through the Pi-independent `packages/semantic-predicate` package and keeps thresholds or actions outside the model boundary.
+
+Context is assembled as evidence, not as a transcript:
+
+- Prefer primary evidence: the user request, task contract, changed paths or small diff excerpts, executed verification results, and repository evidence retrieved for the question.
+- Keep fields named and structured. Questions refer to the state fields they judge rather than relying on one opaque prompt.
+- Give each judgment only the fields it needs. Questions that need different evidence are evaluated against separate minimal states; questions with the same state may be batched.
+- Keep deterministic facts in code. Jev is for semantic judgments such as scope drift or whether verification meaningfully covers a change, not whether a check exists or how many files changed.
+- Preserve probabilities. The observer does not turn Jev output into a pass/fail result; later policy may choose thresholds after the behavior has been measured.
+- Do not feed broad session history, repository dumps, or previous Jev outputs back into later state by default. Add context only when it is evidence for the next judgment.
+
+The current observer evaluates `scopeDrift`, optional `verificationGap`, and optional `consistencyRisk`. It is deliberately explicit-call and advisory while the experiment is being evaluated.
 
 See [`docs/architecture.md`](docs/architecture.md) for the design rationale and runtime contracts.
