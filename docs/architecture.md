@@ -52,20 +52,28 @@ Stable behavior belongs in tools and runtime state. `AGENTS.md` therefore contai
 
 The context boundary is intentionally narrower than the model context window. Jev 1.13 degrades when state contains irrelevant detail, so the observer does not treat the current conversation or repository as a default context blob. Each semantic judgment declares the evidence it needs and receives a small structured state with named fields. Primary runtime or repository evidence is preferred over a model-authored narrative summary.
 
+The observer does not ask the calling model to summarize its own work. It projects existing Pi Kit runtime state instead. `task/evidence.ts` exposes the same side-effect-free packet used by `task.review_context`: task contract and latest checkpoint, resource provenance, workspace delta, and verification evidence. The semantic observer augments that packet with a bounded Git diff from the task's captured baseline and bounded excerpts from successful `read`/`context` tool results identified by their tracked tool-call IDs.
+
 The current context views are:
 
 ```text
 scopeDrift
-  request + optional task contract + changes
+  task goal + acceptance
+  + current checkpoint (plan marked as hypothesis)
+  + tracked mutations + task-baseline diff
 
 verificationGap
-  request + changes + executed verification
+  task goal + acceptance
+  + tracked mutations + task-baseline diff
+  + executed verification only
 
 consistencyRisk
-  changes + relevant repository evidence
+  tracked mutations + task-baseline diff
+  + paths observed during the task
+  + bounded excerpts from the exact read/context results already seen
 ```
 
-These are separate requests because their evidence sets differ. If future questions genuinely share the same state, they should be batched into one Decisions API request; Jev evaluates questions independently and batching avoids sending the same state repeatedly.
+The caller supplies only which observation IDs to run. These are separate requests because their evidence sets differ. If future questions genuinely share the same state, they should be batched into one Decisions API request; Jev evaluates questions independently and batching avoids sending the same state repeatedly.
 
 This boundary follows four rules:
 
