@@ -51,6 +51,7 @@ export interface TaskReviewResources {
     path: string;
     tool: string;
     action?: string;
+    toolCallId: string;
     assistantEntryId?: string;
   }>;
   coverage: {
@@ -440,6 +441,7 @@ export async function taskReviewResources(
       path: event.path,
       tool: event.tool,
       ...(event.action ? { action: event.action } : {}),
+      toolCallId: event.toolCallId,
       ...(event.assistantEntryId ? { assistantEntryId: event.assistantEntryId } : {}),
     })),
     coverage: {
