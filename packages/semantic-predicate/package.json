@@ -2,6 +2,9 @@
   "name": "@halqme/semantic-predicate",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "check": "bun run typecheck && bun run test",
     "typecheck": "tsc --noEmit",
@@ -14,8 +17,5 @@
   },
   "engines": {
     "node": ">=26.0.0"
-  },
-  "exports": {
-    ".": "./src/index.ts"
   }
-}\n
+}
