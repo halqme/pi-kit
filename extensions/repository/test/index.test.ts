@@ -60,6 +60,16 @@ test("exposes repository capabilities and keeps code reachable without context",
   await writeFile(join(dir, "sample.ts"), "export const answer = 1;\n", "utf8");
   const signal = new AbortController().signal;
 
+  const located = await context.execute(
+    "context-locate-clamped",
+    { action: "locate", scope: "sample.ts", symbols: ["answer"], maxCandidates: 20 },
+    signal,
+    undefined,
+    { cwd: dir },
+  );
+  const location = JSON.parse(located.content[0]?.text ?? "{}") as { ok?: boolean };
+  assert.equal(location.ok, true);
+
   const inspected = await context.execute(
     "context-source",
     { action: "inspect", path: "sample.ts", detail: "source" },

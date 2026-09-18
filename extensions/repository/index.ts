@@ -104,7 +104,7 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
         language: Type.Optional(StringEnum(supportedLanguageIds)),
         symbols: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
         terms: Type.Optional(Type.Array(Type.String(), { maxItems: 10 })),
-        maxCandidates: Type.Optional(Type.Integer({ minimum: 1, maximum: 5 })),
+        maxCandidates: Type.Optional(Type.Integer({ minimum: 1 })),
       }),
       Type.Object({
         action: Type.Literal("search"),
@@ -134,6 +134,15 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
       if (params.action === "find") {
         const { action: _action, ...query } = params;
         return lexical.execute(id, query, signal, update, ctx);
+      }
+      if (params.action === "locate" && params.maxCandidates !== undefined) {
+        return structural.execute(
+          id,
+          { ...params, maxCandidates: Math.min(params.maxCandidates, 5) },
+          signal,
+          update,
+          ctx,
+        );
       }
       return structural.execute(id, params, signal, update, ctx);
     },
