@@ -38,6 +38,7 @@
       "./extensions/browser-inspector/index.ts",
       "./extensions/macos-talk/index.ts",
       "./extensions/session-metrics/index.ts",
+      "./extensions/semantic-observer/index.ts",
       "./extensions/terminal/index.ts"
     ],
     "skills": [
