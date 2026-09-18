@@ -81,7 +81,7 @@ test("check hides running output unless inspection is explicit", async (t) => {
   assert.ok(registeredTool);
   const started = (await registeredTool.execute(
     "start",
-    { action: "start", command: "printf progress; sleep 10", label: "progress" },
+    { action: "start", command: "printf progress; sleep 10", label: "worker" },
     undefined,
     undefined,
     ctx,
