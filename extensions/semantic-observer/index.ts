@@ -106,7 +106,7 @@ export default function semanticObserverExtension(pi: ExtensionAPI): void {
             stateFields: ["request", ...(params.task ? ["task"] : []), "changes"],
             ...(response.model ? { model: response.model } : {}),
           },
-        ]),
+        ] as [string, ObservationResult]),
       );
 
       if (params.verification !== undefined) {
@@ -125,7 +125,7 @@ export default function semanticObserverExtension(pi: ExtensionAPI): void {
               stateFields: ["request", "changes", "verification"],
               ...(response.model ? { model: response.model } : {}),
             },
-          ]),
+          ] as [string, ObservationResult]),
         );
       }
 
@@ -144,7 +144,7 @@ export default function semanticObserverExtension(pi: ExtensionAPI): void {
               stateFields: ["changes", "repository_evidence"],
               ...(response.model ? { model: response.model } : {}),
             },
-          ]),
+          ] as [string, ObservationResult]),
         );
       }
 
