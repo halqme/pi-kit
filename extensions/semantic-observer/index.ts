@@ -1,6 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { createOpenRouterSemanticEvaluator } from "@halqme/semantic-predicate";
+import { createOpenRouterSemanticEvaluator } from "../../packages/semantic-predicate/src/index.ts";
 
 const DEFAULT_PREDICATES = {
   scopeDrift: {
