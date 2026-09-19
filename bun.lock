@@ -83,6 +83,18 @@
         "typescript": "catalog:",
       },
     },
+    "extensions/semantic-observer": {
+      "name": "@halqme/semantic-observer",
+      "dependencies": {
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "extensions/session-metrics": {
       "name": "@halqme/session-metrics",
       "bin": {
@@ -117,6 +129,13 @@
         "@earendil-works/pi-coding-agent": "catalog:",
         "@earendil-works/pi-tui": "catalog:",
       },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/semantic-predicate": {
+      "name": "@halqme/semantic-predicate",
       "devDependencies": {
         "@types/node": "catalog:",
         "typescript": "catalog:",
@@ -212,6 +231,10 @@
     "@halqme/macos-talk": ["@halqme/macos-talk@workspace:extensions/macos-talk"],
 
     "@halqme/repository": ["@halqme/repository@workspace:extensions/repository"],
+
+    "@halqme/semantic-observer": ["@halqme/semantic-observer@workspace:extensions/semantic-observer"],
+
+    "@halqme/semantic-predicate": ["@halqme/semantic-predicate@workspace:packages/semantic-predicate"],
 
     "@halqme/session-metrics": ["@halqme/session-metrics@workspace:extensions/session-metrics"],
 

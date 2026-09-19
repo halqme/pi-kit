@@ -130,7 +130,8 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
       inspectRunning: Type.Optional(
         Type.Boolean({
           default: false,
-          description: "For check only: include stdout/stderr while a process is pending or running.",
+          description:
+            "For check only: include stdout/stderr while a process is pending or running.",
         }),
       ),
     }),

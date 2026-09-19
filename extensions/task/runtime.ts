@@ -9,11 +9,11 @@ import {
   captureWorkspaceBaseline,
   registerTaskResourceTracking,
   resolveProjectRoot,
-  taskReviewResources,
   taskWorkspaceRevision,
   taskWorkspaceState,
   WORKSPACE_ENTRY,
 } from "./resources.ts";
+import { taskEvidencePacket } from "./evidence.ts";
 import {
   customEntries,
   jsonResult,
@@ -371,11 +371,8 @@ export function registerTask(pi: ExtensionAPI): void {
       if (!current) throw new Error("precondition: No task state. Start a task first.");
 
       if (params.action === "review_context") {
-        const evidence = customEntries<VerificationEvidence>(ctx, VERIFY_ENTRY).filter(
-          (item) => item.taskId === current.id,
-        );
-        const resources = await taskReviewResources(ctx, current.id);
-        const latestCheckpoint = current.checkpoints.at(-1);
+        const evidence = await taskEvidencePacket(ctx);
+        if (!evidence) throw new Error("precondition: No task evidence available.");
         const workspaceRevision = await taskWorkspaceRevision(ctx, current.id);
         const reviewRequest: TaskReviewRequest = {
           version: 1,
@@ -386,16 +383,7 @@ export function registerTask(pi: ExtensionAPI): void {
         };
         pi.appendEntry(REVIEW_ENTRY, reviewRequest);
         return jsonResult({
-          task: {
-            id: current.id,
-            goal: current.goal,
-            acceptance: current.acceptance,
-            status: current.status,
-            ...(latestCheckpoint ? { latestCheckpoint } : {}),
-            ...(current.blocker ? { blocker: current.blocker } : {}),
-          },
-          resources,
-          verification: evidence,
+          ...evidence,
           reviewRequest: { id: reviewRequest.id, at: reviewRequest.at },
         });
       }
