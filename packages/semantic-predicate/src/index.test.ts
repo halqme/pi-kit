@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import {
-  createOpenRouterSemanticEvaluator,
-  parseSemanticDecisionResponse,
-} from "./index.ts";
+import { createOpenRouterSemanticEvaluator, parseSemanticDecisionResponse } from "./index.ts";
 
 describe("parseSemanticDecisionResponse", () => {
   test("parses a Noul without inventing a confidence field", () => {

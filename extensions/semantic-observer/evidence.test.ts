@@ -115,8 +115,5 @@ test("consistency state reuses observed repository evidence", () => {
     "src/parser.ts",
     "src/parser.test.ts",
   ]);
-  assert.equal(
-    state.repository_evidence.excerpts[0].text,
-    "export function parse() {}",
-  );
+  assert.equal(state.repository_evidence.excerpts[0].text, "export function parse() {}");
 });

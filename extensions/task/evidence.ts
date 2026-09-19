@@ -1,6 +1,11 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { taskReviewResources, taskWorkspaceState, type TaskReviewResources, type TaskWorkspaceState } from "./resources.ts";
+import {
+  taskReviewResources,
+  taskWorkspaceState,
+  type TaskReviewResources,
+  type TaskWorkspaceState,
+} from "./resources.ts";
 import { customEntries, latestCustom, TASK_ENTRY, VERIFY_ENTRY } from "./shared.ts";
 
 export interface TaskEvidenceCheckpoint {

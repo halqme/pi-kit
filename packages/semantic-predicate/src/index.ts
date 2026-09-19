@@ -170,7 +170,11 @@ export const parseSemanticDecisionResponse = <T extends SemanticQuestionSet>(
   }
 
   const response = raw as Record<string, unknown>;
-  if (!response.answers || typeof response.answers !== "object" || Array.isArray(response.answers)) {
+  if (
+    !response.answers ||
+    typeof response.answers !== "object" ||
+    Array.isArray(response.answers)
+  ) {
     throw new Error("Semantic decision response is missing answers");
   }
 

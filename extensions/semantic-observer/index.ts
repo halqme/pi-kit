@@ -8,11 +8,7 @@ import {
 } from "../../packages/semantic-predicate/src/index.ts";
 import { buildObservationState, type ObservationId } from "./evidence.ts";
 
-const noul = (
-  instructions: string,
-  yes: string,
-  no: string,
-): NoulQuestion => ({
+const noul = (instructions: string, yes: string, no: string): NoulQuestion => ({
   type: "noul",
   instructions,
   criteria: {

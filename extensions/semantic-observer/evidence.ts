@@ -2,10 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import {
-  taskEvidencePacket,
-  type TaskEvidencePacket,
-} from "../task/evidence.ts";
+import { taskEvidencePacket, type TaskEvidencePacket } from "../task/evidence.ts";
 import type { JsonValue } from "../../packages/semantic-predicate/src/index.ts";
 
 const exec = promisify(execFile);
@@ -196,10 +193,7 @@ function toolResultText(entries: unknown[]): Map<string, { tool: string; text: s
   return results;
 }
 
-function contextEvidence(
-  ctx: ExtensionContext,
-  packet: TaskEvidencePacket,
-): ContextExcerpt[] {
+function contextEvidence(ctx: ExtensionContext, packet: TaskEvidencePacket): ContextExcerpt[] {
   const results = toolResultText(ctx.sessionManager.getEntries());
   const changed = new Set(packet.resources.changedDuringTask);
   const grouped = new Map<
