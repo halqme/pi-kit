@@ -51,6 +51,7 @@
       "./skills/perform-safely",
       "./skills/place-knowledges",
       "./skills/research-answer",
+      "./skills/shape-actionable-output",
       "./skills/simplify-change",
       "./skills/test-design",
       "./skills/visualize-structure",
