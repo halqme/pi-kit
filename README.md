@@ -69,3 +69,28 @@ Context is assembled as evidence, not as a transcript:
 The current observer accepts only an `observations` list (`scopeDrift`, `verificationGap`, `consistencyRisk`). Evidence payloads are not authored by the calling model. It is deliberately explicit-call and advisory while the experiment is being evaluated.
 
 See [`docs/architecture.md`](docs/architecture.md) for the design rationale and runtime contracts.
+
+## Standalone skills
+
+The following skills do not require Pi-Kit-specific extensions. References to other skills alone do not make a skill non-standalone.
+
+Install an individual skill with:
+
+```sh
+bunx skills add http://github.com/halqme/pi-kit --skill <skill-name>
+```
+
+- `apply-correction`
+- `cognitive-rhythm-writing`
+- `git-workflow`
+- `natural-japanese-writing`
+- `perform-safely`
+- `place-knowledges`
+- `research-answer`
+- `shape-actionable-output`
+- `test-design`
+- `visualize-structure`
+- `write-commit-message`
+- `writing-skills`
+
+See [`docs/architecture.md`](docs/architecture.md) for the design rationale and runtime contracts.
