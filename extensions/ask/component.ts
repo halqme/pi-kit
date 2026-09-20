@@ -33,6 +33,7 @@ export class AskComponent implements Component, Focusable {
 
   private currentQuestion = 0;
   private editingOther = false;
+  private confirmButtonFocused = false;
   private error: string | undefined;
   private _focused = false;
 
@@ -89,18 +90,20 @@ export class AskComponent implements Component, Focusable {
       return;
     }
 
-    if (matchesKey(data, "ctrl+enter")) {
-      this.submit();
-      return;
-    }
-
     if (matchesKey(data, "tab")) {
-      this.moveQuestion(1);
+      this.moveFocus(1);
       return;
     }
 
     if (matchesKey(data, "shift+tab")) {
-      this.moveQuestion(-1);
+      this.moveFocus(-1);
+      return;
+    }
+
+    if (this.confirmButtonFocused) {
+      if (matchesKey(data, "enter") || matchesKey(data, "space")) {
+        this.submit();
+      }
       return;
     }
 
@@ -160,7 +163,7 @@ export class AskComponent implements Component, Focusable {
     lines.push("");
 
     for (const [questionIndex, question] of this.questions.entries()) {
-      const active = questionIndex === this.currentQuestion;
+      const active = !this.confirmButtonFocused && questionIndex === this.currentQuestion;
       const required = question.type === "confirm" || (question.required ?? true);
       const suffix = required ? "" : this.theme.fg("dim", " (optional)");
       const prefix = active ? this.theme.fg("accent", "❯") : " ";
@@ -191,10 +194,21 @@ export class AskComponent implements Component, Focusable {
       lines.push("");
     }
 
+    lines.push("");
+    const confirmLabel = "[ Confirm ]";
+    const confirmButton = this.confirmButtonFocused
+      ? this.theme.bg("selectedBg", this.theme.fg("text", confirmLabel))
+      : this.theme.fg("accent", confirmLabel);
+    lines.push(
+      truncateToWidth(
+        `    ${this.confirmButtonFocused ? this.theme.fg("accent", "❯") : " "} ${confirmButton}`,
+        safeWidth,
+      ),
+    );
     lines.push(
       this.theme.fg(
         "dim",
-        "↑/↓ move  Space toggle  Enter select  Tab/Shift+Tab question  Ctrl+Enter submit  Esc cancel",
+        "↑/↓ move  Space toggle  Enter select  Tab/Shift+Tab navigate  Enter/Space Confirm  Esc cancel",
       ),
     );
     return lines;
@@ -206,7 +220,9 @@ export class AskComponent implements Component, Focusable {
     if (!question || !state || state.type !== question.type) return [];
 
     const active =
-      questionIndex === this.currentQuestion && optionIndex === this.optionCursors[questionIndex];
+      !this.confirmButtonFocused &&
+      questionIndex === this.currentQuestion &&
+      optionIndex === this.optionCursors[questionIndex];
     const cursor = active && !this.editingOther ? this.theme.fg("accent", "❯") : " ";
 
     let label: string;
@@ -246,6 +262,31 @@ export class AskComponent implements Component, Focusable {
       lines.push(truncateToWidth(`        ${this.theme.fg("dim", description)}`, width));
     }
     return lines;
+  }
+
+  private moveFocus(delta: number): void {
+    if (this.confirmButtonFocused) {
+      this.confirmButtonFocused = false;
+      this.currentQuestion = delta > 0 ? 0 : this.questions.length - 1;
+    } else {
+      const atBoundary =
+        delta > 0 ? this.currentQuestion === this.questions.length - 1 : this.currentQuestion === 0;
+      if (atBoundary) {
+        this.confirmButtonFocused = true;
+        this.editingOther = false;
+        this.error = undefined;
+        this.syncInputFocus();
+        this.requestRender();
+        return;
+      }
+      this.moveQuestion(delta);
+      return;
+    }
+
+    this.editingOther = false;
+    this.error = undefined;
+    this.syncInputFocus();
+    this.requestRender();
   }
 
   private moveQuestion(delta: number): void {
@@ -370,6 +411,7 @@ export class AskComponent implements Component, Focusable {
     this.syncOtherValue();
     const failure = validateSubmission(this.questions, this.states);
     if (failure) {
+      this.confirmButtonFocused = false;
       this.currentQuestion = failure.questionIndex;
       this.editingOther =
         this.isOtherSelected(failure.questionIndex) && failure.message.includes("Other");
