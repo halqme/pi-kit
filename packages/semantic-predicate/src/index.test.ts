@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { createOpenRouterSemanticEvaluator, parseSemanticDecisionResponse } from "./index.ts";
+import { createTypeSafeSemanticEvaluator, parseSemanticDecisionResponse } from "./index.ts";
 
 describe("parseSemanticDecisionResponse", () => {
   test("parses a Noul without inventing a confidence field", () => {
     const result = parseSemanticDecisionResponse(
       {
-        model: "typesafe/jev-1.13",
+        model: "jev-latest",
         answers: {
           scope_drift: {
             type: "noul",
@@ -83,19 +83,21 @@ describe("parseSemanticDecisionResponse", () => {
   });
 });
 
-describe("createOpenRouterSemanticEvaluator", () => {
-  test("uses the Decisions API with state and typed questions directly", async () => {
+describe("createTypeSafeSemanticEvaluator", () => {
+  test("uses the TypeSafe API with state and typed questions directly", async () => {
     let requestUrl = "";
+    let requestHeaders: unknown;
     let requestBody: unknown;
 
-    const evaluate = createOpenRouterSemanticEvaluator({
+    const evaluate = createTypeSafeSemanticEvaluator({
       apiKey: "test-key",
       fetch: async (input, init) => {
         requestUrl = String(input);
+        requestHeaders = init?.headers;
         requestBody = JSON.parse(String(init?.body));
         return new Response(
           JSON.stringify({
-            model: "typesafe/jev-1.13",
+            model: "jev-latest",
             answers: {
               scope_drift: {
                 type: "noul",
@@ -129,9 +131,13 @@ describe("createOpenRouterSemanticEvaluator", () => {
 
     const result = await evaluate({ state, questions });
 
-    assert.equal(requestUrl, "https://openrouter.ai/api/alpha/decisions");
+    assert.equal(requestUrl, "https://api.typesafe.ai/v1/systemone");
+    assert.deepEqual(requestHeaders, {
+      Authorization: "Bearer test-key",
+      "Content-Type": "application/json",
+    });
     assert.deepEqual(requestBody, {
-      model: "typesafe/jev-1.13",
+      model: "jev-latest",
       state,
       questions,
     });

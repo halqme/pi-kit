@@ -46,7 +46,7 @@ docs/
 tsconfig.json
 ```
 
-`extensions/` remains the home of Pi runtime integration. `packages/` is reserved for code that is meaningful without Pi; both are root workspaces. The experimental `semantic-predicate` package lives under `packages/` so Jev/OpenRouter evaluation can be removed or reused without changing Pi runtime contracts. `session-metrics` continues to own both its Pi extension and offline CLI/analysis kernel. Multi-word extension directories use kebab-case, and the shared TypeScript configuration lives at the repository root.
+`extensions/` remains the home of Pi runtime integration. `packages/` is reserved for code that is meaningful without Pi; both are root workspaces. The experimental `semantic-predicate` package lives under `packages/` so TypeSafe/Jev evaluation can be removed or reused without changing Pi runtime contracts. `session-metrics` continues to own both its Pi extension and offline CLI/analysis kernel. Multi-word extension directories use kebab-case, and the shared TypeScript configuration lives at the repository root.
 
 The repository extension exposes `context` and `code`, and transparently strengthens the built-in `edit` path for supported source files. The old standalone Astrolabe and BM25 tool surfaces are gone; their useful structural and lexical mechanisms are internal implementation details under `src/syntax` and `src/context`.
 
@@ -55,7 +55,7 @@ Additional independent utilities remain available through the extensions listed 
 
 ## Experimental semantic observation
 
-`semantic-observer` treats Jev as a sensor, not an authority. It uses OpenRouter's Decisions API through the Pi-independent `packages/semantic-predicate` package and keeps thresholds or actions outside the model boundary.
+`semantic-observer` treats Jev as a sensor, not an authority. It uses TypeSafe's official Jev API through the Pi-independent `packages/semantic-predicate` package and keeps thresholds or actions outside the model boundary. Set `TYPESAFE_API_KEY` before calling `semantic_observe`; the evaluator sends requests to `https://api.typesafe.ai/v1/systemone` with Bearer authentication and uses `jev-latest` by default.
 
 Context is assembled as evidence, not as a transcript:
 

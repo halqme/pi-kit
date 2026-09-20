@@ -1,7 +1,7 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
-  createOpenRouterSemanticEvaluator,
+  createTypeSafeSemanticEvaluator,
   type JsonValue,
   type NoulQuestion,
   type SemanticEvaluator,
@@ -99,12 +99,12 @@ export default function semanticObserverExtension(pi: ExtensionAPI): void {
       ),
     }),
     async execute(_toolCallId, params, _signal, _update, ctx) {
-      const apiKey = process.env.OPENROUTER_API_KEY;
+      const apiKey = process.env.TYPESAFE_API_KEY;
       if (!apiKey) {
-        throw new Error("semantic_observe requires OPENROUTER_API_KEY");
+        throw new Error("semantic_observe requires TYPESAFE_API_KEY");
       }
 
-      const evaluate = createOpenRouterSemanticEvaluator({ apiKey });
+      const evaluate = createTypeSafeSemanticEvaluator({ apiKey });
       const observations = Object.fromEntries(
         await Promise.all(
           params.observations.map(async (observation) => {

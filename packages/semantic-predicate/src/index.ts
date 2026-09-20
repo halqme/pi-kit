@@ -84,7 +84,7 @@ export type SemanticEvaluator = <T extends SemanticQuestionSet>(
   input: EvaluateInput<T>,
 ) => Promise<SemanticDecisionResponse<T>>;
 
-export type OpenRouterEvaluatorOptions = {
+export type TypeSafeEvaluatorOptions = {
   apiKey: string;
   model?: string;
   endpoint?: string;
@@ -199,11 +199,11 @@ export const parseSemanticDecisionResponse = <T extends SemanticQuestionSet>(
   return parsed;
 };
 
-export const createOpenRouterSemanticEvaluator = (
-  options: OpenRouterEvaluatorOptions,
+export const createTypeSafeSemanticEvaluator = (
+  options: TypeSafeEvaluatorOptions,
 ): SemanticEvaluator => {
-  const endpoint = options.endpoint ?? "https://openrouter.ai/api/alpha/decisions";
-  const model = options.model ?? "typesafe/jev-1.13";
+  const endpoint = options.endpoint ?? "https://api.typesafe.ai/v1/systemone";
+  const model = options.model ?? "jev-latest";
   const fetchImpl = options.fetch ?? globalThis.fetch;
 
   return async <T extends SemanticQuestionSet>({
@@ -230,7 +230,7 @@ export const createOpenRouterSemanticEvaluator = (
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`OpenRouter semantic evaluation failed (${response.status}): ${body}`);
+      throw new Error(`TypeSafe semantic evaluation failed (${response.status}): ${body}`);
     }
 
     return parseSemanticDecisionResponse(await response.json(), questions);
