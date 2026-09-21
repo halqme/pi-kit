@@ -55,7 +55,7 @@ Additional independent utilities remain available through the extensions listed 
 
 ## Experimental semantic observation
 
-`semantic-observer` treats Jev as a sensor, not an authority. It uses TypeSafe's official Jev API through the Pi-independent `packages/semantic-predicate` package and keeps thresholds or actions outside the model boundary. Set `TYPESAFE_API_KEY` before calling `semantic_observe`; the evaluator sends requests to `https://api.typesafe.ai/v1/systemone` with Bearer authentication and uses `jev-latest` by default.
+`semantic-observer` treats Jev as a sensor, not an authority. It uses TypeSafe's official Jev API through the Pi-independent `packages/semantic-predicate` package and keeps thresholds or actions outside the model boundary. Store the API key as the `typesafe` entry in Pi's `~/.pi/agent/auth.json` before calling `semantic_observe`; the evaluator sends requests to `https://api.typesafe.ai/v1/systemone` with Bearer authentication and uses `jev-latest` by default.
 
 Context is assembled as evidence, not as a transcript:
 

@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { createProvider, Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   createTypeSafeSemanticEvaluator,
@@ -7,6 +7,41 @@ import {
   type SemanticEvaluator,
 } from "../../packages/semantic-predicate/src/index.ts";
 import { buildObservationState, type ObservationId } from "./evidence.ts";
+
+const TYPESAFE_PROVIDER_ID = "typesafe";
+
+const typeSafeCredentialProvider = createProvider({
+  id: TYPESAFE_PROVIDER_ID,
+  name: "TypeSafe",
+  auth: {
+    apiKey: {
+      name: "TypeSafe API key",
+      async resolve({ credential, signal }) {
+        signal.throwIfAborted();
+        if (
+          credential?.type !== "api_key" ||
+          typeof credential.key !== "string" ||
+          !credential.key
+        ) {
+          return undefined;
+        }
+        return {
+          auth: { apiKey: credential.key },
+          source: "stored credential",
+        };
+      },
+    },
+  },
+  models: [],
+  api: {
+    stream() {
+      throw new Error("The TypeSafe provider is only used for credential resolution.");
+    },
+    streamSimple() {
+      throw new Error("The TypeSafe provider is only used for credential resolution.");
+    },
+  },
+});
 
 const noul = (instructions: string, yes: string, no: string): NoulQuestion => ({
   type: "noul",
@@ -78,6 +113,7 @@ async function evaluateObservation(
 }
 
 export default function semanticObserverExtension(pi: ExtensionAPI): void {
+  pi.registerProvider(typeSafeCredentialProvider);
   pi.registerTool({
     name: "semantic_observe",
     label: "Semantic Observe",
@@ -99,9 +135,9 @@ export default function semanticObserverExtension(pi: ExtensionAPI): void {
       ),
     }),
     async execute(_toolCallId, params, _signal, _update, ctx) {
-      const apiKey = process.env.TYPESAFE_API_KEY;
+      const apiKey = (await ctx.modelRegistry.getProviderAuth(TYPESAFE_PROVIDER_ID))?.auth.apiKey;
       if (!apiKey) {
-        throw new Error("semantic_observe requires TYPESAFE_API_KEY");
+        throw new Error("semantic_observe requires a `typesafe` API key in Pi auth.json");
       }
 
       const evaluate = createTypeSafeSemanticEvaluator({ apiKey });

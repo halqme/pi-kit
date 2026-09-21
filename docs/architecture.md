@@ -48,7 +48,7 @@ Stable behavior belongs in tools and runtime state. `AGENTS.md` therefore contai
 
 ## Experimental semantic observation
 
-`semantic-observer` is outside the mechanical authority path. Its outputs are observations only: they cannot mutate repository state, satisfy `verify`, or unlock `task.finish`. The Pi-facing extension adapts runtime evidence; `packages/semantic-predicate` owns the Pi-independent TypeSafe Jev API client and typed Jev primitives. The extension reads `TYPESAFE_API_KEY` and sends Bearer-authenticated requests to `https://api.typesafe.ai/v1/systemone`, defaulting to `jev-latest`.
+`semantic-observer` is outside the mechanical authority path. Its outputs are observations only: they cannot mutate repository state, satisfy `verify`, or unlock `task.finish`. The Pi-facing extension adapts runtime evidence; `packages/semantic-predicate` owns the Pi-independent TypeSafe Jev API client and typed Jev primitives. The extension resolves the `typesafe` API key through Pi's auth store and sends Bearer-authenticated requests to `https://api.typesafe.ai/v1/systemone`, defaulting to `jev-latest`.
 
 The context boundary is intentionally narrower than the model context window. Jev degrades when state contains irrelevant detail, so the observer does not treat the current conversation or repository as a default context blob. Each semantic judgment declares the evidence it needs and receives a small structured state with named fields. Primary runtime or repository evidence is preferred over a model-authored narrative summary.
 
