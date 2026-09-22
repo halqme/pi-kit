@@ -109,7 +109,7 @@ const STYLE_PRESETS: Record<Exclude<StylePreset, "all">, string[]> = {
   ],
 };
 
-class BrowserRuntime {
+export class BrowserRuntime {
   private view: Bun.WebView | undefined;
   private viewport = { width: 1440, height: 900 };
   private generation = 0;
@@ -372,10 +372,11 @@ class BrowserRuntime {
 
   private async inspect(target: BrowserTarget): Promise<unknown> {
     const nodes = await this.nodesForTarget(target);
-    return {
-      matches: await Promise.all(nodes.slice(0, 20).map((nodeId) => this.inspectNode(nodeId))),
-      total: nodes.length,
-    };
+    const matches: unknown[] = [];
+    for (const nodeId of nodes.slice(0, 20)) {
+      matches.push(await this.inspectNode(nodeId));
+    }
+    return { matches, total: nodes.length };
   }
 
   private styleSelection(
@@ -607,6 +608,7 @@ class BrowserRuntime {
     const backendNodeIds = [...new Set(candidates.map((node) => node.backendDOMNodeId!))];
     const refsByBackendId = new Map<number, string>();
     if (backendNodeIds.length) {
+      await this.cdp("DOM.getDocument", { depth: 0, pierce: true });
       const pushed = await this.cdp<{ nodeIds: number[] }>("DOM.pushNodesByBackendIdsToFrontend", {
         backendNodeIds,
       });
@@ -764,27 +766,31 @@ function errorResponse(id: number, error: unknown): HostResponse {
   };
 }
 
-const runtime = new BrowserRuntime();
-const lines = createInterface({ input: process.stdin });
-let queue = Promise.resolve();
+export function runHost(): void {
+  const runtime = new BrowserRuntime();
+  const lines = createInterface({ input: process.stdin });
+  let queue = Promise.resolve();
 
-lines.on("line", (line) => {
-  queue = queue.then(async () => {
-    let request: HostRequest;
-    try {
-      request = JSON.parse(line) as HostRequest;
-    } catch (error) {
-      process.stderr.write(`browser_inspector invalid request: ${String(error)}\n`);
-      return;
-    }
-    let response: HostResponse;
-    try {
-      response = { id: request.id, ok: true, result: await runtime.dispatch(request.command) };
-    } catch (error) {
-      response = errorResponse(request.id, error);
-    }
-    process.stdout.write(`${JSON.stringify(response)}\n`);
+  lines.on("line", (line) => {
+    queue = queue.then(async () => {
+      let request: HostRequest;
+      try {
+        request = JSON.parse(line) as HostRequest;
+      } catch (error) {
+        process.stderr.write(`browser_inspector invalid request: ${String(error)}\n`);
+        return;
+      }
+      let response: HostResponse;
+      try {
+        response = { id: request.id, ok: true, result: await runtime.dispatch(request.command) };
+      } catch (error) {
+        response = errorResponse(request.id, error);
+      }
+      process.stdout.write(`${JSON.stringify(response)}\n`);
+    });
   });
-});
 
-lines.once("close", () => runtime.close());
+  lines.once("close", () => runtime.close());
+}
+
+if (import.meta.main) runHost();
