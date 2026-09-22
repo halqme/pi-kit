@@ -11,7 +11,6 @@ import {
   startBackgroundProcess,
   taskPath,
   type ProcessInspection,
-  type ProcessSnapshot,
 } from "./core.ts";
 
 const TOOL_NAME = "background_process";
@@ -173,7 +172,7 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
             summary += `; ${record.failed.length} failed`;
           }
         } else {
-          const snapshot = (record.snapshot ?? record) as ProcessSnapshot;
+          const snapshot = (record.snapshot ?? record) as ProcessInspection;
           if (snapshot && typeof snapshot === "object" && "request" in snapshot) {
             summary = describe(snapshot);
           }
@@ -318,7 +317,7 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
             .filter((item) => item.type === "text")
             .map((item) => item.text ?? "")
             .join("\n");
-    const details = message.details as ProcessSnapshot | undefined;
+    const details = message.details as ProcessInspection | undefined;
     let text = body;
     if (!expanded && details) text = describe(details);
     if (expanded && details) text += `\n\n${JSON.stringify(details, null, 2)}`;
