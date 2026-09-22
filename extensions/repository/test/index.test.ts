@@ -38,7 +38,7 @@ test("exposes repository capabilities and keeps code reachable without context",
 
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    ["context", "code", "edit"],
+    ["context", "code", "edit", "read"],
   );
   assert.equal(
     tools.some((tool) => tool.name === "astrolabe"),
@@ -52,9 +52,11 @@ test("exposes repository capabilities and keeps code reachable without context",
   const context = tools.find((tool) => tool.name === "context");
   const code = tools.find((tool) => tool.name === "code");
   const edit = tools.find((tool) => tool.name === "edit");
+  const read = tools.find((tool) => tool.name === "read");
   assert.ok(context);
   assert.ok(code);
   assert.ok(edit);
+  assert.ok(read);
 
   const dir = await mkdtemp(join(tmpdir(), "repository-surface-"));
   await writeFile(join(dir, "sample.ts"), "export const answer = 1;\n", "utf8");
@@ -112,7 +114,9 @@ test("exposes repository capabilities and keeps code reachable without context",
 
 test("the public edit path validates supported source and falls back for other files", async () => {
   const { tools, shutdown } = setupRepositoryTools();
+  const code = tools.find((tool) => tool.name === "code");
   const edit = tools.find((tool) => tool.name === "edit");
+  assert.ok(code);
   assert.ok(edit);
 
   const dir = await mkdtemp(join(tmpdir(), "repository-edit-"));
@@ -143,15 +147,57 @@ test("the public edit path validates supported source and falls back for other f
   );
   assert.equal(await readFile(sourcePath, "utf8"), "export const answer = 2;\n");
 
+  const codeFallback = await code.execute(
+    "code-config",
+    { action: "edit", path: "notes.md", oldText: "before", newText: "middle" },
+    signal,
+    undefined,
+    { cwd: dir },
+  );
+  assert.match(codeFallback.content[0]?.text ?? "", /Successfully replaced/);
+  assert.equal(await readFile(notesPath, "utf8"), "middle\n");
+
   const fallback = await edit.execute(
     "edit-config",
-    { path: "notes.md", edits: [{ oldText: "before", newText: "after" }] },
+    { path: "notes.md", edits: [{ oldText: "middle", newText: "after" }] },
     signal,
     undefined,
     { cwd: dir },
   );
   assert.match(fallback.content[0]?.text ?? "", /Successfully replaced/);
   assert.equal(await readFile(notesPath, "utf8"), "after\n");
+
+  for (const handler of shutdown) await handler();
+});
+
+test("read and edit failures point to repository discovery and structural editing", async () => {
+  const { tools, shutdown } = setupRepositoryTools();
+  const read = tools.find((tool) => tool.name === "read");
+  const edit = tools.find((tool) => tool.name === "edit");
+  assert.ok(read);
+  assert.ok(edit);
+
+  const dir = await mkdtemp(join(tmpdir(), "repository-recovery-"));
+  await writeFile(join(dir, "sample.ts"), "export const answer = 1;\n", "utf8");
+  const signal = new AbortController().signal;
+
+  await assert.rejects(
+    () => read.execute("read-missing", { path: "missing.ts" }, signal, undefined, { cwd: dir }),
+    /Next: use context.*find or context.*locate/,
+  );
+  const context = tools.find((tool) => tool.name === "context");
+  assert.ok(context);
+  await assert.rejects(
+    () =>
+      context.execute(
+        "context-source-without-target",
+        { action: "inspect", detail: "source" },
+        signal,
+        undefined,
+        { cwd: dir },
+      ),
+    /inspect_requires_target[\s\S]*Next: request context\.inspect/,
+  );
 
   for (const handler of shutdown) await handler();
 });

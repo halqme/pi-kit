@@ -2,11 +2,12 @@
 
 Repository intelligence and structural mutation for Pi Kit.
 
-The extension exposes two repository tools and transparently strengthens the built-in editor:
+The extension exposes repository-aware `context`, `code`, and `read` tools and transparently strengthens the built-in editor:
 
 - `context`: read-only repository acquisition. `find` performs passage-level relevance ranking; `locate`, `search`, `inspect`, and `inspect_many` use Tree-sitter plus optional LSP evidence.
 - `code`: structure-aware mutation. `edit` replaces a validated syntax node and `rename` applies a language-server workspace edit with staleness and syntax checks.
-- `edit`: the built-in exact-text editor is overridden so single replacements in supported source files use the same syntax validation automatically. Unsupported files and multi-edit calls retain the built-in behavior.
+- `read`: the built-in file reader is wrapped to guide missing or invalid paths toward `context.find`/`locate`, and source inspection toward `context.inspect` before mutation.
+- `edit`: the built-in exact-text editor is overridden so single replacements in supported source files use the same syntax validation automatically. Unsupported files and multi-edit calls retain the built-in behavior; failed targets explain when to inspect the current file or switch to `code`.
 
 The repository tools and editor integration intentionally share one structural engine instance, so opaque continuations returned by `context` are valid inputs to `code` in the same session. The automatic `edit` route makes that validation effective even when the model selects the built-in editor directly. Conceptual retrieval and structural retrieval are implementation strategies behind `context`, not separate tools the model must route between.
 

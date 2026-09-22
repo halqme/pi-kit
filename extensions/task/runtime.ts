@@ -3,7 +3,7 @@ import { realpath } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import {
   captureWorkspaceBaseline,
@@ -166,6 +166,26 @@ async function executeCheck(
   });
 }
 
+function assessmentResult(ctx: ExtensionContext, taskId?: string) {
+  const evidence = customEntries<VerificationEvidence>(ctx, VERIFY_ENTRY).filter(
+    (item) => !taskId || item.taskId === taskId,
+  );
+  const strong = evidence.filter(isStrongEvidence);
+  const supporting = evidence.filter((item) => !isStrongEvidence(item));
+  return {
+    taskId: taskId ?? null,
+    strong: {
+      passed: strong.filter((item) => item.passed).length,
+      failed: strong.filter((item) => !item.passed).length,
+    },
+    supporting: {
+      passed: supporting.filter((item) => item.passed).length,
+      failed: supporting.filter((item) => !item.passed).length,
+    },
+    evidence,
+  };
+}
+
 export function registerVerification(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "verify",
@@ -285,23 +305,7 @@ export function registerVerification(pi: ExtensionAPI): void {
         pi.appendEntry(VERIFY_ENTRY, evidence);
         return jsonResult({ recorded: evidence, strong: false });
       }
-      const evidence = customEntries<VerificationEvidence>(ctx, VERIFY_ENTRY).filter(
-        (item) => !taskId || item.taskId === taskId,
-      );
-      const strong = evidence.filter(isStrongEvidence);
-      const supporting = evidence.filter((item) => !isStrongEvidence(item));
-      return jsonResult({
-        taskId: taskId ?? null,
-        strong: {
-          passed: strong.filter((item) => item.passed).length,
-          failed: strong.filter((item) => !item.passed).length,
-        },
-        supporting: {
-          passed: supporting.filter((item) => item.passed).length,
-          failed: supporting.filter((item) => !item.passed).length,
-        },
-        evidence,
-      });
+      return jsonResult(assessmentResult(ctx, taskId));
     },
   });
 }
@@ -317,6 +321,7 @@ export function registerTask(pi: ExtensionAPI): void {
     promptGuidelines: [
       "Ground the repository before committing to a detailed plan; plans are hypotheses and may be replaced as observations change.",
       "Use checkpoint when the current plan or understanding materially changes, not after every tool call.",
+      "Use task.status to inspect the lifecycle and task.assess to summarize verification evidence before deciding whether to finish.",
       "Use review_context to hand an independent consistency reviewer a compact task, resource-provenance, workspace-delta, and verification packet. Calling it creates a review request that must be satisfied by a matching review_agent report before finish.",
       "When a task starts inside a Git worktree, any task-local changes are part of the task contract and must be committed before finish. Pre-existing unrelated dirty files may remain untouched. Outside Git, no commit is required.",
       "Do not finish solely because planned steps were executed. Compare the requested outcome with the workspace and executed verification evidence.",
@@ -337,6 +342,10 @@ export function registerTask(pi: ExtensionAPI): void {
       Type.Object({ action: Type.Literal("block"), reason: Type.String({ minLength: 1 }) }),
       Type.Object({ action: Type.Literal("resume"), summary: Type.Optional(Type.String()) }),
       Type.Object({ action: Type.Literal("status") }),
+      Type.Object({
+        action: Type.Literal("assess"),
+        taskId: Type.Optional(Type.String()),
+      }),
       Type.Object({ action: Type.Literal("review_context") }),
       Type.Object({ action: Type.Literal("finish"), summary: Type.String({ minLength: 1 }) }),
       Type.Object({ action: Type.Literal("stop"), reason: Type.String({ minLength: 1 }) }),
@@ -344,11 +353,14 @@ export function registerTask(pi: ExtensionAPI): void {
     async execute(_id, params, _signal, _update, ctx) {
       const current = latestCustom<TaskState>(ctx, TASK_ENTRY);
       if (params.action === "status") return jsonResult(current ?? { status: "none" });
+      if (params.action === "assess") {
+        return jsonResult(assessmentResult(ctx, params.taskId?.trim() || current?.id));
+      }
 
       if (params.action === "start") {
         if (current && (current.status === "active" || current.status === "blocked")) {
           throw new Error(
-            `precondition: Task '${current.id}' is still ${current.status}; finish or stop it first.`,
+            `precondition: Task '${current.id}' is still ${current.status}; finish or stop it first. Next: use task.status to confirm the lifecycle before starting another task.`,
           );
         }
         const now = new Date().toISOString();

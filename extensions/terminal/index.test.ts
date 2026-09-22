@@ -114,16 +114,27 @@ test("public tool reports busy and unknown terminals and rolls back failed creat
     "Left",
     "Right",
   ]);
-  await assert.rejects(() =>
-    registered.execute(
-      "text-and-keys",
-      { action: "send", name: "x", text: "later", keys: ["Enter"] },
-      undefined,
-      undefined,
-      ctx,
-    ),
+  const sequence = await registered.execute(
+    "text-and-keys",
+    { action: "send", name: " x ", text: "later", keys: ["Enter"] },
+    undefined,
+    undefined,
+    ctx,
   );
+  assert.deepEqual(sequence.details.sequence, ["text", "keys"]);
+  assert.deepEqual(tmuxCalls.at(-2), ["send-keys", "-t", created.details.session, "-l", "later"]);
+  assert.deepEqual(tmuxCalls.at(-1), ["send-keys", "-t", created.details.session, "Enter"]);
   const beforeUnknown = tmuxCalls.length;
+  const duplicate = await registered.execute(
+    "duplicate",
+    { action: "create", name: " x ", command: "other" },
+    undefined,
+    undefined,
+    ctx,
+  );
+  assert.equal(duplicate.details.status, "already_exists");
+  assert.equal(duplicate.details.terminal.name, "x");
+
   const unknown = await registered.execute(
     "unknown",
     { action: "read", name: "stale" },

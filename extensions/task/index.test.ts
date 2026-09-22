@@ -48,6 +48,29 @@ function parsed(result: any): any {
   return JSON.parse(result.content[0]?.text ?? "{}");
 }
 
+test("task assess summarizes evidence without requiring a separate verify tool call", async () => {
+  const { tools, ctx } = harness();
+  const task = tools.get("task");
+  const verify = tools.get("verify");
+  await call(task, { action: "start", goal: "inspect evidence" }, ctx);
+  await call(
+    verify,
+    {
+      action: "run",
+      provenance: "typecheck",
+      command: process.execPath,
+      args: ["-e", "process.exit(0)"],
+      summary: "node check",
+    },
+    ctx,
+  );
+
+  const assessment = parsed(await call(task, { action: "assess" }, ctx));
+  assert.equal(assessment.strong.passed, 1);
+  assert.equal(assessment.strong.failed, 0);
+  assert.equal(assessment.taskId, assessment.evidence[0].taskId);
+});
+
 test("reported evidence cannot self-certify completion", async () => {
   const { tools, ctx } = harness();
   const task = tools.get("task");

@@ -6,9 +6,9 @@ tmux上の永続TTYを、Agentから非同期に操作・監視する拡張機�
 
 ## Actions
 
-- `create`: 名前付きTTYを作り、シェルの表示用promptを抑制してからコマンドを起動する
+- `create`: 名前付きTTYを作り、シェルの表示用promptを抑制してからコマンドを起動する。同じ名前が既に管理中なら既存TTYを返し、新しいセッションは作らない
 - `list`: 管理中のTTYを一覧する
-- `send`: TTYへ文字列またはキーを非同期送信する。`text` と `keys` は併用できず、`keys` には `Enter`、`Tab`、`C-c`、`C-d`、`C-l`、`C-a`、`C-e`、`C-f`、`C-b`、`C-n`、`C-p`、`C-u`、`C-k`、`C-w`、`C-r`、`C-z`、`Escape`、`BSpace`、`Up`、`Down`、`Left`、`Right`、`Home`、`End` を指定できる
+- `send`: TTYへ文字列またはキーを非同期送信する。`text` と `keys` は併用でき、その場合は文字列の後にキーを送る。`keys` には `Enter`、`Tab`、`C-c`、`C-d`、`C-l`、`C-a`、`C-e`、`C-f`、`C-b`、`C-n`、`C-p`、`C-u`、`C-k`、`C-w`、`C-r`、`C-z`、`Escape`、`BSpace`、`Up`、`Down`、`Left`、`Right`、`Home`、`End` を指定できる
 - `read`: 最新の端末状態を読む
 - `call`: 既存TTYの文脈でコマンドを実行し、完了結果を非同期通知する
 - `watch`: 出力パターンの監視を登録する。複数登録可能で、既定では最初の一致後に解除する

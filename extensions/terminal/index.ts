@@ -387,6 +387,8 @@ export default function terminalExtension(pi: ExtensionAPI): void {
       "Use background_process instead of terminal for non-interactive detached commands that do not need later stdin or TTY state.",
       "Use watch for actionable readiness, failure, or completion patterns instead of polling terminal.read repeatedly.",
       "Use terminal for dev servers when the next step depends on readiness or failure output; do not wait for process completion as a startup signal.",
+      "A send request may contain text followed by keys; text is sent literally and keys are sent afterward.",
+      "Creating an existing terminal name is idempotent and returns the existing terminal; use list or close when changing sessions.",
       "Treat a watch match or call completion as process evidence only; verify semantic task completion separately.",
     ],
     parameters: Type.Object({
@@ -400,10 +402,12 @@ export default function terminalExtension(pi: ExtensionAPI): void {
         Type.Literal("cancel_watch"),
         Type.Literal("close"),
       ]),
-      name: Type.Optional(Type.String()),
-      command: Type.Optional(Type.String()),
-      cwd: Type.Optional(Type.String()),
-      text: Type.Optional(Type.String()),
+      name: Type.Optional(Type.String({ description: "Managed terminal name" })),
+      command: Type.Optional(Type.String({ description: "Command for create or call" })),
+      cwd: Type.Optional(Type.String({ description: "Working directory for create" })),
+      text: Type.Optional(
+        Type.String({ description: "Literal text to send first; may be combined with keys" }),
+      ),
       keys: Type.Optional(
         Type.Array(
           Type.Union([
@@ -517,10 +521,18 @@ export default function terminalExtension(pi: ExtensionAPI): void {
           return result(listed);
         }
         if (params.action === "create") {
-          if (!params.name?.trim() || !params.command?.trim())
-            throw new Error("name and command are required");
-          if (terminals.has(params.name))
-            throw new Error(`Terminal already exists: ${params.name}`);
+          const name = params.name?.trim();
+          if (!name || !params.command?.trim()) throw new Error("name and command are required");
+          const existing = terminals.get(name);
+          if (existing) {
+            return result({
+              status: "already_exists",
+              reason: "name_in_use",
+              terminal: existing,
+              health: health.get(name)?.status ?? "unknown",
+              next: "Use action=list to inspect it or action=close before creating a replacement.",
+            });
+          }
           const session = `pi-terminal-${randomUUID()}`;
           let sessionCreated = false;
           try {
@@ -540,9 +552,9 @@ export default function terminalExtension(pi: ExtensionAPI): void {
             if (sessionCreated) await tmux(["kill-session", "-t", session]).catch(() => {});
             throw error;
           }
-          const terminal = { name: params.name, session, cwd: params.cwd ?? ctx.cwd };
-          terminals.set(params.name, terminal);
-          health.set(params.name, {
+          const terminal = { name, session, cwd: params.cwd ?? ctx.cwd };
+          terminals.set(name, terminal);
+          health.set(name, {
             status: "running",
             consecutiveFailures: 0,
             failureNotified: false,
@@ -559,26 +571,32 @@ export default function terminalExtension(pi: ExtensionAPI): void {
             watchId: params.watchId,
           });
         }
-        if (!params.name?.trim()) throw new Error(`name is required for ${params.action}`);
-        const terminal = terminals.get(params.name);
+        const requestedName = params.name?.trim();
+        if (!requestedName) throw new Error(`name is required for ${params.action}`);
+        const terminal = terminals.get(requestedName);
         if (!terminal)
           return result({
             status: "not_found",
             reason: "unknown_terminal",
-            name: params.name,
+            name: requestedName,
             availableNames: [...terminals.keys()].sort(),
           });
         if (params.action === "send") {
           if (params.text === undefined && !params.keys?.length)
             throw new Error("text or keys is required");
-          if (params.text !== undefined && params.keys?.length)
-            throw new Error("text and keys are mutually exclusive");
-          await tmux(
-            params.text !== undefined
-              ? ["send-keys", "-t", terminal.session, "-l", params.text]
-              : ["send-keys", "-t", terminal.session, ...(params.keys ?? [])],
-          );
-          return result({ status: "accepted", name: terminal.name });
+          if (params.text !== undefined) {
+            await tmux(["send-keys", "-t", terminal.session, "-l", params.text]);
+          }
+          if (params.keys?.length) {
+            await tmux(["send-keys", "-t", terminal.session, ...params.keys]);
+          }
+          return result({
+            status: "accepted",
+            name: terminal.name,
+            ...(params.text !== undefined && params.keys?.length
+              ? { sequence: ["text", "keys"] }
+              : {}),
+          });
         }
         if (params.action === "read")
           return result({
