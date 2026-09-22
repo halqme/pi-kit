@@ -118,12 +118,7 @@ async function readJson<T>(path: string): Promise<T | undefined> {
   try {
     return JSON.parse(await readFile(path, "utf8")) as T;
   } catch (error) {
-    if (
-      (error as NodeJS.ErrnoException).code === "ENOENT" ||
-      (error as NodeJS.ErrnoException).code === "ENOTDIR"
-    ) {
-      return undefined;
-    }
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
 }
@@ -215,7 +210,8 @@ export async function reconcileProcess(taskDir: string): Promise<void> {
 
 export async function inspectProcess(taskDir: string): Promise<ProcessInspection> {
   await reconcileProcess(taskDir);
-  const requestRead = (await isDirectory(taskDir))
+  const directory = await isDirectory(taskDir);
+  const requestRead = directory
     ? await readProcessRequest(taskDir)
     : {
         issue: {
@@ -223,9 +219,11 @@ export async function inspectProcess(taskDir: string): Promise<ProcessInspection
           message: "Background process directory is missing.",
         },
       };
-  const running = await readJson<RunningState>(join(taskDir, RUNNING_FILE));
-  const result = await readJson<ProcessResult>(join(taskDir, RESULT_FILE));
-  const acknowledged = await readJson<{ acknowledgedAt: string }>(join(taskDir, ACK_FILE));
+  const running = directory ? await readJson<RunningState>(join(taskDir, RUNNING_FILE)) : undefined;
+  const result = directory ? await readJson<ProcessResult>(join(taskDir, RESULT_FILE)) : undefined;
+  const acknowledged = directory
+    ? await readJson<{ acknowledgedAt: string }>(join(taskDir, ACK_FILE))
+    : undefined;
   const phase: ProcessPhase = result
     ? acknowledged
       ? "completed"
@@ -236,7 +234,7 @@ export async function inspectProcess(taskDir: string): Promise<ProcessInspection
   if ("issue" in requestRead) {
     return {
       taskDir,
-      phase,
+      phase: phase === "pending" ? "unchecked" : phase,
       error: requestRead.issue,
       ...(running ? { running } : {}),
       ...(result ? { result } : {}),

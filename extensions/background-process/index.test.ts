@@ -189,9 +189,13 @@ test("check and stop report a missing request without throwing", async (t) => {
     undefined,
     undefined,
     ctx,
-  )) as { content: Array<{ text?: string }> };
+  )) as {
+    content: Array<{ text?: string }>;
+    details: { snapshot: { phase: string } };
+  };
   assert.match(String(missing.content[0]?.text), /directory is missing/);
   assert.doesNotMatch(String(missing.content[0]?.text), /Process is still pending/);
+  assert.equal(missing.details.snapshot.phase, "unchecked");
 });
 
 test("start_many reports mixed failures without requiring a retry", async (t) => {
