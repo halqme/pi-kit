@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { access, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Dirent } from "node:fs";
@@ -45,6 +45,20 @@ export interface ProcessSnapshot {
   result?: ProcessResult;
   acknowledgedAt?: string;
 }
+
+export interface ProcessInspectionIssue {
+  taskDir: string;
+  phase: ProcessPhase;
+  error: {
+    code: "missing_directory" | "missing_request" | "invalid_request";
+    message: string;
+  };
+  running?: RunningState;
+  result?: ProcessResult;
+  acknowledgedAt?: string;
+}
+
+export type ProcessInspection = ProcessSnapshot | ProcessInspectionIssue;
 
 export interface StartProcessOptions {
   taskRoot: string;
@@ -104,8 +118,44 @@ async function readJson<T>(path: string): Promise<T | undefined> {
   try {
     return JSON.parse(await readFile(path, "utf8")) as T;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (
+      (error as NodeJS.ErrnoException).code === "ENOENT" ||
+      (error as NodeJS.ErrnoException).code === "ENOTDIR"
+    ) {
+      return undefined;
+    }
     throw error;
+  }
+}
+
+type ProcessRequestRead = { request: ProcessRequest } | { issue: ProcessInspectionIssue["error"] };
+
+async function readProcessRequest(taskDir: string): Promise<ProcessRequestRead> {
+  try {
+    const request = await readJson<ProcessRequest>(join(taskDir, REQUEST_FILE));
+    return request
+      ? { request }
+      : {
+          issue: {
+            code: "missing_request",
+            message: "Background process request is missing.",
+          },
+        };
+  } catch {
+    return {
+      issue: {
+        code: "invalid_request",
+        message: "Background process request could not be read.",
+      },
+    };
+  }
+}
+
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
   }
 }
 
@@ -129,7 +179,7 @@ async function recordLost(taskDir: string, message: string): Promise<void> {
 }
 
 export async function reconcileProcess(taskDir: string): Promise<void> {
-  if (await pathExists(join(taskDir, RESULT_FILE))) return;
+  if (!(await isDirectory(taskDir)) || (await pathExists(join(taskDir, RESULT_FILE)))) return;
   const running = await readJson<RunningState>(join(taskDir, RUNNING_FILE));
   if (running) {
     const heartbeat = await readJson<{ updatedAt: string }>(join(taskDir, HEARTBEAT_FILE));
@@ -140,20 +190,35 @@ export async function reconcileProcess(taskDir: string): Promise<void> {
     return;
   }
 
-  const request = await readJson<ProcessRequest>(join(taskDir, REQUEST_FILE));
+  const requestRead = await readProcessRequest(taskDir);
   const launcher = await readJson<{ pid: number; launchedAt: string }>(
     join(taskDir, LAUNCHER_FILE),
   );
-  if (!request || !launcher) return;
+  if ("issue" in requestRead) {
+    if (
+      !launcher ||
+      (Date.now() - Date.parse(launcher.launchedAt) > LOST_AFTER_MS && !isPidAlive(launcher.pid))
+    ) {
+      await recordLost(taskDir, requestRead.issue.message);
+    }
+    return;
+  }
+  if (!launcher) return;
   if (Date.now() - Date.parse(launcher.launchedAt) > LOST_AFTER_MS && !isPidAlive(launcher.pid)) {
     await recordLost(taskDir, "Background runner did not reach the running phase.");
   }
 }
 
-export async function inspectProcess(taskDir: string): Promise<ProcessSnapshot> {
+export async function inspectProcess(taskDir: string): Promise<ProcessInspection> {
   await reconcileProcess(taskDir);
-  const request = await readJson<ProcessRequest>(join(taskDir, REQUEST_FILE));
-  if (!request) throw new Error(`Missing process request in ${taskDir}`);
+  const requestRead = (await isDirectory(taskDir))
+    ? await readProcessRequest(taskDir)
+    : {
+        issue: {
+          code: "missing_directory" as const,
+          message: "Background process directory is missing.",
+        },
+      };
   const running = await readJson<RunningState>(join(taskDir, RUNNING_FILE));
   const result = await readJson<ProcessResult>(join(taskDir, RESULT_FILE));
   const acknowledged = await readJson<{ acknowledgedAt: string }>(join(taskDir, ACK_FILE));
@@ -164,9 +229,19 @@ export async function inspectProcess(taskDir: string): Promise<ProcessSnapshot> 
     : running
       ? "running"
       : "pending";
+  if ("issue" in requestRead) {
+    return {
+      taskDir,
+      phase,
+      error: requestRead.issue,
+      ...(running ? { running } : {}),
+      ...(result ? { result } : {}),
+      ...(acknowledged ? { acknowledgedAt: acknowledged.acknowledgedAt } : {}),
+    };
+  }
   return {
     taskDir,
-    request,
+    request: requestRead.request,
     phase,
     ...(running ? { running } : {}),
     ...(result ? { result } : {}),
@@ -191,6 +266,7 @@ export async function listProcesses(
     const dir = join(taskRoot, entry.name);
     if (!(await pathExists(join(dir, REQUEST_FILE)))) continue;
     const snapshot = await inspectProcess(dir);
+    if (!("request" in snapshot)) continue;
     if (options.includeCompleted || snapshot.phase !== "completed") snapshots.push(snapshot);
   }
   return snapshots.sort((left, right) =>
@@ -227,16 +303,24 @@ export async function startBackgroundProcess(
     pid: runner.pid,
     launchedAt: new Date().toISOString(),
   });
-  return inspectProcess(taskDir);
+  const snapshot = await inspectProcess(taskDir);
+  if (!("request" in snapshot)) return { ...snapshot, request };
+  return snapshot;
 }
 
 export async function acknowledgeProcess(taskDir: string): Promise<void> {
   await writeJsonExclusive(join(taskDir, ACK_FILE), { acknowledgedAt: new Date().toISOString() });
 }
 
-export async function requestProcessStop(taskDir: string): Promise<ProcessSnapshot> {
+export async function requestProcessStop(taskDir: string): Promise<ProcessInspection> {
   const snapshot = await inspectProcess(taskDir);
-  if (snapshot.phase === "unchecked" || snapshot.phase === "completed") return snapshot;
+  if (
+    !("request" in snapshot) ||
+    snapshot.phase === "unchecked" ||
+    snapshot.phase === "completed"
+  ) {
+    return snapshot;
+  }
   await writeJsonExclusive(join(taskDir, STOP_FILE), { requestedAt: new Date().toISOString() });
   return inspectProcess(taskDir);
 }

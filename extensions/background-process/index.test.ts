@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -123,6 +123,67 @@ test("check hides running output unless inspection is explicit", async (t) => {
   );
 });
 
+test("check and stop report a missing request without throwing", async (t) => {
+  const sessionDir = await mkdtemp(join(tmpdir(), "pi-background-session-"));
+  t.after(() => rm(sessionDir, { recursive: true, force: true }));
+  await mkdir(join(sessionDir, "session.background-process", "broken"), { recursive: true });
+
+  let tool: { execute: (...args: unknown[]) => Promise<unknown> } | undefined;
+  const pi = {
+    registerTool(candidate: { execute: (...args: unknown[]) => Promise<unknown> }) {
+      tool = candidate;
+    },
+    on() {},
+    sendMessage() {},
+  } as unknown as ExtensionAPI;
+  const ctx = {
+    cwd: sessionDir,
+    isIdle: () => true,
+    ui: { setStatus() {} },
+    sessionManager: {
+      getSessionDir: () => sessionDir,
+      getSessionId: () => "session",
+      getSessionFile: () => join(sessionDir, "session.jsonl"),
+    },
+  } as unknown as ExtensionContext;
+
+  backgroundProcessExtension(pi);
+  const registeredTool = tool;
+  assert.ok(registeredTool);
+  const checked = (await registeredTool.execute(
+    "check-broken",
+    { action: "check", id: "broken" },
+    undefined,
+    undefined,
+    ctx,
+  )) as {
+    content: Array<{ text?: string }>;
+    details: {
+      snapshot: {
+        error: { code: string };
+        result: { outcome: string };
+      };
+    };
+    isError?: boolean;
+  };
+
+  assert.equal(checked.isError, undefined);
+  assert.match(String(checked.content[0]?.text), /lost/);
+  assert.match(String(checked.content[0]?.text), /request is missing/);
+  assert.equal(checked.details.snapshot.error.code, "missing_request");
+  assert.equal(checked.details.snapshot.result.outcome, "lost");
+
+  const stopped = (await registeredTool.execute(
+    "stop-broken",
+    { action: "stop", id: "broken" },
+    undefined,
+    undefined,
+    ctx,
+  )) as { content: Array<{ text?: string }> };
+  assert.match(String(stopped.content[0]?.text), /Stop unavailable/);
+  assert.match(String(stopped.content[0]?.text), /lost/);
+});
+
 test("start_many reports mixed failures without requiring a retry", async (t) => {
   const sessionDir = await mkdtemp(join(tmpdir(), "pi-background-session-"));
   t.after(() => rm(sessionDir, { recursive: true, force: true }));
@@ -194,7 +255,10 @@ test("start_many reports mixed failures without requiring a retry", async (t) =>
       for (let attempt = 0; attempt < 200; attempt += 1) {
         const snapshot = await inspectProcess(process.taskDir);
         if (snapshot.phase === "unchecked" || snapshot.phase === "completed") {
-          assert.ok(snapshot.request.label === "one" || snapshot.request.label === "two");
+          assert.ok("request" in snapshot);
+          if ("request" in snapshot) {
+            assert.ok(snapshot.request.label === "one" || snapshot.request.label === "two");
+          }
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, 50));

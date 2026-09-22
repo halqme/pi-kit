@@ -72,6 +72,43 @@ test("an abandoned launcher is reconciled as lost", async (t) => {
   assert.equal(snapshot.result?.outcome, "lost");
 });
 
+test("a missing request is reconciled as a lost inspection", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "pi-background-process-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const taskDir = join(root, "missing-request");
+  await mkdir(taskDir);
+
+  const snapshot = await inspectProcess(taskDir);
+  assert.ok(!("request" in snapshot));
+  if ("request" in snapshot) return;
+  assert.equal(snapshot.phase, "unchecked");
+  assert.equal(snapshot.result?.outcome, "lost");
+  assert.equal(snapshot.error.code, "missing_request");
+  assert.match(snapshot.result?.error ?? "", /request is missing/);
+
+  const completedDir = join(root, "completed-without-request");
+  await mkdir(completedDir);
+  await atomicWriteJson(join(completedDir, "result.json"), {
+    outcome: "success",
+    finishedAt: new Date().toISOString(),
+    exitCode: 0,
+    signal: null,
+  });
+  await atomicWriteJson(join(completedDir, "acknowledged.json"), {
+    acknowledgedAt: new Date().toISOString(),
+  });
+  const completed = await inspectProcess(completedDir);
+  assert.ok(!("request" in completed));
+  if ("request" in completed) return;
+  assert.equal(completed.phase, "completed");
+  assert.equal(completed.result?.outcome, "success");
+
+  const repeated = await inspectProcess(taskDir);
+  assert.ok(!("request" in repeated));
+  if ("request" in repeated) return;
+  assert.equal(repeated.result?.outcome, "lost");
+});
+
 test("failed and stopped outcomes remain in the four-phase model", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "pi-background-process-"));
   t.after(() => rm(root, { recursive: true, force: true }));

@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
@@ -10,6 +10,7 @@ import {
   requestProcessStop,
   startBackgroundProcess,
   taskPath,
+  type ProcessInspection,
   type ProcessSnapshot,
 } from "./core.ts";
 
@@ -20,8 +21,11 @@ function rootFor(ctx: ExtensionContext): string {
   return `${ctx.sessionManager.getSessionDir()}/${ctx.sessionManager.getSessionId()}.background-process`;
 }
 
-function describe(snapshot: ProcessSnapshot): string {
+function describe(snapshot: ProcessInspection): string {
   const result = snapshot.result ? `/${snapshot.result.outcome}` : "";
+  if (!("request" in snapshot)) {
+    return `${basename(snapshot.taskDir)} [${snapshot.phase}${result}] ${snapshot.error.message}`;
+  }
   return `${snapshot.request.id} [${snapshot.phase}${result}] ${snapshot.request.label}`;
 }
 
@@ -262,7 +266,12 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
       if (params.action === "stop") {
         const snapshot = await requestProcessStop(dir);
         return {
-          content: [{ type: "text" as const, text: `Stop requested: ${describe(snapshot)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `${"request" in snapshot ? "Stop requested" : "Stop unavailable"}: ${describe(snapshot)}`,
+            },
+          ],
           details: snapshot,
         };
       }
