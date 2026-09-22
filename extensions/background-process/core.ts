@@ -123,22 +123,70 @@ async function readJson<T>(path: string): Promise<T | undefined> {
   }
 }
 
+function isProcessSpec(value: unknown): value is ProcessSpec {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    typeof (value as { type?: unknown }).type !== "string"
+  ) {
+    return false;
+  }
+  const spec = value as Record<string, unknown>;
+  if (spec.type === "shell") {
+    return (
+      typeof spec.command === "string" &&
+      (spec.stdin === undefined || typeof spec.stdin === "string")
+    );
+  }
+  return (
+    spec.type === "argv" &&
+    typeof spec.executable === "string" &&
+    Array.isArray(spec.args) &&
+    spec.args.every((arg) => typeof arg === "string") &&
+    (spec.stdin === undefined || typeof spec.stdin === "string")
+  );
+}
+
+function isProcessRequest(value: unknown): value is ProcessRequest {
+  if (typeof value !== "object" || value === null) return false;
+  const request = value as Record<string, unknown>;
+  return (
+    request.version === 1 &&
+    typeof request.id === "string" &&
+    typeof request.label === "string" &&
+    typeof request.kind === "string" &&
+    typeof request.ownerSessionId === "string" &&
+    typeof request.cwd === "string" &&
+    typeof request.createdAt === "string" &&
+    isProcessSpec(request.spec)
+  );
+}
+
 type ProcessRequestRead = { request: ProcessRequest } | { issue: ProcessInspectionIssue["error"] };
 
 async function readProcessRequest(taskDir: string): Promise<ProcessRequestRead> {
   try {
-    const request = await readJson<ProcessRequest>(join(taskDir, REQUEST_FILE));
-    return request
-      ? { request }
-      : {
-          issue: {
-            code: "missing_request",
-            message: "Background process request is missing.",
-          },
-        };
+    const request = await readJson<unknown>(join(taskDir, REQUEST_FILE));
+    if (request === undefined) {
+      return {
+        issue: {
+          code: "missing_request",
+          message: "Background process request is missing.",
+        },
+      };
+    }
+    if (!isProcessRequest(request)) {
+      return {
+        issue: {
+          code: "invalid_request",
+          message: "Background process request is invalid.",
+        },
+      };
+    }
+    return { request };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (!(error instanceof SyntaxError) && code !== "EISDIR") throw error;
+    if (!(error instanceof SyntaxError) && code !== "EISDIR" && code !== "ENOTDIR") throw error;
     return {
       issue: {
         code: "invalid_request",

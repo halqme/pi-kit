@@ -49,8 +49,10 @@ test("session restore notifies and acknowledges an unchecked process once", asyn
   assert.equal(messages.length, 1);
   assert.deepEqual(messages[0]?.options, { triggerTurn: true, deliverAs: "followUp" });
   assert.equal((await inspectProcess(started.taskDir)).phase, "completed");
+  await mkdir(join(root, "broken"));
   await events.get("session_compact")?.({ type: "session_compact" }, ctx);
-  assert.equal(messages.length, 1);
+  assert.equal(messages.length, 2);
+  assert.ok(messages.some(({ message }) => JSON.stringify(message).includes("request is missing")));
   await events.get("session_shutdown")?.({ type: "session_shutdown", reason: "quit" }, ctx);
 });
 
@@ -150,6 +152,22 @@ test("check and stop report a missing request without throwing", async (t) => {
   backgroundProcessExtension(pi);
   const registeredTool = tool;
   assert.ok(registeredTool);
+  const listed = (await registeredTool.execute(
+    "list-broken",
+    { action: "list" },
+    undefined,
+    undefined,
+    ctx,
+  )) as {
+    content: Array<{ text?: string }>;
+    details: Array<{ error?: { code: string } }>;
+  };
+  assert.match(String(listed.content[0]?.text), /request is missing/);
+  assert.equal(
+    listed.details.some((snapshot) => snapshot.error?.code === "missing_request"),
+    true,
+  );
+
   const checked = (await registeredTool.execute(
     "check-broken",
     { action: "check", id: "broken" },

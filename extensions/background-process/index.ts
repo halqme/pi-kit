@@ -54,15 +54,21 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
 
   async function announce(
     ctx: ExtensionContext,
-    snapshot: ProcessSnapshot,
+    snapshot: ProcessInspection,
     force: boolean,
   ): Promise<void> {
-    const previous = announced.get(snapshot.request.id);
-    if (!force && previous === snapshot.phase) return;
-    announced.set(snapshot.request.id, snapshot.phase);
+    const key = "request" in snapshot ? snapshot.request.id : snapshot.taskDir;
+    const state =
+      "request" in snapshot
+        ? snapshot.phase
+        : `${snapshot.phase}:${snapshot.error.code}:${snapshot.result?.outcome ?? ""}`;
+    const previous = announced.get(key);
+    if (!force && previous === state) return;
+    announced.set(key, state);
+    const completion = "request" in snapshot && snapshot.phase === "unchecked";
     const text = [
       `[background-process] ${describe(snapshot)}`,
-      snapshot.phase === "unchecked"
+      completion
         ? "Completion received. Continue the pending task; do not rerun check unless output is needed."
         : "",
     ]
@@ -75,11 +81,11 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
         display: true,
         details: snapshot,
       },
-      snapshot.phase === "unchecked"
+      completion
         ? { triggerTurn: true, deliverAs: "followUp" }
         : { triggerTurn: false, deliverAs: "nextTurn" },
     );
-    if (snapshot.phase === "unchecked") await acknowledgeProcess(snapshot.taskDir);
+    if (completion) await acknowledgeProcess(snapshot.taskDir);
   }
 
   async function poll(
@@ -89,7 +95,6 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
     const snapshots = await listProcesses(rootFor(ctx));
     updateStatus(ctx, snapshots);
     for (const snapshot of snapshots) {
-      if (!("request" in snapshot)) continue;
       if (options.completedOnly && snapshot.phase !== "unchecked") continue;
       await announce(ctx, snapshot, options.force ?? false);
     }

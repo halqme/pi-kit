@@ -67,7 +67,13 @@ function errorMessage(error: unknown): string {
 }
 
 function recoveryError(error: unknown, hint: string): Error {
-  return new Error(`${errorMessage(error)}\n${hint}`);
+  const recovered = new Error(`${errorMessage(error)}\n${hint}`, { cause: error });
+  if (typeof error === "object" && error !== null) {
+    const source = error as { code?: unknown; name?: unknown };
+    if (typeof source.name === "string") recovered.name = source.name;
+    if (typeof source.code === "string") Object.assign(recovered, { code: source.code });
+  }
+  return recovered;
 }
 
 function readRecoveryHint(error: unknown): string {

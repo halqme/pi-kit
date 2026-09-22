@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -114,20 +114,34 @@ test("list reports damaged process inspections instead of hiding them", async (t
   const root = await mkdtemp(join(tmpdir(), "pi-background-process-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const missingDir = join(root, "missing-request");
-  const invalidDir = join(root, "invalid-request");
+  const invalidJsonDir = join(root, "invalid-json-request");
+  const invalidShapeDir = join(root, "invalid-shape-request");
   await mkdir(missingDir);
-  await mkdir(invalidDir);
-  await writeFile(join(invalidDir, "request.json"), "{", "utf8");
+  await mkdir(invalidJsonDir);
+  await mkdir(invalidShapeDir);
+  await writeFile(join(invalidJsonDir, "request.json"), "{", "utf8");
+  await atomicWriteJson(join(invalidShapeDir, "request.json"), {});
 
   const snapshots = await listProcesses(root);
-  assert.equal(snapshots.length, 2);
+  assert.equal(snapshots.length, 3);
   const missing = snapshots.find((snapshot) => snapshot.taskDir === missingDir);
-  const invalid = snapshots.find((snapshot) => snapshot.taskDir === invalidDir);
+  const invalidJson = snapshots.find((snapshot) => snapshot.taskDir === invalidJsonDir);
+  const invalidShape = snapshots.find((snapshot) => snapshot.taskDir === invalidShapeDir);
   assert.ok(missing && !("request" in missing));
-  assert.ok(invalid && !("request" in invalid));
-  if (!missing || !invalid || "request" in missing || "request" in invalid) return;
+  assert.ok(invalidJson && !("request" in invalidJson));
+  assert.ok(invalidShape && !("request" in invalidShape));
+  if (
+    !missing ||
+    !invalidJson ||
+    !invalidShape ||
+    "request" in missing ||
+    "request" in invalidJson ||
+    "request" in invalidShape
+  )
+    return;
   assert.equal(missing.error.code, "missing_request");
-  assert.equal(invalid.error.code, "invalid_request");
+  assert.equal(invalidJson.error.code, "invalid_request");
+  assert.equal(invalidShape.error.code, "invalid_request");
 });
 
 test("inspection preserves ENOTDIR instead of reporting a missing directory", async (t) => {
@@ -140,6 +154,16 @@ test("inspection preserves ENOTDIR instead of reporting a missing directory", as
     () => inspectProcess(join(file, "task")),
     (error: NodeJS.ErrnoException) => error.code === "ENOTDIR",
   );
+
+  const requestDir = join(root, "request-enotdir");
+  const requestTarget = join(root, "request-target");
+  await mkdir(requestDir);
+  await writeFile(requestTarget, "file", "utf8");
+  await symlink(join(requestTarget, "child"), join(requestDir, "request.json"));
+  const requestError = await inspectProcess(requestDir);
+  assert.ok(!("request" in requestError));
+  if ("request" in requestError) return;
+  assert.equal(requestError.error.code, "invalid_request");
 });
 
 test("failed and stopped outcomes remain in the four-phase model", async (t) => {

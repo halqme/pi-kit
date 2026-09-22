@@ -183,7 +183,10 @@ test("read and edit failures point to repository discovery and structural editin
 
   await assert.rejects(
     () => read.execute("read-missing", { path: "missing.ts" }, signal, undefined, { cwd: dir }),
-    /Next: use context.*find or context.*locate/,
+    (error: NodeJS.ErrnoException) =>
+      error.code === "ENOENT" &&
+      error.cause instanceof Error &&
+      /Next: use context.*find or context.*locate/.test(error.message),
   );
   const context = tools.find((tool) => tool.name === "context");
   assert.ok(context);
