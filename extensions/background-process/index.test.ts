@@ -259,9 +259,12 @@ test("start_many reports mixed failures without requiring a retry", async (t) =>
   assert.match(result.details.failed[0]?.error ?? "", /command is required/);
 
   const launched = await listProcesses(root, { includeCompleted: true });
-  assert.equal(launched.length, 2);
+  const launchedRequests = launched.flatMap((process) =>
+    "request" in process ? [process.request] : [],
+  );
+  assert.equal(launchedRequests.length, 2);
   assert.deepEqual(
-    new Set(launched.map((process) => process.request.label)),
+    new Set(launchedRequests.map((request) => request.label)),
     new Set(["one", "two"]),
   );
   await Promise.all(

@@ -152,8 +152,7 @@ async function isDirectory(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isDirectory();
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT" || code === "ENOTDIR") return false;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
   }
 }
@@ -254,7 +253,7 @@ export async function inspectProcess(taskDir: string): Promise<ProcessInspection
 export async function listProcesses(
   taskRoot: string,
   options: { includeCompleted?: boolean } = {},
-): Promise<ProcessSnapshot[]> {
+): Promise<ProcessInspection[]> {
   let entries: Dirent[];
   try {
     entries = await readdir(taskRoot, { withFileTypes: true });
@@ -262,18 +261,17 @@ export async function listProcesses(
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  const snapshots: ProcessSnapshot[] = [];
+  const snapshots: ProcessInspection[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const dir = join(taskRoot, entry.name);
-    if (!(await pathExists(join(dir, REQUEST_FILE)))) continue;
-    const snapshot = await inspectProcess(dir);
-    if (!("request" in snapshot)) continue;
+    const snapshot = await inspectProcess(join(taskRoot, entry.name));
     if (options.includeCompleted || snapshot.phase !== "completed") snapshots.push(snapshot);
   }
-  return snapshots.sort((left, right) =>
-    right.request.createdAt.localeCompare(left.request.createdAt),
-  );
+  return snapshots.sort((left, right) => {
+    const leftCreatedAt = "request" in left ? left.request.createdAt : "";
+    const rightCreatedAt = "request" in right ? right.request.createdAt : "";
+    return rightCreatedAt.localeCompare(leftCreatedAt) || right.taskDir.localeCompare(left.taskDir);
+  });
 }
 
 export async function startBackgroundProcess(

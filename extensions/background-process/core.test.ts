@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -7,6 +7,7 @@ import {
   acknowledgeProcess,
   atomicWriteJson,
   inspectProcess,
+  listProcesses,
   readProcessOutput,
   requestProcessStop,
   startBackgroundProcess,
@@ -107,6 +108,38 @@ test("a missing request is reconciled as a lost inspection", async (t) => {
   assert.ok(!("request" in repeated));
   if ("request" in repeated) return;
   assert.equal(repeated.result?.outcome, "lost");
+});
+
+test("list reports damaged process inspections instead of hiding them", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "pi-background-process-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const missingDir = join(root, "missing-request");
+  const invalidDir = join(root, "invalid-request");
+  await mkdir(missingDir);
+  await mkdir(invalidDir);
+  await writeFile(join(invalidDir, "request.json"), "{", "utf8");
+
+  const snapshots = await listProcesses(root);
+  assert.equal(snapshots.length, 2);
+  const missing = snapshots.find((snapshot) => snapshot.taskDir === missingDir);
+  const invalid = snapshots.find((snapshot) => snapshot.taskDir === invalidDir);
+  assert.ok(missing && !("request" in missing));
+  assert.ok(invalid && !("request" in invalid));
+  if (!missing || !invalid || "request" in missing || "request" in invalid) return;
+  assert.equal(missing.error.code, "missing_request");
+  assert.equal(invalid.error.code, "invalid_request");
+});
+
+test("inspection preserves ENOTDIR instead of reporting a missing directory", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "pi-background-process-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const file = join(root, "not-a-directory");
+  await writeFile(file, "file", "utf8");
+
+  await assert.rejects(
+    () => inspectProcess(join(file, "task")),
+    (error: NodeJS.ErrnoException) => error.code === "ENOTDIR",
+  );
 });
 
 test("failed and stopped outcomes remain in the four-phase model", async (t) => {

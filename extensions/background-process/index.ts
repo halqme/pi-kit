@@ -29,7 +29,7 @@ function describe(snapshot: ProcessInspection): string {
   return `${snapshot.request.id} [${snapshot.phase}${result}] ${snapshot.request.label}`;
 }
 
-function formatList(snapshots: ProcessSnapshot[]): string {
+function formatList(snapshots: ProcessInspection[]): string {
   return snapshots.length === 0 ? "No background processes." : snapshots.map(describe).join("\n");
 }
 
@@ -38,7 +38,7 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
   let activeContext: ExtensionContext | undefined;
   const announced = new Map<string, string>();
 
-  function updateStatus(ctx: ExtensionContext, snapshots: ProcessSnapshot[]): void {
+  function updateStatus(ctx: ExtensionContext, snapshots: ProcessInspection[]): void {
     const running = snapshots.filter((item) => item.phase === "running").length;
     const pending = snapshots.filter((item) => item.phase === "pending").length;
     const unchecked = snapshots.filter((item) => item.phase === "unchecked").length;
@@ -89,6 +89,7 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
     const snapshots = await listProcesses(rootFor(ctx));
     updateStatus(ctx, snapshots);
     for (const snapshot of snapshots) {
+      if (!("request" in snapshot)) continue;
       if (options.completedOnly && snapshot.phase !== "unchecked") continue;
       await announce(ctx, snapshot, options.force ?? false);
     }
