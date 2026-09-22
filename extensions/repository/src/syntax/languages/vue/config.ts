@@ -1,5 +1,5 @@
 import { labelsQuery, outlineQuery, searchQueries } from "./queries.ts";
-import type { LanguageAdapter } from "../../language-profile.ts";
+import type { LanguageAdapter } from "../../language-types.ts";
 
 const sectionNodeTypes = new Set(["template_element", "script_element", "style_element"]);
 

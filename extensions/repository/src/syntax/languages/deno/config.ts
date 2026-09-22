@@ -1,5 +1,5 @@
 import { labelsQuery, outlineQuery, searchQueries } from "./queries.ts";
-import type { LanguageAdapter } from "../../language-profile.ts";
+import type { LanguageAdapter } from "../../language-types.ts";
 
 const importantNodeTypes = new Set([
   "class_declaration",

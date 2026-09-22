@@ -7,40 +7,16 @@ import { adapter as swiftAdapter } from "./languages/swift/config.ts";
 import { adapter as typescriptAdapter } from "./languages/typescript/config.ts";
 import { adapter as tsxAdapter } from "./languages/tsx/config.ts";
 import { adapter as vueAdapter } from "./languages/vue/config.ts";
+import type { LanguageAdapter, LanguageId } from "./language-types.ts";
 
-export type LanguageId = string;
-
-export interface GrammarDescriptor {
-  id: string;
-  packageName: string;
-  wasmFile: string;
-}
-
-export interface LspServerSpec {
-  command: string;
-  args?: readonly string[];
-}
-
-export interface LspProfile {
-  servers: readonly LspServerSpec[];
-  initializationOptions?: unknown;
-}
-
-export type SyntaxSearchKind = "function" | "call" | "import";
-
-export interface LanguageAdapter {
-  id: string;
-  extensions: readonly string[];
-  autoDetect?: boolean;
-  grammar: GrammarDescriptor;
-  lsp?: LspProfile;
-  lspLanguageId?: string;
-  outlineQuery: string;
-  labelsQuery: string;
-  searchQueries: Partial<Record<SyntaxSearchKind, string>>;
-  declarationNodeTypes: ReadonlySet<string>;
-  importantNodeTypes: ReadonlySet<string>;
-}
+export type {
+  GrammarDescriptor,
+  LanguageAdapter,
+  LanguageId,
+  LspProfile,
+  LspServerSpec,
+  SyntaxSearchKind,
+} from "./language-types.ts";
 
 const adapters: readonly LanguageAdapter[] = [
   denoAdapter,

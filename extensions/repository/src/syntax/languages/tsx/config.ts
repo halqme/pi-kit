@@ -1,4 +1,4 @@
-import type { LanguageAdapter } from "../../language-profile.ts";
+import type { LanguageAdapter } from "../../language-types.ts";
 import { typescriptAdapter } from "../typescript/config.ts";
 
 export const adapter: LanguageAdapter = {
