@@ -116,32 +116,50 @@ test("list reports damaged process inspections instead of hiding them", async (t
   const missingDir = join(root, "missing-request");
   const invalidJsonDir = join(root, "invalid-json-request");
   const invalidShapeDir = join(root, "invalid-shape-request");
+  const invalidStateDir = join(root, "invalid-state");
   await mkdir(missingDir);
   await mkdir(invalidJsonDir);
   await mkdir(invalidShapeDir);
+  await mkdir(invalidStateDir);
   await writeFile(join(invalidJsonDir, "request.json"), "{", "utf8");
   await atomicWriteJson(join(invalidShapeDir, "request.json"), {});
+  await atomicWriteJson(join(invalidStateDir, "request.json"), {
+    version: 1,
+    id: "invalid-state",
+    label: "invalid-state",
+    kind: "command",
+    ownerSessionId: "session",
+    cwd: root,
+    createdAt: new Date().toISOString(),
+    spec: { type: "shell", command: "true" },
+  });
+  await writeFile(join(invalidStateDir, "result.json"), "{", "utf8");
 
   const snapshots = await listProcesses(root);
-  assert.equal(snapshots.length, 3);
+  assert.equal(snapshots.length, 4);
   const missing = snapshots.find((snapshot) => snapshot.taskDir === missingDir);
   const invalidJson = snapshots.find((snapshot) => snapshot.taskDir === invalidJsonDir);
   const invalidShape = snapshots.find((snapshot) => snapshot.taskDir === invalidShapeDir);
+  const invalidState = snapshots.find((snapshot) => snapshot.taskDir === invalidStateDir);
   assert.ok(missing && !("request" in missing));
   assert.ok(invalidJson && !("request" in invalidJson));
   assert.ok(invalidShape && !("request" in invalidShape));
+  assert.ok(invalidState && !("request" in invalidState));
   if (
     !missing ||
     !invalidJson ||
     !invalidShape ||
+    !invalidState ||
     "request" in missing ||
     "request" in invalidJson ||
-    "request" in invalidShape
+    "request" in invalidShape ||
+    "request" in invalidState
   )
     return;
   assert.equal(missing.error.code, "missing_request");
   assert.equal(invalidJson.error.code, "invalid_request");
   assert.equal(invalidShape.error.code, "invalid_request");
+  assert.equal(invalidState.error.code, "invalid_state");
 });
 
 test("inspection preserves ENOTDIR instead of reporting a missing directory", async (t) => {

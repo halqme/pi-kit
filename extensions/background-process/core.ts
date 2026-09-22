@@ -50,7 +50,7 @@ export interface ProcessInspectionIssue {
   taskDir: string;
   phase: ProcessPhase;
   error: {
-    code: "missing_directory" | "missing_request" | "invalid_request";
+    code: "missing_directory" | "missing_request" | "invalid_request" | "invalid_state";
     message: string;
   };
   running?: RunningState;
@@ -120,6 +120,23 @@ async function readJson<T>(path: string): Promise<T | undefined> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
+  }
+}
+
+type InspectionJsonRead<T> = { value: T | undefined } | { issue: ProcessInspectionIssue["error"] };
+
+async function readInspectionJson<T>(path: string, name: string): Promise<InspectionJsonRead<T>> {
+  try {
+    return { value: await readJson<T>(path) };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (!(error instanceof SyntaxError) && code !== "EISDIR" && code !== "ENOTDIR") throw error;
+    return {
+      issue: {
+        code: "invalid_state",
+        message: `Background process ${name} could not be read.`,
+      },
+    };
   }
 }
 
@@ -224,11 +241,23 @@ async function recordLost(taskDir: string, message: string): Promise<void> {
   } satisfies ProcessResult);
 }
 
-export async function reconcileProcess(taskDir: string): Promise<void> {
+export async function reconcileProcess(
+  taskDir: string,
+): Promise<ProcessInspectionIssue["error"] | undefined> {
   if (!(await isDirectory(taskDir)) || (await pathExists(join(taskDir, RESULT_FILE)))) return;
-  const running = await readJson<RunningState>(join(taskDir, RUNNING_FILE));
+  const runningRead = await readInspectionJson<RunningState>(
+    join(taskDir, RUNNING_FILE),
+    "running state",
+  );
+  if ("issue" in runningRead) return runningRead.issue;
+  const running = runningRead.value;
   if (running) {
-    const heartbeat = await readJson<{ updatedAt: string }>(join(taskDir, HEARTBEAT_FILE));
+    const heartbeatRead = await readInspectionJson<{ updatedAt: string }>(
+      join(taskDir, HEARTBEAT_FILE),
+      "heartbeat",
+    );
+    if ("issue" in heartbeatRead) return heartbeatRead.issue;
+    const heartbeat = heartbeatRead.value;
     const updatedAt = heartbeat ? Date.parse(heartbeat.updatedAt) : Date.parse(running.startedAt);
     if (Date.now() - updatedAt > LOST_AFTER_MS && !isPidAlive(running.supervisorPid)) {
       await recordLost(taskDir, "Background runner disappeared before recording a result.");
@@ -237,9 +266,12 @@ export async function reconcileProcess(taskDir: string): Promise<void> {
   }
 
   const requestRead = await readProcessRequest(taskDir);
-  const launcher = await readJson<{ pid: number; launchedAt: string }>(
+  const launcherRead = await readInspectionJson<{ pid: number; launchedAt: string }>(
     join(taskDir, LAUNCHER_FILE),
+    "launcher state",
   );
+  if ("issue" in launcherRead) return launcherRead.issue;
+  const launcher = launcherRead.value;
   if ("issue" in requestRead) {
     if (
       !launcher ||
@@ -256,7 +288,7 @@ export async function reconcileProcess(taskDir: string): Promise<void> {
 }
 
 export async function inspectProcess(taskDir: string): Promise<ProcessInspection> {
-  await reconcileProcess(taskDir);
+  const reconciliationIssue = await reconcileProcess(taskDir);
   const directory = await isDirectory(taskDir);
   const requestRead = directory
     ? await readProcessRequest(taskDir)
@@ -266,11 +298,27 @@ export async function inspectProcess(taskDir: string): Promise<ProcessInspection
           message: "Background process directory is missing.",
         },
       };
-  const running = directory ? await readJson<RunningState>(join(taskDir, RUNNING_FILE)) : undefined;
-  const result = directory ? await readJson<ProcessResult>(join(taskDir, RESULT_FILE)) : undefined;
-  const acknowledged = directory
-    ? await readJson<{ acknowledgedAt: string }>(join(taskDir, ACK_FILE))
-    : undefined;
+  const runningRead: InspectionJsonRead<RunningState> = directory
+    ? await readInspectionJson(join(taskDir, RUNNING_FILE), "running state")
+    : { value: undefined };
+  const resultRead: InspectionJsonRead<ProcessResult> = directory
+    ? await readInspectionJson(join(taskDir, RESULT_FILE), "result")
+    : { value: undefined };
+  const acknowledgedRead: InspectionJsonRead<{ acknowledgedAt: string }> = directory
+    ? await readInspectionJson(join(taskDir, ACK_FILE), "acknowledgement")
+    : { value: undefined };
+  const running = "value" in runningRead ? runningRead.value : undefined;
+  const result = "value" in resultRead ? resultRead.value : undefined;
+  const acknowledged = "value" in acknowledgedRead ? acknowledgedRead.value : undefined;
+  const stateIssue =
+    "issue" in runningRead
+      ? runningRead.issue
+      : "issue" in resultRead
+        ? resultRead.issue
+        : "issue" in acknowledgedRead
+          ? acknowledgedRead.issue
+          : undefined;
+  const issue = reconciliationIssue ?? ("issue" in requestRead ? requestRead.issue : stateIssue);
   const phase: ProcessPhase = result
     ? acknowledged
       ? "completed"
@@ -278,11 +326,21 @@ export async function inspectProcess(taskDir: string): Promise<ProcessInspection
     : running
       ? "running"
       : "pending";
-  if ("issue" in requestRead) {
+  if (!("request" in requestRead)) {
     return {
       taskDir,
       phase: phase === "pending" ? "unchecked" : phase,
-      error: requestRead.issue,
+      error: issue ?? requestRead.issue,
+      ...(running ? { running } : {}),
+      ...(result ? { result } : {}),
+      ...(acknowledged ? { acknowledgedAt: acknowledged.acknowledgedAt } : {}),
+    };
+  }
+  if (issue) {
+    return {
+      taskDir,
+      phase: phase === "pending" ? "unchecked" : phase,
+      error: issue,
       ...(running ? { running } : {}),
       ...(result ? { result } : {}),
       ...(acknowledged ? { acknowledgedAt: acknowledged.acknowledgedAt } : {}),

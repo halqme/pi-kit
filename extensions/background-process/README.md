@@ -6,7 +6,7 @@ The `background_process` tool supports:
 
 - `start`: start a shell command with an optional label and cwd.
 - `start_many`: start multiple shell commands concurrently. Each item accepts `command`, plus optional `label` and `cwd`.
-- `list`: show pending, running, and unchecked jobs. Set `includeCompleted` for history. Missing or malformed request metadata is reported as an inspection issue instead of being silently omitted; unrelated filesystem errors still fail the operation.
+- `list`: show pending, running, and unchecked jobs. Set `includeCompleted` for history. Missing or malformed process metadata is reported as an inspection issue instead of being silently omitted; unrelated filesystem errors still fail the operation.
 - `check`: return status and, after completion, bounded stdout/stderr tails without acknowledging the result. While a process is pending or running, output is hidden by default; set `inspectRunning: true` only for an explicit progress/output request, never to wait for completion.
 - `stop`: request TERM followed by KILL after a grace period.
 
