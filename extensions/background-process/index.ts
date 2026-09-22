@@ -277,6 +277,7 @@ export default function backgroundProcessExtension(pi: ExtensionAPI): void {
       }
       const snapshot = await inspectProcess(dir);
       if (
+        "request" in snapshot &&
         (snapshot.phase === "pending" || snapshot.phase === "running") &&
         !params.inspectRunning
       ) {

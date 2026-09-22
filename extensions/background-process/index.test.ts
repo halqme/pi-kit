@@ -182,6 +182,16 @@ test("check and stop report a missing request without throwing", async (t) => {
   )) as { content: Array<{ text?: string }> };
   assert.match(String(stopped.content[0]?.text), /Stop unavailable/);
   assert.match(String(stopped.content[0]?.text), /lost/);
+
+  const missing = (await registeredTool.execute(
+    "check-missing",
+    { action: "check", id: "missing" },
+    undefined,
+    undefined,
+    ctx,
+  )) as { content: Array<{ text?: string }> };
+  assert.match(String(missing.content[0]?.text), /directory is missing/);
+  assert.doesNotMatch(String(missing.content[0]?.text), /Process is still pending/);
 });
 
 test("start_many reports mixed failures without requiring a retry", async (t) => {

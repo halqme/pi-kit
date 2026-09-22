@@ -141,7 +141,9 @@ async function readProcessRequest(taskDir: string): Promise<ProcessRequestRead> 
             message: "Background process request is missing.",
           },
         };
-  } catch {
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (!(error instanceof SyntaxError) && code !== "EISDIR") throw error;
     return {
       issue: {
         code: "invalid_request",
@@ -154,8 +156,10 @@ async function readProcessRequest(taskDir: string): Promise<ProcessRequestRead> 
 async function isDirectory(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isDirectory();
-  } catch {
-    return false;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return false;
+    throw error;
   }
 }
 
