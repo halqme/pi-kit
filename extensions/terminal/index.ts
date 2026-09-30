@@ -382,9 +382,9 @@ export default function terminalExtension(pi: ExtensionAPI): void {
     name: "terminal",
     label: "Terminal",
     description:
-      "Manage persistent interactive tmux terminals. Use terminal when a process needs a TTY, later stdin or control keys, live state inspection, or output-pattern watches; for a dev server whose readiness gates the next step, use terminal with a readiness/failure watch. Use background_process for detached non-interactive processes whose stdout/stderr and process cancellation matter more than TTY interaction. Terminal registrations, pending calls, and watches are restored across Pi session reloads. call completion is asynchronous; timeoutMs stops tracking but does not interrupt the underlying command, and only one call may be pending per terminal.",
+      "Manage persistent shell processes in named tmux sessions. Use terminal for long-lived interactive work, asynchronous one-shot commands, reviewer subprocesses, dev servers, live state inspection, later stdin or control keys, and output-pattern watches. Use one terminal per concurrently running command. Terminal registrations, pending calls, and watches are restored across Pi session reloads. call completion is asynchronous; timeoutMs stops tracking but does not interrupt the underlying command, and only one call may be pending per terminal.",
     promptGuidelines: [
-      "Use background_process instead of terminal for non-interactive detached commands that do not need later stdin or TTY state.",
+      "Use call for asynchronous one-shot commands and one named terminal per concurrent command; close disposable terminals after their result is consumed.",
       "Use watch for actionable readiness, failure, or completion patterns instead of polling terminal.read repeatedly.",
       "Use terminal for dev servers when the next step depends on readiness or failure output; do not wait for process completion as a startup signal.",
       "A send request may contain text followed by keys; text is sent literally and keys are sent afterward.",
