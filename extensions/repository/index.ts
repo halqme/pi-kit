@@ -117,6 +117,7 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "context",
     label: "Context",
+    exposure: "codemode",
     description:
       "Acquire compact repository evidence. find performs relevance-ranked conceptual retrieval; locate/search/inspect use structural and language-server evidence. Retrieval never mutates files.",
     promptGuidelines: [
@@ -196,6 +197,7 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "code",
     label: "Code",
+    exposure: "codemode",
     description:
       "Mutate supported existing source through the repository structural engine. edit accepts either a structural continuation for a complete node replacement or path/oldText/newText for one exact unique target; exact edit requests on unsupported paths fall back to the built-in editor; rename uses language-server workspace edits.",
     promptGuidelines: [
