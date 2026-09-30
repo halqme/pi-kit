@@ -247,8 +247,6 @@
 
     "@halqme/ask": ["@halqme/ask@workspace:extensions/ask"],
 
-    "@halqme/background-process": ["@halqme/background-process@workspace:extensions/background-process"],
-
     "@halqme/browser-inspector": ["@halqme/browser-inspector@workspace:extensions/browser-inspector"],
 
     "@halqme/delegate": ["@halqme/delegate@workspace:extensions/delegate"],
