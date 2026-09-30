@@ -19,6 +19,12 @@ User goal ─────────────────> task ────
 
 An observation is not authority for a mutation, a completed plan is not authority for completion, and a child agent's report is not authority for integration. Likewise, `context` is not a qualification gate for `code`: structural discovery is useful only when it provides leverage.
 
+## Tool surface
+
+The authority diagram is not the model's tool list. Pi Kit's default direct tools are only `delegate` and `terminal`; Pi's built-in `codemode` is the structured gateway. `context`, `code`, `task`, and `verify` are registered with Codemode exposure, so their contracts stay explicit without multiplying top-level tool choices. Specialized browser, macOS, metrics, and semantic-observation tools remain deferred.
+
+`terminal` owns generic process lifecycle. `delegate` stays separate because its contract is an isolated unit of work: create a worktree/branch, run child Pi, preserve its commit, integrate the result, and clean up.
+
 ## Repository intelligence
 
 `context` is the read-only repository-intelligence boundary. Conceptual retrieval uses passage-level Okapi BM25, while structural lookup and inspection use Tree-sitter plus optional LSP evidence. These are implementation strategies behind one tool rather than separate product boundaries the model must route between.
