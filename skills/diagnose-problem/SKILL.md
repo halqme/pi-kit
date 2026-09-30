@@ -5,6 +5,8 @@ description: Diagnose failures, regressions, anomalies, flaky behavior, performa
 
 # Diagnose a Problem
 
+Pi Kit's `context`, `code`, `task`, and `verify` tools are Codemode-exposed; invoke those runtime operations from `codemode` scripts.
+
 1. Define observed behavior, expected behavior, environment, impact, and the earliest known failure. Keep observations separate from explanations.
 2. Acquire the smallest relevant repository and runtime evidence. Use `context` to locate the responsible boundary instead of broadly reading the repository.
 3. Reproduce the problem with the smallest faithful check when safe. Record what the result proves and what it leaves unresolved.
