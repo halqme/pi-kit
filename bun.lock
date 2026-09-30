@@ -21,18 +21,6 @@
         "typescript": "catalog:",
       },
     },
-    "extensions/background-process": {
-      "name": "@halqme/background-process",
-      "dependencies": {
-        "@earendil-works/pi-ai": "catalog:",
-        "@earendil-works/pi-coding-agent": "catalog:",
-        "@earendil-works/pi-tui": "catalog:",
-      },
-      "devDependencies": {
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
     "extensions/browser-inspector": {
       "name": "@halqme/browser-inspector",
       "dependencies": {
