@@ -43,4 +43,4 @@ Open the page, inspect a target, then reuse the returned ref:
 
 Raw CDP is intentionally not part of the Pi tool API. The Bun host uses CDP internally for DOM, CSS, Accessibility, Page, Runtime, and Network observations while exposing stable, task-level operations to the model. Add a structured browser action when a recurring observation is missing instead of teaching callers to assemble protocol commands themselves.
 
-`Bun.WebView` is experimental, so the JSONL host boundary also isolates Pi from Bun API churn. The browser tool should not manage dev servers or other long-running commands; use `terminal` when browser checks depend on readiness or startup/failure output, and use `background_process` only when no readiness observation is needed.
+`Bun.WebView` is experimental, so the JSONL host boundary also isolates Pi from Bun API churn. The browser tool should not manage dev servers or other long-running commands; use `terminal` for server and subprocess lifecycle, including readiness/startup observation and asynchronous one-shot commands.
