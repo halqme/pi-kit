@@ -190,6 +190,7 @@ export function registerVerification(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "verify",
     label: "Verify",
+    exposure: "codemode",
     description:
       "Execute verification checks or record supporting evidence with provenance. task.finish trusts only checks executed by verify.run; manually reported evidence remains supporting context and cannot self-certify completion.",
     promptGuidelines: [
@@ -316,6 +317,7 @@ export function registerTask(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "task",
     label: "Task",
+    exposure: "codemode",
     description:
       "Maintain one adaptive task as goal, disposable plan, observations, checkpoints, blockers, resource provenance, and evidence-backed completion. Planning is optional and revisable; completion requires a successful check executed through verify.run.",
     promptGuidelines: [
