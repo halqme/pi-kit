@@ -2,7 +2,7 @@
 
 まず依頼内容と完了条件を現在の差分や成果物へ対応付け、リポジトリのREADME、設定、package scripts、既存テストから正規の検証方法を確認してください。変更範囲とリスクに見合う最小のcheckから始め、必要に応じて広げてください。
 
-Pi Kitの `verify` toolが利用できる場合、実行可能な既存テスト、compiler、typecheck、lint、structural auditは `verify.run` で実行してください。CIやユーザー確認など外部で得た結果は `verify.record` で補助証拠として記録できますが、自己申告だけを完了根拠にしないでください。
+Pi Kitの `verify` toolが利用できる場合、Codemodeから呼び出し、実行可能な既存テスト、compiler、typecheck、lint、structural auditは `verify.run` で実行してください。CIやユーザー確認など外部で得た結果は `verify.record` で補助証拠として記録できますが、自己申告だけを完了根拠にしないでください。
 
 終了前に、最も重大な見落としになり得る点を一つ挙げ、それを露呈させる反証的な確認を行ってください。検証のために実装や設定を変更する必要がある場合は、勝手に変更せず先に説明してください。
 
