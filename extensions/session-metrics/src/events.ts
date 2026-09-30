@@ -28,6 +28,7 @@ export type SessionEvent =
       timestamp?: string;
       provider?: string;
       model?: string;
+      thinkingLevel?: string;
       stopReason?: string;
       errorMessage?: string;
       usage: UsageTotals;
@@ -38,6 +39,7 @@ export type SessionEvent =
       toolCallId?: string;
       toolName: string;
       input: unknown;
+      nested?: true;
     }
   | {
       kind: "tool_result";
@@ -48,6 +50,18 @@ export type SessionEvent =
       details?: unknown;
       isError: boolean;
       reportedTokens: number;
+      usage?: UsageTotals;
+      nested?: true;
+      durationMs?: number;
+      nestedCallsIncomplete?: true;
+    }
+  | {
+      kind: "usage";
+      timestamp?: string;
+      usageKind: string;
+      provider?: string;
+      model?: string;
+      usage: UsageTotals;
     }
   | {
       kind: "other";
@@ -134,6 +148,7 @@ function messageEvents(entry: RecordValue, message: RecordValue): SessionEvent[]
   if (role === "assistant") {
     const provider = string(message.provider);
     const model = string(message.model);
+    const thinkingLevel = string(message.thinkingLevel);
     const stopReason = string(message.stopReason);
     const errorMessage = string(message.errorMessage);
     const events: SessionEvent[] = [
@@ -142,6 +157,7 @@ function messageEvents(entry: RecordValue, message: RecordValue): SessionEvent[]
         ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
         ...(provider ? { provider } : {}),
         ...(model ? { model } : {}),
+        ...(thinkingLevel ? { thinkingLevel } : {}),
         ...(stopReason ? { stopReason } : {}),
         ...(errorMessage ? { errorMessage } : {}),
         usage: normalizeUsage(message.usage),
@@ -164,18 +180,57 @@ function messageEvents(entry: RecordValue, message: RecordValue): SessionEvent[]
   if (role === "toolResult") {
     const toolCallId = string(message.toolCallId);
     const toolName = string(message.toolName);
-    return [
-      {
+    const nestedCalls = record(message.nestedCalls);
+    const events: SessionEvent[] = [];
+
+    for (const candidate of Array.isArray(nestedCalls?.calls) ? nestedCalls.calls : []) {
+      const call = record(candidate);
+      const id = string(call?.id);
+      const name = string(call?.name);
+      if (!call || !id || !name) continue;
+      events.push({
+        kind: "tool_call",
+        ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
+        toolCallId: id,
+        toolName: name,
+        input: call.arguments,
+        nested: true,
+      });
+      if (call.status !== "ok" && call.status !== "error") continue;
+      const durationMs =
+        typeof call.durationMs === "number" &&
+        Number.isFinite(call.durationMs) &&
+        call.durationMs >= 0
+          ? call.durationMs
+          : undefined;
+      const error = string(call.error);
+      events.push({
         kind: "tool_result",
         ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
-        ...(toolCallId ? { toolCallId } : {}),
-        ...(toolName ? { toolName } : {}),
-        content: message.content,
-        ...(message.details !== undefined ? { details: message.details } : {}),
-        isError: message.isError === true,
-        reportedTokens: numeric(record(message.usage)?.totalTokens),
-      },
-    ];
+        toolCallId: id,
+        toolName: name,
+        content: error ? [{ type: "text", text: error }] : [],
+        details: { status: call.status },
+        isError: call.status === "error",
+        reportedTokens: 0,
+        nested: true,
+        ...(durationMs !== undefined ? { durationMs } : {}),
+      });
+    }
+
+    events.push({
+      kind: "tool_result",
+      ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
+      ...(toolCallId ? { toolCallId } : {}),
+      ...(toolName ? { toolName } : {}),
+      content: message.content,
+      ...(message.details !== undefined ? { details: message.details } : {}),
+      isError: message.isError === true,
+      reportedTokens: numeric(record(message.usage)?.totalTokens),
+      usage: normalizeUsage(message.usage),
+      ...(nestedCalls?.complete === false ? { nestedCallsIncomplete: true as const } : {}),
+    });
+    return events;
   }
   return [
     {
@@ -222,6 +277,20 @@ export function eventsFromLine(line: string): SessionEvent[] {
   }
   if (type === "turn_end") {
     return [{ kind: "turn_end", ...(eventTimestamp ? { timestamp: eventTimestamp } : {}) }];
+  }
+  if (type === "usage") {
+    const provider = string(entry.provider);
+    const model = string(entry.model);
+    return [
+      {
+        kind: "usage",
+        ...(eventTimestamp ? { timestamp: eventTimestamp } : {}),
+        usageKind: string(entry.kind) ?? "unknown",
+        ...(provider ? { provider } : {}),
+        ...(model ? { model } : {}),
+        usage: normalizeUsage(entry.usage),
+      },
+    ];
   }
   if (type === "message") {
     const message = record(entry.message);

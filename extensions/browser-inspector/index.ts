@@ -182,6 +182,7 @@ export default function browserInspectorExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: TOOL_NAME,
     label: "Browser Inspector",
+    exposure: "deferred",
     description:
       "Inspect and interact with a running web UI through an isolated headless Chrome managed by a Bun.WebView sidecar. Use after web UI changes and when runtime DOM, computed CSS, layout, console, network, or rendered output matters. Prefer targeted inspect/styles calls; use snapshot only to discover an unfamiliar page, and refresh for the common reload-observe loop. Element refs are short-lived and become stale after navigation. Use terminal or background_process for servers and non-browser commands.",
     promptGuidelines: [

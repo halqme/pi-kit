@@ -12,6 +12,8 @@ export const WORKSPACE_ENTRY = "task-workspace-baseline";
 
 const exec = promisify(execFile);
 const trackedTools = new Set(["read", "edit", "write", "context", "code"]);
+const MAX_NESTED_EXCERPTS = 4;
+const MAX_NESTED_EXCERPT_CHARS = 3_000;
 
 export interface TaskResourceEvent {
   version: 1;
@@ -22,7 +24,9 @@ export interface TaskResourceEvent {
   tool: string;
   action?: string;
   toolCallId: string;
+  parentToolCallId?: string;
   assistantEntryId?: string;
+  excerpt?: string;
   at: string;
 }
 
@@ -52,7 +56,9 @@ export interface TaskReviewResources {
     tool: string;
     action?: string;
     toolCallId: string;
+    parentToolCallId?: string;
     assistantEntryId?: string;
+    excerpt?: string;
   }>;
   coverage: {
     observations: "explicit-tools";
@@ -79,6 +85,33 @@ function string(value: unknown): string | undefined {
 
 function array(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function nestedExcerpt(value: unknown): string | undefined {
+  const parts: string[] = [];
+  let length = 0;
+  let truncated = false;
+  for (const block of array(value)) {
+    const item = record(block);
+    if (item?.type !== "text" || typeof item.text !== "string" || !item.text) continue;
+    const remaining = MAX_NESTED_EXCERPT_CHARS - length;
+    if (remaining <= 0) {
+      truncated = true;
+      break;
+    }
+    const chunk = `${parts.length > 0 ? "\n" : ""}${item.text}`;
+    parts.push(chunk.slice(0, remaining));
+    length += Math.min(chunk.length, remaining);
+    if (chunk.length > remaining) {
+      truncated = true;
+      break;
+    }
+  }
+  const text = parts.join("").trim();
+  if (!text) return undefined;
+  if (!truncated) return text;
+  const suffix = "\n…[truncated]";
+  return `${text.slice(0, MAX_NESTED_EXCERPT_CHARS - suffix.length)}${suffix}`;
 }
 
 function normalized(path: string): string {
@@ -187,6 +220,7 @@ function workspaceBaseline(
 
 export function registerTaskResourceTracking(pi: ExtensionAPI): void {
   const pending = new Map<string, PendingCall>();
+  const excerptCounts = new Map<string, number>();
 
   pi.on("tool_call", async (event, ctx) => {
     if (!trackedTools.has(event.toolName)) return undefined;
@@ -202,15 +236,27 @@ export function registerTaskResourceTracking(pi: ExtensionAPI): void {
     const task = activeTask(ctx);
     if (!task) return undefined;
     const root = workspaceBaseline(ctx, task.id)?.root ?? (await resolveProjectRoot(ctx.cwd));
-
-    for (const capture of capturesForTool(
+    const captures = capturesForTool(
       event.toolName,
       event.input,
       event.content,
       event.details,
       ctx.cwd,
       root,
-    )) {
+    );
+    const parentToolCallId = string(event.parentToolCallId);
+    let excerptCount = excerptCounts.get(task.id);
+    let excerpt: string | undefined;
+    if (parentToolCallId && captures.some((capture) => capture.operation === "observe")) {
+      excerptCount ??= customEntries<TaskResourceEvent>(ctx, RESOURCE_ENTRY).filter(
+        (resource) => resource.taskId === task.id && resource.excerpt,
+      ).length;
+      excerptCounts.set(task.id, excerptCount);
+      if (excerptCount < MAX_NESTED_EXCERPTS) excerpt = nestedExcerpt(event.content);
+    }
+
+    for (const capture of captures) {
+      const includeExcerpt = capture.operation === "observe" && Boolean(excerpt);
       const resource: TaskResourceEvent = {
         version: 1,
         id: randomUUID(),
@@ -220,10 +266,17 @@ export function registerTaskResourceTracking(pi: ExtensionAPI): void {
         tool: event.toolName,
         ...(capture.action ? { action: capture.action } : {}),
         toolCallId: event.toolCallId,
+        ...(parentToolCallId ? { parentToolCallId } : {}),
         ...(call?.assistantEntryId ? { assistantEntryId: call.assistantEntryId } : {}),
+        ...(includeExcerpt && excerpt ? { excerpt } : {}),
         at: new Date().toISOString(),
       };
       pi.appendEntry(RESOURCE_ENTRY, resource);
+      if (includeExcerpt) {
+        excerptCount = (excerptCount ?? 0) + 1;
+        excerptCounts.set(task.id, excerptCount);
+        excerpt = undefined;
+      }
     }
     return undefined;
   });
@@ -442,7 +495,9 @@ export async function taskReviewResources(
       tool: event.tool,
       ...(event.action ? { action: event.action } : {}),
       toolCallId: event.toolCallId,
+      ...(event.parentToolCallId ? { parentToolCallId: event.parentToolCallId } : {}),
       ...(event.assistantEntryId ? { assistantEntryId: event.assistantEntryId } : {}),
+      ...(event.excerpt ? { excerpt: event.excerpt } : {}),
     })),
     coverage: {
       observations: "explicit-tools",

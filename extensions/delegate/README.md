@@ -2,7 +2,7 @@
 
 Isolated implementation delegation for Pi Kit.
 
-Each `delegate.start` creates a dedicated Git worktree and branch, then launches a child `pi` process in that workspace. The worker receives a bounded task and acceptance criteria and commits its own coherent changes. Concurrent mutating delegates therefore never share a working tree.
+Each `delegate.start` creates a dedicated Git worktree and branch, then launches a child `pi` process in that workspace. It uses `pi -ne` (`--no-extensions`) so discovered, configured, and built-in extensions are not inherited; the worker follows the repository's own instructions and setup. The worker receives a bounded task and acceptance criteria and commits its own coherent changes. Concurrent mutating delegates therefore never share a working tree.
 
 Worker exit is delivered automatically as a follow-up completion message, so the parent should not poll `delegate.status` while waiting. `delegate.status` remains available for explicit progress or output inspection. `delegate.stop` terminates a running worker.
 

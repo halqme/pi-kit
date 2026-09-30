@@ -196,6 +196,50 @@ test("review_context reports successful explicit resource activity", async () =>
   assert.equal(review.resources.coverage.opaqueToolEffects, "not-attributed");
 });
 
+test("records bounded excerpts and parent IDs for nested observations", async () => {
+  const { tools, ctx, emit } = harness();
+  const task = tools.get("task");
+  await call(task, { action: "start", goal: "track nested repository evidence" }, ctx);
+
+  for (let index = 1; index <= 5; index++) {
+    const toolCallId = `codemode/${index}`;
+    const input = { path: "extensions/task/README.md" };
+    await emit("tool_call", {
+      toolCallId,
+      parentToolCallId: "codemode-call",
+      toolName: "read",
+      input,
+    });
+    await emit("tool_result", {
+      toolCallId,
+      parentToolCallId: "codemode-call",
+      toolName: "read",
+      input,
+      content: [
+        {
+          type: "text",
+          text: index === 1 ? "n".repeat(4_000) : `nested result ${index}`,
+        },
+      ],
+      isError: false,
+    });
+  }
+
+  const review = parsed(await call(task, { action: "review_context" }, ctx));
+  assert.equal(review.resources.timeline.length, 5);
+  assert.ok(
+    review.resources.timeline.every((event: any) => event.parentToolCallId === "codemode-call"),
+  );
+  const excerpts = review.resources.timeline.flatMap((event: any) =>
+    event.excerpt ? [event.excerpt] : [],
+  );
+  assert.equal(excerpts.length, 4);
+  assert.equal(excerpts[0]?.length, 3_000);
+  assert.ok(excerpts[0]?.startsWith("n".repeat(20)));
+  assert.ok(excerpts[0]?.endsWith("\n…[truncated]"));
+  assert.deepEqual(excerpts.slice(1), ["nested result 2", "nested result 3", "nested result 4"]);
+});
+
 test("failed mutations are not recorded as task resource events", async () => {
   const { tools, ctx, emit } = harness();
   const task = tools.get("task");

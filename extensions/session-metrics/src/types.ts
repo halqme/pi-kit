@@ -139,6 +139,8 @@ export interface MetricSummary {
   turns: number;
   toolCalls: number;
   toolCallsByName: Record<string, number>;
+  nestedCallsIncomplete: number;
+  usageByKind: Record<string, UsageTotals>;
   toolUsage: Record<string, ToolMetrics>;
   toolActions: Record<string, Record<string, ToolMetrics>>;
   logicalOperations: LogicalOperationMetrics;

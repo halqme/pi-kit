@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import type { JsonObject, JsonValue } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { taskEvidencePacket, type TaskEvidencePacket } from "../task/evidence.ts";
-import type { JsonValue } from "../../packages/semantic-predicate/src/index.ts";
 
 const exec = promisify(execFile);
 const MAX_DIFF_CHARS = 12_000;
@@ -127,7 +127,7 @@ export function projectObservationState(
   observation: ObservationId,
   packet: TaskEvidencePacket,
   runtime: ObservationRuntimeEvidence,
-): JsonValue {
+): JsonObject {
   if (observation === "scopeDrift") {
     return {
       task: taskView(packet),
@@ -198,7 +198,13 @@ function contextEvidence(ctx: ExtensionContext, packet: TaskEvidencePacket): Con
   const changed = new Set(packet.resources.changedDuringTask);
   const grouped = new Map<
     string,
-    { tool: string; paths: Set<string>; index: number; overlapsChange: boolean }
+    {
+      tool: string;
+      paths: Set<string>;
+      index: number;
+      overlapsChange: boolean;
+      excerpt?: string;
+    }
   >();
 
   packet.resources.timeline.forEach((event, index) => {
@@ -209,6 +215,7 @@ function contextEvidence(ctx: ExtensionContext, packet: TaskEvidencePacket): Con
     if (existing) {
       existing.paths.add(event.path);
       existing.overlapsChange ||= changed.has(event.path);
+      if (!existing.excerpt && event.excerpt) existing.excerpt = event.excerpt;
       existing.index = index;
       return;
     }
@@ -217,12 +224,13 @@ function contextEvidence(ctx: ExtensionContext, packet: TaskEvidencePacket): Con
       paths: new Set([event.path]),
       index,
       overlapsChange: changed.has(event.path),
+      ...(event.excerpt ? { excerpt: event.excerpt } : {}),
     });
   });
 
   const candidates = [...grouped.entries()]
     .map(([toolCallId, value]) => ({ toolCallId, ...value }))
-    .filter((item) => results.has(item.toolCallId))
+    .filter((item) => results.has(item.toolCallId) || item.excerpt)
     .sort((a, b) => {
       if (a.overlapsChange !== b.overlapsChange) return a.overlapsChange ? -1 : 1;
       return b.index - a.index;
@@ -234,8 +242,9 @@ function contextEvidence(ctx: ExtensionContext, packet: TaskEvidencePacket): Con
   for (const item of candidates) {
     if (remaining <= 0) break;
     const result = results.get(item.toolCallId);
-    if (!result) continue;
-    const text = clip(result.text, Math.min(MAX_CONTEXT_ITEM_CHARS, remaining));
+    const source = result?.text ?? item.excerpt;
+    if (!source) continue;
+    const text = clip(source, Math.min(MAX_CONTEXT_ITEM_CHARS, remaining));
     remaining -= text.length;
     excerpts.push({
       tool: item.tool,
@@ -249,7 +258,7 @@ function contextEvidence(ctx: ExtensionContext, packet: TaskEvidencePacket): Con
 export async function buildObservationState(
   ctx: ExtensionContext,
   observation: ObservationId,
-): Promise<JsonValue> {
+): Promise<JsonObject> {
   const packet = await taskEvidencePacket(ctx);
   if (!packet || (packet.task.status !== "active" && packet.task.status !== "blocked")) {
     throw new Error("precondition: semantic_observe requires an active or blocked task.");

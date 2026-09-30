@@ -12,37 +12,26 @@ import { adapterForPath, supportedLanguageIds } from "./src/syntax/language-prof
 import type { TextToolResult } from "./src/shared.ts";
 
 type CapturedTool = {
-  name: string;
   execute: (...args: any[]) => Promise<TextToolResult>;
 };
 
 type Installer = (pi: ExtensionAPI) => void;
 
-function captureTool(pi: ExtensionAPI, installer: Installer, expectedName: string): CapturedTool {
+function captureTool(pi: ExtensionAPI, installer: Installer): CapturedTool {
   let captured: CapturedTool | undefined;
-  const proxy = new Proxy(pi, {
-    get(target, property, receiver) {
-      if (property === "registerTool") {
-        return (tool: unknown) => {
-          const candidate = tool as CapturedTool;
-          if (candidate.name === expectedName) captured = candidate;
-        };
-      }
-      if (property === "on") {
-        return (event: string, handler: unknown) => {
-          if (event === "before_agent_start") return undefined;
-          const value = Reflect.get(target, property, receiver) as (...args: unknown[]) => unknown;
-          return value.call(target, event, handler);
-        };
-      }
-      const value = Reflect.get(target, property, receiver) as unknown;
-      return typeof value === "function"
-        ? (value as (...args: unknown[]) => unknown).bind(target)
-        : value;
+  const registrationApi = {
+    registerTool(tool: unknown) {
+      captured = tool as CapturedTool;
     },
-  }) as ExtensionAPI;
-  installer(proxy);
-  if (!captured) throw new Error(`Repository engine '${expectedName}' was not registered.`);
+    on(event: string, handler: unknown) {
+      if (event !== "session_shutdown") {
+        throw new Error(`Unexpected repository engine event '${event}'.`);
+      }
+      return pi.on(event as never, handler as never);
+    },
+  } as unknown as ExtensionAPI;
+  installer(registrationApi);
+  if (!captured) throw new Error("Repository engine did not register a tool.");
   return captured;
 }
 
@@ -119,26 +108,10 @@ function contextRecoveryHint(error: unknown): string {
 }
 
 export default function repositoryExtension(pi: ExtensionAPI): void {
-  const structural = captureTool(pi, installStructuralEngine, "astrolabe");
-  const lexical = captureTool(pi, installLexicalEngine, "bm25_search");
+  const structural = captureTool(pi, installStructuralEngine);
+  const lexical = captureTool(pi, installLexicalEngine);
   const fallbackEdit = createEditToolDefinition("");
-  const fallbackEdits = new Map<string, typeof fallbackEdit>([["", fallbackEdit]]);
-  const fallbackEditFor = (cwd: string) => {
-    const existing = fallbackEdits.get(cwd);
-    if (existing) return existing;
-    const created = createEditToolDefinition(cwd);
-    fallbackEdits.set(cwd, created);
-    return created;
-  };
   const fallbackRead = createReadToolDefinition("");
-  const fallbackReads = new Map<string, typeof fallbackRead>([["", fallbackRead]]);
-  const fallbackReadFor = (cwd: string) => {
-    const existing = fallbackReads.get(cwd);
-    if (existing) return existing;
-    const created = createReadToolDefinition(cwd);
-    fallbackReads.set(cwd, created);
-    return created;
-  };
   const continuationSchema = Type.Object({ token: Type.String() });
 
   pi.registerTool({
@@ -260,7 +233,7 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
           /unsupported_language/.test(errorMessage(error))
         ) {
           try {
-            return await fallbackEditFor(ctx.cwd).execute(
+            return await fallbackEdit.execute(
               id,
               {
                 path: params.path,
@@ -283,16 +256,10 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
     ...fallbackEdit,
     description:
       "Edit a file with exact replacements. Single replacements in supported source files are syntax-validated automatically; unsupported files and multi-edit calls use the standard editor.",
-    promptGuidelines: [
-      "Use edit for exact replacements; single edits in supported source files are validated against the syntax tree automatically.",
-      "If an exact replacement fails, inspect the current file with context before retrying; do not repeat stale oldText.",
-      "Use code when a structural continuation or semantic rename is available.",
-    ],
     async execute(id, params, signal, update, ctx) {
       try {
         const request = structuralEditRequest(params);
-        if (!request)
-          return await fallbackEditFor(ctx.cwd).execute(id, params, signal, update, ctx);
+        if (!request) return await fallbackEdit.execute(id, params, signal, update, ctx);
         await structural.execute(id, request, signal, update, ctx);
         return {
           content: [
@@ -313,14 +280,9 @@ export default function repositoryExtension(pi: ExtensionAPI): void {
     ...fallbackRead,
     description:
       "Read a file. If the path is uncertain or source context is needed for a later edit, use context.find/locate/inspect first.",
-    promptGuidelines: [
-      ...(fallbackRead.promptGuidelines ?? []),
-      "When read reports a missing or incorrect path, use context.find or context.locate instead of guessing another path.",
-      "For source changes, use context.inspect before code or edit so the target reflects the current file.",
-    ],
     async execute(id, params, signal, update, ctx) {
       try {
-        return await fallbackReadFor(ctx.cwd).execute(id, params, signal, update, ctx);
+        return await fallbackRead.execute(id, params, signal, update, ctx);
       } catch (error) {
         throw recoveryError(error, readRecoveryHint(error));
       }

@@ -74,6 +74,7 @@ export default function askExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "ask",
     label: "Ask",
+    exposure: "model-only",
     description:
       "Ask the user one or more structured choice questions when their decision is required. Supports single choice, multiple choice, Other free text, and confirm questions. Use only for genuine user decisions; do not use for choices the user already answered, routine implementation details the model can decide, progress updates, or next-action suggestions.",
     promptGuidelines: [

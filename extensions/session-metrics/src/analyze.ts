@@ -77,6 +77,8 @@ export function createMetrics(): SessionMetrics {
     turns: 0,
     toolCalls: 0,
     toolCallsByName: {},
+    nestedCallsIncomplete: 0,
+    usageByKind: {},
     toolUsage: {},
     toolActions: {},
     logicalOperations: {
@@ -123,8 +125,10 @@ function addToolResult(
   event: Extract<SessionEvent, { kind: "tool_result" }>,
   durationMs?: number,
 ): void {
-  tool.estimatedResultTokens += Math.ceil(textContent(event.content).length / 4);
-  tool.reportedTokens += event.reportedTokens;
+  if (!event.nested) {
+    tool.estimatedResultTokens += Math.ceil(textContent(event.content).length / 4);
+    tool.reportedTokens += event.reportedTokens;
+  }
   if (event.isError) tool.errors++;
   if (durationMs !== undefined) {
     tool.completedCalls++;
@@ -254,6 +258,11 @@ function createAccumulator() {
       }
       return;
     }
+    if (event.kind === "usage") {
+      addUsage(result.tokens, event.usage);
+      addUsage((result.usageByKind[event.usageKind] ??= emptyUsage()), event.usage);
+      return;
+    }
     if (event.kind === "user_message") {
       result.messages++;
       result.userMessages++;
@@ -263,6 +272,7 @@ function createAccumulator() {
       return;
     }
     if (event.kind === "assistant_message") {
+      if (event.thinkingLevel) thinkingLevel = event.thinkingLevel;
       const at = timestampMs(event.timestamp);
       if (operationStartedAt === undefined && at !== undefined) operationStartedAt = at;
       if (at !== undefined) operationLastAt = at;
@@ -330,20 +340,25 @@ function createAccumulator() {
     if (event.kind === "tool_result") {
       const at = timestampMs(event.timestamp);
       if (at !== undefined) operationLastAt = at;
-      operationReturnedTokens +=
-        event.reportedTokens || Math.ceil(textContent(event.content).length / 4);
+      if (event.nestedCallsIncomplete) result.nestedCallsIncomplete++;
+      if (!event.nested) {
+        operationReturnedTokens +=
+          event.reportedTokens || Math.ceil(textContent(event.content).length / 4);
+        addUsage(result.tokens, event.usage ?? emptyUsage());
+        result.messages++;
+        result.toolResults++;
+      }
       if (event.isError) operationErrors++;
-      result.messages++;
-      result.toolResults++;
       const pending = event.toolCallId ? pendingTools.get(event.toolCallId) : undefined;
       const toolName = event.toolName ?? pending?.toolName ?? "unknown";
       const endedAt = timestampMs(event.timestamp);
       const durationMs =
-        pending?.timestampMs !== undefined &&
+        event.durationMs ??
+        (pending?.timestampMs !== undefined &&
         endedAt !== undefined &&
         endedAt >= pending.timestampMs
           ? endedAt - pending.timestampMs
-          : undefined;
+          : undefined);
       addToolResult((result.toolUsage[toolName] ??= createToolMetrics()), event, durationMs);
       if (pending?.action) {
         const action = (result.toolActions[toolName] ??= {})[pending.action];
@@ -486,6 +501,10 @@ export function mergeMetrics(target: MetricSummary, source: MetricSummary): Metr
   target.toolResults += source.toolResults;
   target.turns += source.turns;
   target.toolCalls += source.toolCalls;
+  target.nestedCallsIncomplete += source.nestedCallsIncomplete;
+  for (const [kind, usage] of Object.entries(source.usageByKind)) {
+    addUsage((target.usageByKind[kind] ??= emptyUsage()), usage);
+  }
   target.toolErrors += source.toolErrors;
   target.modelErrors += source.modelErrors;
   target.logicalOperations.operations += source.logicalOperations.operations;

@@ -1,21 +1,21 @@
 # Session Metrics extension
 
-Pi session JSONLの統計をagentから読むための`session_metrics` toolを登録する薄いwrapperです。結果はcanonical JSONのみを返し、表示はconsumer側に委ねます。
+Pi session JSONLの統計をagentから読むための`session_metrics` toolを登録する薄いwrapperです。結果はcanonical JSONのみを返し、表示はconsumer側に委ねます。使用頻度の低い分析用ツールなので、Pi 0.99以降ではdeferred exposureにしています。Piの`tool_search`が有効なセッションで、必要なときにこのtoolを検索して有効化できます。`tool_search`はPiで既定無効のため、有効化手順は[extension guide](../README.md)を参照してください。
 
 通常のtool実行やmodel eventはinstrumentせず、既存のsession JSONLを後から解析します。例外として、Pi Kit自身のrevision差を履歴から区別できるよう、`session_start`で現在のPi Kit Git revisionとdirty fingerprintだけをcustom entryとして1回記録します。同じfingerprintでextensionがreloadされた場合は重複記録しません。Git metadataを取得できないインストールではfingerprintを記録しません。
 
-session解析、skill/tool action集計、現在のPi resource discoveryはいずれもpackage側の実装を共有します。tool errorの診断では、`details.errorClass`またはPi Kitが契約として付ける既知prefixだけを分類し、任意のエラー文面から推測はしません。分類は`execution_failure`、`agent_misuse`、`expected_failure`、`precondition`の4種で、それ以外は`unknown`に残します。
+session解析、skill/tool action集計、現在のPi resource discoveryはいずれもpackage側の実装を共有します。nested Codemode callsはPiがsession JSONLに残した範囲でtool callとして集計します。`toolCalls`にはnested callsを含みますが、`messages`と`toolResults`はtranscript上のentryだけを数えます。親tool resultの`nestedCalls.complete === false`は`nestedCallsIncomplete`に計上し、欠落した実行を成功・失敗のどちらにも推定しません。Piの`usage` entryとtool resultのusageもtoken/cost合計に加え、前者は`usageByKind`で区別します。
 
 利用できるview:
 
 - `overview`: 概況（tool / skill頻度、modelのprovider・cache・cost、Activity、MonthlyActivity）
-- `summary`: session / turn / token / cache / errorと主要model・skill・tool
+- `summary`: session / turn / token / cache / errorと主要model・skill・tool。`nestedCallsIncomplete`でnested-call記録の不完全数を示し、`usageByKind`でPiの追加usage entryを区別
 - `daily`: 日別集計
 - `weekly`: 週別集計
 - `monthly`: 月別集計
 - `monthly-activity`: 月別活動のrows
 - `projects`: cwd別集計
-- `models`: model + thinking level別集計
+- `models`: assistant messageに記録されたmodel + 実際のthinking level別集計
 - `skills`: skillのread / explicit invocationと現在status
 - `tools`: tool別calls / errors / result tokens / latencyと現在status
 - `tool-actions`: string `action`を持つtool inputのaction別統計

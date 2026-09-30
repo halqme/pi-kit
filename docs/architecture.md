@@ -48,11 +48,11 @@ Stable behavior belongs in tools and runtime state. `AGENTS.md` therefore contai
 
 ## Experimental semantic observation
 
-`semantic-observer` is outside the mechanical authority path. Its outputs are observations only: they cannot mutate repository state, satisfy `verify`, or unlock `task.finish`. The Pi-facing extension adapts runtime evidence; `packages/semantic-predicate` owns the Pi-independent TypeSafe Jev API client and typed Jev primitives. The extension resolves the `typesafe` API key through Pi's auth store and sends Bearer-authenticated requests to `https://api.typesafe.ai/v1/systemone`, defaulting to `jev-latest`.
+`semantic-observer` is outside the mechanical authority path. Its outputs are observations only: they cannot mutate repository state, satisfy `verify`, or unlock `task.finish`. The extension uses Pi's `modelRegistry.classify()` with the configured TypeSafe `jev-latest` boolean classifier; Pi owns model resolution and authentication. Classifier token and cost usage is returned with the tool result so the session log can account for it.
 
 The context boundary is intentionally narrower than the model context window. Jev degrades when state contains irrelevant detail, so the observer does not treat the current conversation or repository as a default context blob. Each semantic judgment declares the evidence it needs and receives a small structured state with named fields. Primary runtime or repository evidence is preferred over a model-authored narrative summary.
 
-The observer does not ask the calling model to summarize its own work. It projects existing Pi Kit runtime state instead. `task/evidence.ts` exposes the same side-effect-free packet used by `task.review_context`: task contract and latest checkpoint, resource provenance, workspace delta, and verification evidence. The semantic observer augments that packet with a bounded Git diff from the task's captured baseline and bounded excerpts from successful `read`/`context` tool results identified by their tracked tool-call IDs.
+The observer does not ask the calling model to summarize its own work. It projects existing Pi Kit runtime state instead. `task/evidence.ts` exposes the same side-effect-free packet used by `task.review_context`: task contract and latest checkpoint, resource provenance, workspace delta, and verification evidence. The semantic observer augments that packet with a bounded Git diff from the task's captured baseline and bounded excerpts from successful `read`/`context` tool results. Top-level results are found by tool-call ID; for nested results that Pi may not persist independently, the task runtime retains at most four text excerpts of 3,000 characters each, together with their parent tool-call IDs.
 
 The current context views are:
 
@@ -73,19 +73,19 @@ consistencyRisk
   + bounded excerpts from the exact read/context results already seen
 ```
 
-The caller supplies only which observation IDs to run. These are separate requests because their evidence sets differ. If future questions genuinely share the same state, they should be batched into one TypeSafe API request; Jev evaluates questions independently and batching avoids sending the same state repeatedly.
+The caller supplies only which observation IDs to run. Each is a separate Pi classifier request because its evidence set differs. The classifier returns a boolean probability; Pi Kit preserves that probability and usage metadata without assigning a policy threshold.
 
 This boundary follows four rules:
 
 1. **Filter before inference.** Retrieval and runtime state select evidence before Jev sees it.
 2. **Semantic only.** Exact checks, counts, dates, presence tests, and arithmetic stay in code.
-3. **Probabilities before policy.** Raw Noul probabilities or Choice/Score distributions are recorded first; thresholds and actions belong to deterministic policy outside the package.
+3. **Probabilities before policy.** The classifier's boolean probability is recorded first; thresholds and actions belong to deterministic policy outside the observer.
 4. **No ambient accumulation.** Session history, broad diffs, repository dumps, and prior semantic answers are not automatically carried forward. A second-stage request receives earlier output only when code needs that result to construct genuinely new state.
 
 The experiment is intentionally explicit-call. Automatic hooks, escalation, or review routing should be added only after session evidence shows which judgments are useful and how their probabilities calibrate on Pi Kit work.
 
 ## Evaluation
 
-`session-metrics` reconstructs runtime behavior from Pi session JSONL without active instrumentation. In addition to generic tool/action metrics, it records the `context`, `code`, `task`, `delegate`, and `verify` surfaces and verification provenance so harness changes can be compared against historical trajectories.
+`session-metrics` reconstructs runtime behavior from Pi session JSONL without active instrumentation. It counts nested calls reported by Codemode separately from transcript messages, uses their reported durations and statuses, records when nested-call coverage is incomplete, and aggregates Pi usage entries by kind without double-counting nested usage already summarized on the parent result. In addition to generic tool/action metrics, it records the `context`, `code`, `task`, `delegate`, and `verify` surfaces and verification provenance so harness changes can be compared against historical trajectories.
 
 The package manifest is the authoritative capability boundary.

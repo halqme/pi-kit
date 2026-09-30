@@ -26,6 +26,7 @@ export default function sessionMetricsExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "session_metrics",
     label: "Session Metrics",
+    exposure: "deferred",
     description:
       "Read Pi session JSONL logs and summarize usage, cache, models, skills, tools, tool actions, errors, and current Pi resource status without instrumenting tool execution. The extension records a lightweight Pi Kit revision fingerprint at session start so historical reports can separate harness revisions.",
     parameters: Type.Object({

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { TaskEvidencePacket } from "../task/evidence.ts";
-import { projectObservationState } from "./evidence.ts";
+import { RESOURCE_ENTRY } from "../task/resources.ts";
+import { TASK_ENTRY } from "../task/shared.ts";
+import { projectObservationState, buildObservationState } from "./evidence.ts";
 
 const packet: TaskEvidencePacket = {
   task: {
@@ -116,4 +118,54 @@ test("consistency state reuses observed repository evidence", () => {
     "src/parser.test.ts",
   ]);
   assert.equal(state.repository_evidence.excerpts[0].text, "export function parse() {}");
+});
+
+test("uses captured nested tool output when no transcript result exists", async () => {
+  const ctx = {
+    cwd: process.cwd(),
+    sessionManager: {
+      getEntries: () => [
+        {
+          type: "custom",
+          customType: TASK_ENTRY,
+          data: {
+            id: "task-1",
+            goal: "inspect the current implementation",
+            acceptance: [],
+            status: "active",
+            checkpoints: [],
+          },
+        },
+        {
+          type: "custom",
+          customType: RESOURCE_ENTRY,
+          data: {
+            version: 1,
+            id: "resource-1",
+            taskId: "task-1",
+            operation: "observe",
+            path: "src/current.ts",
+            tool: "read",
+            toolCallId: "codemode/1",
+            parentToolCallId: "codemode-call",
+            excerpt: "nested tool output captured at execution time",
+            at: "2026-09-30T00:00:00.000Z",
+          },
+        },
+      ],
+    },
+  };
+
+  const state = JSON.parse(
+    JSON.stringify(await buildObservationState(ctx as any, "consistencyRisk")),
+  );
+
+  assert.deepEqual(state.repository_evidence.observed_paths, ["src/current.ts"]);
+  assert.deepEqual(state.repository_evidence.excerpts, [
+    {
+      tool: "read",
+      paths: ["src/current.ts"],
+      text: "nested tool output captured at execution time",
+    },
+  ]);
 });

@@ -66,6 +66,63 @@ test("aggregates usage, tool latency, actions, and errors from session events", 
   assert.equal(result.errors, 1);
 });
 
+test("accounts for nested calls and typed usage without duplicating transcript results", () => {
+  const result = analyzeLines([
+    JSON.stringify({
+      type: "message",
+      timestamp: "2026-01-01T00:00:01.000Z",
+      message: {
+        role: "assistant",
+        provider: "provider-a",
+        model: "model-a",
+        thinkingLevel: "high",
+        stopReason: "toolUse",
+        usage: { totalTokens: 2 },
+        content: [{ type: "toolCall", id: "codemode-call", name: "codemode", arguments: {} }],
+      },
+    }),
+    JSON.stringify({
+      type: "message",
+      timestamp: "2026-01-01T00:00:02.000Z",
+      message: {
+        role: "toolResult",
+        toolCallId: "codemode-call",
+        toolName: "codemode",
+        content: [{ type: "text", text: "done" }],
+        usage: { input: 3, output: 2, totalTokens: 5 },
+        nestedCalls: {
+          complete: false,
+          calls: [
+            { id: "codemode/1", name: "read", status: "ok", durationMs: 12 },
+            { id: "codemode/2", name: "bash", status: "error", durationMs: 4, error: "failed" },
+          ],
+        },
+      },
+    }),
+    JSON.stringify({
+      type: "usage",
+      kind: "cache_warm",
+      provider: "provider-a",
+      model: "model-a",
+      usage: { input: 0, totalTokens: 3 },
+    }),
+  ]);
+
+  assert.equal(result.messages, 2);
+  assert.equal(result.toolResults, 1);
+  assert.equal(result.toolCalls, 3);
+  assert.equal(result.toolUsage.read?.calls, 1);
+  assert.equal(result.toolUsage.read?.completedCalls, 1);
+  assert.equal(result.toolUsage.read?.totalDurationMs, 12);
+  assert.equal(result.toolUsage.read?.reportedTokens, 0);
+  assert.equal(result.toolUsage.bash?.errors, 1);
+  assert.equal(result.toolErrors, 1);
+  assert.equal(result.nestedCallsIncomplete, 1);
+  assert.equal(result.tokens.total, 10);
+  assert.equal(result.usageByKind.cache_warm?.total, 3);
+  assert.equal(result.thinkingLevels.high?.messages, 1);
+});
+
 test("uses the tool name as the default action when input has no action", () => {
   const result = analyzeLines([
     JSON.stringify({

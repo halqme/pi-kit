@@ -77,7 +77,63 @@ test("preserves generic tool result payload for external analyzers", () => {
     details: { arbitrary: true },
     isError: false,
     reportedTokens: 7,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: 0,
+      total: 7,
+      cost: 0,
+      cacheCost: 0,
+    },
   });
+});
+
+test("reconstructs bounded nested tool outcomes and incomplete parent results", () => {
+  const events = [
+    ...eventsFromLines([
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-09-30T00:00:02.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "codemode-call",
+          toolName: "codemode",
+          content: [{ type: "text", text: "script completed" }],
+          isError: false,
+          nestedCalls: {
+            complete: false,
+            calls: [
+              {
+                id: "codemode/1",
+                name: "read",
+                arguments: { path: "src/a.ts" },
+                status: "ok",
+                durationMs: 12,
+              },
+              {
+                id: "codemode/2",
+                name: "bash",
+                status: "error",
+                durationMs: 4,
+                error: "command failed",
+              },
+            ],
+          },
+        },
+      }),
+    ]),
+  ];
+
+  assert.deepEqual(
+    events.map((event) => event.kind),
+    ["tool_call", "tool_result", "tool_call", "tool_result", "tool_result"],
+  );
+  assert.equal(events[0]?.kind === "tool_call" && events[0].nested, true);
+  assert.equal(events[1]?.kind === "tool_result" && events[1].durationMs, 12);
+  assert.equal(events[3]?.kind === "tool_result" && events[3].isError, true);
+  assert.equal(events[4]?.kind === "tool_result" && events[4].nestedCallsIncomplete, true);
 });
 
 test("emits other events instead of teaching the core custom extension semantics", () => {

@@ -53,9 +53,13 @@ async function waitForFinished(delegate: any, id: string, ctx: any): Promise<any
 test("worker commits ignore the repository's signing configuration", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "pi-kit-delegate-signing-"));
   const originalPath = process.env.PATH;
+  const originalArgsFile = process.env.PI_TEST_ARGS_FILE;
+  const argsFile = join(root, "child-args.json");
   t.after(async () => {
     if (originalPath === undefined) delete process.env.PATH;
     else process.env.PATH = originalPath;
+    if (originalArgsFile === undefined) delete process.env.PI_TEST_ARGS_FILE;
+    else process.env.PI_TEST_ARGS_FILE = originalArgsFile;
     await rm(root, { recursive: true, force: true });
   });
 
@@ -70,6 +74,7 @@ test("worker commits ignore the repository's signing configuration", async (t) =
     `#!/usr/bin/env node
 import { writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+writeFileSync(process.env.PI_TEST_ARGS_FILE, JSON.stringify(process.argv.slice(2)));
 writeFileSync("worker.txt", "worker\\n");
 execFileSync("git", ["add", "worker.txt"]);
 execFileSync("git", ["commit", "-m", "worker"]);
@@ -91,6 +96,7 @@ execFileSync("git", ["commit", "-m", "worker"]);
   git(repo, ["config", "gpg.program", failingGpg]);
 
   process.env.PATH = [bin, originalPath].filter(Boolean).join(delimiter);
+  process.env.PI_TEST_ARGS_FILE = argsFile;
   const delegate = registeredDelegate();
   const ctx = { cwd: repo };
   const started = parsed(
@@ -105,6 +111,9 @@ execFileSync("git", ["commit", "-m", "worker"]);
   const status = await waitForFinished(delegate, started.id, ctx);
 
   assert.equal(status.status, "finished");
+  const childArgs = JSON.parse(await readFile(argsFile, "utf8")) as string[];
+  assert.equal(childArgs[0], "-ne");
+  assert.match(childArgs[1] ?? "", /Task: make a worker commit/);
   assert.equal(git(status.worktree, ["log", "-1", "--format=%G?"]), "N");
 
   await delegate.execute(

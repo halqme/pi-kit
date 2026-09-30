@@ -5,6 +5,7 @@ import { normalizeTimeout, parseJsonStdout, type OsaRunRequest } from "./core.ts
 import macosTalkExtension, { setMacOSTalkRuntimeForTests } from "./index.ts";
 
 type CapturedTool = {
+  exposure: string;
   execute: (...args: unknown[]) => Promise<{
     content: Array<{ type: string; text?: string }>;
     details: Record<string, unknown>;
@@ -21,6 +22,7 @@ function registerTool(): { tool: CapturedTool; ctx: ExtensionContext } {
   } as unknown as ExtensionAPI;
   macosTalkExtension(pi);
   assert.ok(captured);
+  assert.equal(captured.exposure, "deferred");
   return {
     tool: captured,
     ctx: { cwd: "/tmp/project" } as unknown as ExtensionContext,

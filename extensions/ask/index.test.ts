@@ -20,6 +20,10 @@ function registeredAsk(): any {
   return tool;
 }
 
+test("keeps interactive ask callable by the model but unavailable to codemode", () => {
+  assert.equal(registeredAsk().exposure, "model-only");
+});
+
 test("generates stable call-local question ids", () => {
   const questions = generateQuestions([
     {

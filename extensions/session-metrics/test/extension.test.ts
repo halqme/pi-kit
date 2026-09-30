@@ -3,7 +3,7 @@ import test from "node:test";
 import sessionMetricsExtension from "../index.ts";
 
 test("registers one metrics tool and only the revision fingerprint session hook", () => {
-  const tools: Array<{ name: string }> = [];
+  const tools: Array<{ name: string; exposure?: string }> = [];
   const hooks: string[] = [];
   const pi = {
     on(name: string) {
@@ -18,6 +18,7 @@ test("registers one metrics tool and only the revision fingerprint session hook"
     tools.map((tool) => tool.name),
     ["session_metrics"],
   );
+  assert.equal(tools[0]?.exposure, "deferred");
   assert.deepEqual(hooks, ["session_start"]);
 });
 

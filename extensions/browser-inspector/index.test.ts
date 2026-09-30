@@ -40,6 +40,7 @@ test("browser_inspector registers a snake_case tool and forwards commands to one
   extension(pi);
 
   assert.equal(tool.name, "browser_inspector");
+  assert.equal(tool.exposure, "deferred");
   const ctx = { cwd: "/tmp/project" };
   await tool.execute(
     "open-1",

@@ -47,6 +47,7 @@ export default function macosTalkExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: TOOL_NAME,
     label: "macOS Talk",
+    exposure: "deferred",
     description:
       "Execute AppleScript or JavaScript for Automation (JXA) directly through macOS osascript. Use macos_talk instead of shelling out to osascript through terminal when automating native applications, System Events, Accessibility/UI scripting, menus, windows, keyboard input, or application lifecycle. Scripts are sent on stdin, so shell quoting and heredocs are unnecessary. Prefer automation that does not change the frontmost application; macos_talk does not automatically activate applications or rewrite the supplied script. For complex observations, return JSON from the script so the result is exposed as structured value data.",
     promptGuidelines: [
