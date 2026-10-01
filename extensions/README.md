@@ -1,30 +1,37 @@
 # Extensions
 
-Pi Kitのextensionは、モデルに見せる境界を少なく保ちます。
+Pi Kit keeps the default model-visible boundary small and moves structured operations behind Pi's Codemode runtime.
 
-中核:
+## Default surface
 
-- `repository` — `context`、`code`、`read`、`edit`。概念検索、構造検索、inspection、validated mutationと、現在の内容に基づく復旧誘導を同一repository engine上で扱う。
-- `task` — `task` と `verify`。適応的task stateと実行済みverification evidenceを管理する。
-- `delegate` — child Piを専用Git worktree/branchへ隔離して実行する。
+- `delegate` — isolated child Pi work in a dedicated Git worktree and branch.
+- `terminal` — persistent shell-process lifecycle, including interactive sessions, asynchronous one-shot commands, reviewer subprocesses, output watches, and later stdin/control keys.
+- `codemode` — provided by Pi itself; this is the structured orchestration boundary used to reach Pi Kit's non-direct tools.
 
-汎用utility:
+## Codemode tools
 
-- `ask` — TUIの対話を使うmodel-only tool。Codemodeからは呼び出せない。
-- `background_process`
-- `terminal`
+The following Pi Kit tools use `exposure: "codemode"`. They are callable from Codemode scripts and are not separate top-level model tools.
 
-Pi 0.99以降では、使用場面が限られる次のツールをdeferred exposureにしている。Piの`tool_search`を使うと必要なツールを検索できるが、これは既定で無効である。利用するには、Piのユーザー設定（`~/.pi/agent/settings.json`）かプロジェクト設定（`.pi/settings.json`）の`defaultTools`に`"+tool_search"`を追加する。次の設定例では、Piの既定ツールを維持したまま`tool_search`を有効にできる。
+- `context` — lexical/structural repository evidence.
+- `code` — syntax-validated source mutation.
+- `task` — adaptive task state, checkpoints, review requests, and completion state.
+- `verify` — executable and reported verification evidence.
 
-```json
-{
-  "defaultTools": ["+tool_search"]
-}
-```
+Codemode can call these through `tools.*`, and can use `searchTools()`, `describeTool()`, or `ALL_TOOLS` when a declaration is outside its inline budget.
 
-Pi KitはPiの設定を自動変更しない。
+## Deferred utilities
+
+Rare or specialized capabilities remain callable without occupying the normal model surface:
 
 - `browser_inspector`
-- `macos_talk` — AppleScript/JXAを`osascript`へ直接渡すmacOS automation boundary。foregroundを必要以上に奪わないscriptを優先する。
+- `macos_talk`
 - `session_metrics`
-- `semantic_observe` — task/runtime evidenceに対する実験的なJev観測。結果はadvisoryに限定する。
+- `semantic_observe`
+
+These use deferred exposure. Codemode can discover them with `searchTools()` or `ALL_TOOLS`.
+
+## Optional interactive tool
+
+`ask` is a model-only TUI interaction tool. Because model-only tools cannot be invoked from Codemode, Pi Kit does not load it in the default package. Load `extensions/ask/index.ts` explicitly when structured interactive questions are worth an additional direct tool.
+
+Pi Kit does not register a separate detached-process tool. Use `terminal` for process lifecycle and one named terminal per concurrently running command.

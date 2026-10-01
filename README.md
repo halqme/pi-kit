@@ -1,6 +1,6 @@
 # Pi Kit
 
-Pi Kit is a deliberately small runtime layer for Pi Coding Agent 0.99.1 and newer. The active architecture is organized around five mechanical authority boundaries, not a mandatory execution pipeline:
+Pi Kit is a deliberately small runtime layer for Pi Coding Agent 0.99.1 and newer. Its runtime is organized around mechanical authority boundaries, while its default model-visible surface stays deliberately small:
 
 ```text
 repository evidence ──> context
@@ -26,7 +26,6 @@ The arrows describe common evidence and authority flow. They are not prerequisit
 ```text
 extensions/
   ask/
-  background-process/
   browser-inspector/
   delegate/
   repository/
@@ -46,10 +45,11 @@ tsconfig.json
 
 `extensions/` is the home of Pi runtime integration. The root workspace reserves `packages/*` for code that is meaningful without Pi. `session-metrics` owns both its Pi extension and offline CLI/analysis kernel. Multi-word extension directories use kebab-case, and the shared TypeScript configuration lives at the repository root.
 
-The repository extension exposes `context` and `code`, and transparently strengthens the built-in `edit` path for supported source files. The old standalone Astrolabe and BM25 tool surfaces are gone; their useful structural and lexical mechanisms are internal implementation details under `src/syntax` and `src/context`.
+The default Pi Kit package adds only two direct model tools: `delegate` and `terminal`. Pi's built-in `codemode` is the structured orchestration boundary. Pi Kit registers `context`, `code`, `task`, and `verify` with `exposure: "codemode"`, so they are callable from Codemode scripts without becoming additional top-level model tools. Repository `read` / `edit` overrides keep their built-in names.
 
-Additional independent utilities remain available through the extensions listed above. `ask` provides synchronous structured user decisions in the interactive TUI; offline session analysis is provided by the `session-metrics` CLI in `extensions/session-metrics`. The specialized `browser_inspector`, `macos_talk`, `session_metrics`, and `semantic_observe` tools use Pi's deferred exposure. Pi disables `tool_search` by default, so add `"+tool_search"` to `defaultTools` to find and activate these tools; see [the extension guide](extensions/README.md). `ask` is model-only so Codemode cannot invoke its interactive UI. `semantic-observer` is an experimental, explicitly invoked observer: the caller selects semantic judgments, while Pi Kit builds compact evidence from task state, tracked reads/context, actual workspace changes, and executed verification. It returns advisory probabilities without changing task, verification, or completion state.
+Specialized `browser_inspector`, `macos_talk`, `session_metrics`, and `semantic_observe` tools use deferred exposure and remain discoverable from Codemode through `searchTools()` / `ALL_TOOLS`. The interactive `ask` extension remains in the repository as an optional standalone model-only tool, but is not loaded by the default Pi Kit package.
 
+`terminal` owns persistent shell-process lifecycle for both interactive sessions and asynchronous one-shot subprocesses. `delegate` remains separate because it owns isolated Git worktrees, branches, worker commits, and integration rather than generic process execution.
 
 ## Experimental semantic observation
 

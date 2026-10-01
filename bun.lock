@@ -21,18 +21,6 @@
         "typescript": "catalog:",
       },
     },
-    "extensions/background-process": {
-      "name": "@halqme/background-process",
-      "dependencies": {
-        "@earendil-works/pi-ai": "catalog:",
-        "@earendil-works/pi-coding-agent": "catalog:",
-        "@earendil-works/pi-tui": "catalog:",
-      },
-      "devDependencies": {
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
     "extensions/browser-inspector": {
       "name": "@halqme/browser-inspector",
       "dependencies": {
@@ -258,8 +246,6 @@
     "@google/genai": ["@google/genai@2.21.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-+PDtco2/Z0ONdzCGekCoCT+O1VJS9xJQNN4XzQpXG/t3El/SWWMkCWlFRO1KmivOHPa4Q0VjUYu1HBKCZ/v33Q=="],
 
     "@halqme/ask": ["@halqme/ask@workspace:extensions/ask"],
-
-    "@halqme/background-process": ["@halqme/background-process@workspace:extensions/background-process"],
 
     "@halqme/browser-inspector": ["@halqme/browser-inspector@workspace:extensions/browser-inspector"],
 

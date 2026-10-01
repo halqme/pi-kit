@@ -2,10 +2,10 @@
 
 Repository intelligence and structural mutation for Pi Kit.
 
-The extension exposes repository-aware `context`, `code`, and `read` tools and transparently strengthens the built-in editor:
+The extension registers repository-aware `context` and `code` for Codemode, wraps the built-in `read`, and transparently strengthens the built-in editor:
 
-- `context`: read-only repository acquisition. `find` performs passage-level relevance ranking; `locate`, `search`, `inspect`, and `inspect_many` use Tree-sitter plus optional LSP evidence.
-- `code`: structure-aware mutation. `edit` replaces a validated syntax node and `rename` applies a language-server workspace edit with staleness and syntax checks.
+- `context` (Codemode exposure): read-only repository acquisition. `find` performs passage-level relevance ranking; `locate`, `search`, `inspect`, and `inspect_many` use Tree-sitter plus optional LSP evidence.
+- `code` (Codemode exposure): structure-aware mutation. `edit` replaces a validated syntax node and `rename` applies a language-server workspace edit with staleness and syntax checks.
 - `read`: the built-in file reader is wrapped to add actionable recovery hints for missing paths, directories, and invalid offsets.
 - `edit`: the built-in exact-text editor is overridden so single replacements in supported source files use the same syntax validation automatically. Unsupported files and multi-edit calls retain the built-in behavior; failed targets include concise recovery guidance.
 

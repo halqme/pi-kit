@@ -1,6 +1,6 @@
 # task
 
-Adaptive task state, resource provenance, and verification for Pi Kit.
+Adaptive task state, resource provenance, and verification for Pi Kit. The `task` and `verify` tools use Codemode exposure so their authority remains explicit without adding top-level model tools.
 
 `task` keeps one session-scoped goal with acceptance criteria, disposable plans, checkpoints, blockers, and a completion state. A plan is a hypothesis and can be replaced whenever repository evidence changes.
 

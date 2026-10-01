@@ -184,7 +184,7 @@ export default function browserInspectorExtension(pi: ExtensionAPI): void {
     label: "Browser Inspector",
     exposure: "deferred",
     description:
-      "Inspect and interact with a running web UI through an isolated headless Chrome managed by a Bun.WebView sidecar. Use after web UI changes and when runtime DOM, computed CSS, layout, console, network, or rendered output matters. Prefer targeted inspect/styles calls; use snapshot only to discover an unfamiliar page, and refresh for the common reload-observe loop. Element refs are short-lived and become stale after navigation. Use terminal or background_process for servers and non-browser commands.",
+      "Inspect and interact with a running web UI through an isolated headless Chrome managed by a Bun.WebView sidecar. Use after web UI changes and when runtime DOM, computed CSS, layout, console, network, or rendered output matters. Prefer targeted inspect/styles calls; use snapshot only to discover an unfamiliar page, and refresh for the common reload-observe loop. Element refs are short-lived and become stale after navigation. Use terminal for servers and non-browser commands.",
     promptGuidelines: [
       "For visual or layout changes, verify the rendered browser state before claiming completion when the browser is available.",
       "Use inspect to resolve a selector or viewport point to element refs, then reuse those refs for styles, screenshots, and interactions until navigation invalidates them.",
@@ -192,7 +192,7 @@ export default function browserInspectorExtension(pi: ExtensionAPI): void {
       "Use styles when classes or CSS rules appear correct but the rendered result is wrong; it reports computed values, matched declarations, and unresolved custom properties.",
       "Use refresh after an edit when you need reload plus post-reload console/network deltas and an optional selector/point inspection in one round trip. refresh cannot accept an element ref because reload invalidates refs; failedOnly defaults to true for its network result.",
       "Use network and console cursors when you need explicit incremental event control outside refresh.",
-      "Do not use browser_inspector to manage dev servers; use terminal or background_process for process lifecycle.",
+      "Do not use browser_inspector to manage dev servers; use terminal for process lifecycle.",
     ],
     parameters: Type.Object({
       action: Type.Union([
