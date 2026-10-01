@@ -41,22 +41,12 @@
       "./extensions/terminal/index.ts"
     ],
     "skills": [
-      "./skills/apply-correction",
-      "./skills/cognitive-rhythm-writing",
       "./skills/consistency-review",
       "./skills/diagnose-problem",
       "./skills/git-workflow",
       "./skills/implement-change",
-      "./skills/natural-japanese-writing",
-      "./skills/perform-safely",
-      "./skills/place-knowledges",
-      "./skills/research-answer",
-      "./skills/shape-actionable-output",
       "./skills/simplify-change",
-      "./skills/test-design",
-      "./skills/visualize-structure",
-      "./skills/write-commit-message",
-      "./skills/writing-skills"
+      "./skills/visualize-structure"
     ],
     "prompts": [
       "./prompts"
