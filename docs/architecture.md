@@ -35,6 +35,16 @@ This separation keeps structured discovery and structured mutation independent: 
 
 The design follows the retrieval results reported by Agent Retrieval Bench (arXiv:2607.24882) and FastContext (arXiv:2606.14066), and the structured action-space results in CODESTRUCT (arXiv:2604.05407).
 
+## Adaptive control policy
+
+Pi Kit separates capability from control intensity. Repository intelligence, validated mutation, terminal lifecycle, browser inspection, and other capability extensions remain available regardless of model. The control policy only decides whether `task` is expected to drive ordinary implementation work.
+
+The default policy is conservative and deterministic. Two small code-defined model sets classify the current id by explicit naming convention: `astra`, `sol`, `fable`, and `opus` enter `lean`; `luna`, `sonnet`, `haiku`, `flash`, `lite`, and `free` enter `robust`. Robust matches take precedence when both groups match, and unknown ids remain robust. The underlying matcher still supports `include`, `is`, and `exclude` so exceptions can be expressed without replacing the selector with ad-hoc regexes. `PI_KIT_CONTROL_POLICY=lean|robust` remains an explicit override.
+
+Under `lean`, Pi Kit injects no control-policy guidance. The model works through ordinary Pi tools and may opt into `task` only when externalized state or completion authority becomes useful, for example across long-running work, compaction, recovery, or multi-worker coordination. Under `robust`, Pi Kit adds one short system instruction telling non-trivial implementation work to start `task`.
+
+The policy changes the entry condition, not the meaning of an active task. Once `task.start` is called, `task.finish` keeps the same executable-verification, review-request, and Git completion gates. This keeps the low-capability path strict while allowing sufficiently capable models to run close to pure Pi.
+
 ## Adaptive task runtime
 
 `task` stores the goal, acceptance criteria, observations, checkpoints, blockers, and a disposable plan. The plan is a mutable hypothesis, not an approval artifact or completion counter.

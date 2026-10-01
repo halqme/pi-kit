@@ -21,6 +21,8 @@ user goal ────────────> task ─────> verify ─
 
 The arrows describe common evidence and authority flow. They are not prerequisites between tools: `context` is not a qualification gate for `code`, and `delegate` is only useful when the work actually decomposes.
 
+Task control is policy-driven rather than universally mandatory. Code-defined model sets route ids containing `astra`, `sol`, `fable`, or `opus` to `lean`, while ids containing `luna`, `sonnet`, `haiku`, `flash`, `lite`, or `free` stay `robust`; robust matches take precedence and unknown models are robust. The reusable `include` / `is` / `exclude` matcher keeps that routing explicit instead of hiding it behind ad-hoc regexes. `PI_KIT_CONTROL_POLICY=lean|robust` overrides the selection. Lean mode adds no control-policy prompt and normally leaves `task` unused, while robust mode asks non-trivial implementation work to enter the existing `task`/`verify` completion contract. Starting a task is an explicit escalation into that stronger contract; the contract itself is not weakened for lean models.
+
 ## Layout
 
 ```text
