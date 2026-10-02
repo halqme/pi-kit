@@ -5,10 +5,13 @@
   "scripts": {
     "check": "bun run typecheck && bun run test",
     "typecheck": "tsc --noEmit",
-    "test": "node --test"
+    "test": "cd ../../../../ && node --test packages/railway/extensions/task/*.test.ts"
   },
   "devDependencies": {
-    "@types/node": "catalog:"
+    "@earendil-works/pi-ai": "catalog:",
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

@@ -15,7 +15,8 @@
     "web-tree-sitter": "0.26.13"
   },
   "devDependencies": {
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   },
   "engines": {
     "node": ">=26.0.0"

@@ -26,9 +26,12 @@ pi install git:github.com/halqme/pi-kit
 
 ## Development
 
-Install dependencies and run the checks with Bun:
+Install dependencies, run all tests, and run the full checks with Bun:
 
 ```sh
 bun install
+bun run test
 bun run check
 ```
+
+`bun run test` runs each package with its configured test runner. `bun run check` also runs linting and typechecking.

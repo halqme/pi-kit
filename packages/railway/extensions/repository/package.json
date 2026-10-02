@@ -8,7 +8,12 @@
     "test": "bun test --parallel"
   },
   "devDependencies": {
-    "@types/node": "catalog:"
+    "@earendil-works/pi-ai": "catalog:",
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "@earendil-works/pi-tui": "catalog:",
+    "@halqme/astrolabe": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
