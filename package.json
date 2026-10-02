@@ -5,7 +5,6 @@
     "pi-package"
   ],
   "workspaces": [
-    "extensions/*",
     "packages/*"
   ],
   "scripts": {
@@ -15,42 +14,13 @@
     "format:check": "oxfmt --check .",
     "lint": "oxlint ."
   },
-  "peerDependencies": {
-    "oxfmt": "latest",
-    "oxlint": "latest"
-  },
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.2",
   "catalog": {
     "@earendil-works/pi-agent-core": "^0.99.1",
     "@earendil-works/pi-ai": "^0.99.2",
     "@earendil-works/pi-coding-agent": "^0.99.2",
     "@earendil-works/pi-tui": "^0.99.2",
     "@types/bun": "1.4.0",
-    "@types/node": "26.4.0",
-    "typescript": "7.0.2"
-  },
-  "pi": {
-    "extensions": [
-      "./extensions/repository/index.ts",
-      "./extensions/task/index.ts",
-      "./extensions/delegate/index.ts",
-      "./extensions/browser-inspector/index.ts",
-      "./extensions/macos-talk/index.ts",
-      "./extensions/session-metrics/index.ts",
-      "./extensions/semantic-observer/index.ts",
-      "./extensions/terminal/index.ts"
-    ],
-    "skills": [
-      "./skills/consistency-review",
-      "./skills/diagnose-problem",
-      "./skills/git-workflow",
-      "./skills/implement-change",
-      "./skills/simplify-change",
-      "./skills/visualize-structure"
-    ],
-    "prompts": [
-      "./prompts"
-    ],
-    "themes": []
+    "@types/node": "26.4.0"
   }
 }

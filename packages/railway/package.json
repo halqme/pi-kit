@@ -1,0 +1,24 @@
+{
+  "name": "@halqme/pi-railway",
+  "private": true,
+  "keywords": [
+    "pi-package"
+  ],
+  "devDependencies": {},
+  "peerDependencies": {},
+  "packageManager": "bun@1.4.0",
+  "pi": {
+    "extensions": [
+      "./extensions/delegate/index.ts",
+      "./extensions/repository/index.ts",
+      "./extensions/task/index.ts"
+    ],
+    "skills": [
+      "./skills/consistency-review",
+      "./skills/git-workflow",
+      "./skills/implement-change"
+    ],
+    "prompts": [],
+    "themes": []
+  }
+}
