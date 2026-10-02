@@ -1,6 +1,9 @@
 {
   "name": "@halqme/browser-inspector",
   "private": true,
+  "keywords": [
+    "pi-package"
+  ],
   "type": "module",
   "scripts": {
     "check": "bun run typecheck && bun run test",
@@ -9,16 +12,24 @@
     "dev": "pi -e ./index.ts",
     "smoke": "pi -e ./index.ts --list-models __extension_smoke__"
   },
-  "dependencies": {
+  "devDependencies": {
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
-    "@earendil-works/pi-tui": "catalog:"
-  },
-  "devDependencies": {
+    "@earendil-works/pi-tui": "catalog:",
     "@types/bun": "catalog:",
     "@types/node": "catalog:"
   },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
   "engines": {
     "node": ">=26.0.0"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
   }
 }

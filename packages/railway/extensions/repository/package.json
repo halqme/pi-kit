@@ -7,15 +7,13 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test --parallel"
   },
-  "dependencies": {
-    "@earendil-works/pi-ai": "catalog:",
-    "@earendil-works/pi-coding-agent": "catalog:",
-    "@earendil-works/pi-tui": "catalog:",
-    "@repomix/tree-sitter-wasms": "0.1.17",
-    "web-tree-sitter": "0.26.13"
-  },
   "devDependencies": {
     "@types/node": "catalog:"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "engines": {
     "node": ">=26.0.0"

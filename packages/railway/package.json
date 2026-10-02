@@ -4,8 +4,20 @@
   "keywords": [
     "pi-package"
   ],
-  "devDependencies": {},
-  "peerDependencies": {},
+  "dependencies": {
+    "@repomix/tree-sitter-wasms": "0.1.17",
+    "web-tree-sitter": "0.26.13"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "catalog:",
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "@earendil-works/pi-tui": "catalog:"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
   "packageManager": "bun@1.4.0",
   "pi": {
     "extensions": [

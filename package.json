@@ -22,5 +22,19 @@
     "@earendil-works/pi-tui": "^1.0.0",
     "@types/bun": "1.4.0",
     "@types/node": "26.4.0"
+  },
+  "pi": {
+    "extensions": [
+      "./packages/railway/extensions/delegate/index.ts",
+      "./packages/railway/extensions/repository/index.ts",
+      "./packages/railway/extensions/task/index.ts",
+      "./packages/browser-inspector/index.ts",
+      "./packages/macos-talk/index.ts"
+    ],
+    "skills": [
+      "./packages/railway/skills/consistency-review",
+      "./packages/railway/skills/git-workflow",
+      "./packages/railway/skills/implement-change"
+    ]
   }
 }
