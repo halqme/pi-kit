@@ -1,14 +1,16 @@
-import type { Node } from "web-tree-sitter";
 import {
   adapterForLanguage,
   adapterForPath,
   adapterSupportsPath,
+  parseFile,
   requireAdapterForPath,
+  sourceOf,
   type LanguageAdapter,
   type LanguageId,
-} from "../syntax/language-profile.ts";
+  type Node,
+  type ParsedFile,
+} from "@halqme/astrolabe";
 import { HandleStore, type NodeHandle } from "../syntax/node-handles.ts";
-import { parseFile, sourceOf, type ParsedFile } from "../syntax/parser.ts";
 import { resolveExistingScope, sourceFilesInScope } from "../syntax/path.ts";
 
 export interface LocateParams {

@@ -8,13 +8,14 @@ import {
   adapterForIdentity,
   supportedLanguageDescription,
   supportedLanguageIds,
+  LspManager,
+  shutdownParserCaches,
+  startParserCaches,
   type LanguageId,
-} from "./language-profile.ts";
+} from "@halqme/astrolabe";
 import type { LocateMatch } from "../context/locate.ts";
-import { LspManager } from "./lsp.ts";
 import { createMetrics, record } from "./metrics.ts";
 import { HandleStore, type NodeHandle } from "./node-handles.ts";
-import { shutdownParserCaches, startParserCaches } from "./parser.ts";
 import {
   continuation,
   failure,

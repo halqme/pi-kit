@@ -1,0 +1,4 @@
+{
+  "extends": "../railway/tsconfig.json",
+  "include": ["src/**/*.ts"]
+}

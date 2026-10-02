@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { chmod, rename, stat, unlink, writeFile } from "node:fs/promises";
-import type { Node } from "web-tree-sitter";
-import { HandleStore, resolveHandleResult, type NodeHandle } from "../syntax/node-handles.ts";
-import type { Continuation } from "../syntax/protocol.ts";
 import {
+  adapterForIdentity,
   cacheFile,
   createTreeEdit,
   parseFile,
   parseSource,
   sourceRange,
   withParserActivity,
-} from "../syntax/parser.ts";
-import { adapterForIdentity } from "../syntax/language-profile.ts";
+  type Node,
+} from "@halqme/astrolabe";
+import { HandleStore, resolveHandleResult, type NodeHandle } from "../syntax/node-handles.ts";
+import type { Continuation } from "../syntax/protocol.ts";
 import { resolveExistingPath } from "../syntax/path.ts";
 import {
   describeSyntaxIssues,

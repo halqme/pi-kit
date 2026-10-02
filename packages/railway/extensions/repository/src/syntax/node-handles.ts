@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
-import type { Node } from "web-tree-sitter";
-import { hash, sourceOf, stringIndexToByteIndex, type ParsedFile } from "./parser.ts";
-import { adapterForIdentity } from "./language-profile.ts";
+import {
+  adapterForIdentity,
+  hash,
+  sourceOf,
+  stringIndexToByteIndex,
+  type Node,
+  type ParsedFile,
+} from "@halqme/astrolabe";
 
 export type InspectionStage = "outline" | "structure" | "source";
 

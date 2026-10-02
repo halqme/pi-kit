@@ -1,16 +1,18 @@
-import { Query, type Node } from "web-tree-sitter";
 import {
   adapterForLanguage,
   adapterForPath,
   adapterSupportsPath,
+  parseFile,
+  Query,
   requireAdapterForPath,
-} from "../syntax/language-profile.ts";
-import type { LanguageId, SyntaxSearchKind } from "../syntax/language-types.ts";
+  sourceOf,
+  type LanguageId,
+  type Node,
+  type ParsedFile,
+  type SyntaxSearchKind,
+} from "@halqme/astrolabe";
 import { HandleStore, type NodeHandle } from "../syntax/node-handles.ts";
-import { parseFile, sourceOf, type ParsedFile } from "../syntax/parser.ts";
 import { resolveExistingScope, sourceFilesInScope } from "../syntax/path.ts";
-
-export type { SyntaxSearchKind } from "../syntax/language-types.ts";
 
 export interface SyntaxSearchParams {
   /** @deprecated Use scope. Kept temporarily for internal callers during the API migration. */

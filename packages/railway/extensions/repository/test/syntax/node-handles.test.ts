@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { typescriptAdapter } from "../../src/syntax/languages/typescript/config.ts";
-import type { LanguageAdapter } from "../../src/syntax/language-profile.ts";
+import { adapterForLanguage, parseSource, type LanguageAdapter } from "@halqme/astrolabe";
 import { HandleStore, resolveHandle } from "../../src/syntax/node-handles.ts";
-import { parseSource } from "../../src/syntax/parser.ts";
+
+const typescriptAdapter = adapterForLanguage("typescript");
 
 test("bounds handles per file and retains recently used handles", async () => {
   const file = await parseSource(

@@ -2,17 +2,20 @@ import { randomUUID } from "node:crypto";
 import { chmod, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-import { adapterForPath, type LanguageAdapter } from "../syntax/language-profile.ts";
-import type { LspRange, LspTextEdit, LspWorkspaceEdit } from "../syntax/lsp.ts";
-import { HandleStore } from "../syntax/node-handles.ts";
 import {
+  adapterForPath,
   cacheFile,
   createTreeEdit,
   isStringBoundary,
   parseFile,
   parseSource,
+  type LanguageAdapter,
+  type LspRange,
+  type LspTextEdit,
+  type LspWorkspaceEdit,
   type ParsedFile,
-} from "../syntax/parser.ts";
+} from "@halqme/astrolabe";
+import { HandleStore } from "../syntax/node-handles.ts";
 import { resolveExistingPath } from "../syntax/path.ts";
 import { describeSyntaxIssues, findNewSyntaxIssuesForEdits } from "../syntax/syntax-validation.ts";
 

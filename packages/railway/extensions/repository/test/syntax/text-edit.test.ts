@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { editTextDetailed } from "../../src/code/text-edit.ts";
 import { HandleStore } from "../../src/syntax/node-handles.ts";
-import { clearFileCache } from "../../src/syntax/parser.ts";
+import { clearFileCache } from "@halqme/astrolabe";
 
 test("resolves one exact text match into the structural edit path", async () => {
   const dir = await mkdtemp(join(tmpdir(), "text-edit-"));

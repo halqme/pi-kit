@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HandleStore } from "../../src/syntax/node-handles.ts";
 import { inspect } from "../../src/context/inspect.ts";
-import { parseFile, clearFileCache } from "../../src/syntax/parser.ts";
+import { parseFile, clearFileCache } from "@halqme/astrolabe";
 
 test("TypeScript outline maps a file by declarations without statement-level noise", async () => {
   const dir = await mkdtemp(join(tmpdir(), "astrolabe-inspect-"));

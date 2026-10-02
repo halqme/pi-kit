@@ -1,8 +1,11 @@
-import type { Node } from "web-tree-sitter";
-import { adapterForIdentity } from "../syntax/language-profile.ts";
-import { LspError, type LspService } from "../syntax/lsp.ts";
+import {
+  adapterForIdentity,
+  LspError,
+  parseFile,
+  type LspService,
+  type Node,
+} from "@halqme/astrolabe";
 import { HandleStore, resolveHandleResult } from "../syntax/node-handles.ts";
-import { parseFile } from "../syntax/parser.ts";
 import type { RenameRequest } from "../syntax/protocol.ts";
 import {
   applyWorkspaceEdit,

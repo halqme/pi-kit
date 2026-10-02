@@ -5,17 +5,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
-import { denoAdapter } from "../../src/syntax/languages/deno/config.ts";
 import {
   adapterForLanguage,
   adapterForPath,
+  clearFileCache,
+  LspManager,
+  parseSource,
   supportedLanguageIds,
-} from "../../src/syntax/language-profile.ts";
-import { LspManager } from "../../src/syntax/lsp.ts";
+} from "@halqme/astrolabe";
 import { HandleStore } from "../../src/syntax/node-handles.ts";
 import { locateDetailed } from "../../src/context/locate.ts";
-import { clearFileCache, parseSource } from "../../src/syntax/parser.ts";
 import { syntaxSearchDetailed } from "../../src/context/syntax-search.ts";
+
+const denoAdapter = adapterForLanguage("deno");
 
 const denoAvailable = spawnSync("deno", ["--version"], { stdio: "ignore" }).status === 0;
 

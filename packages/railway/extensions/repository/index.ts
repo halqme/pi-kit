@@ -8,7 +8,7 @@ import {
 
 import installStructuralEngine from "./src/syntax/engine.ts";
 import installLexicalEngine from "./src/context/lexical.ts";
-import { adapterForPath, supportedLanguageIds } from "./src/syntax/language-profile.ts";
+import { adapterForPath, supportedLanguageIds } from "@halqme/astrolabe";
 import type { TextToolResult } from "./src/shared.ts";
 
 type CapturedTool = {

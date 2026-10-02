@@ -1,9 +1,7 @@
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-import type { Node } from "web-tree-sitter";
+import { parseFile, requireAdapterForPath, sourceOf, type Node } from "@halqme/astrolabe";
 import { editDetailed } from "./edit.ts";
 import { HandleStore } from "../syntax/node-handles.ts";
-import { parseFile, sourceOf } from "../syntax/parser.ts";
-import { requireAdapterForPath } from "../syntax/language-profile.ts";
 import { resolveExistingPath } from "../syntax/path.ts";
 
 export interface TextEditParams {

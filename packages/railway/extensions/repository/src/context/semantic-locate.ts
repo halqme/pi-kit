@@ -3,8 +3,12 @@ import {
   adapterForLanguage,
   adapterForPath,
   adapterSupportsPath,
+  isStringBoundary,
+  parseFile,
   type LanguageAdapter,
-} from "../syntax/language-profile.ts";
+  type LspService,
+  type LspSymbol,
+} from "@halqme/astrolabe";
 import {
   declarationAtIndex,
   locateDetailed,
@@ -12,9 +16,7 @@ import {
   type LocateMatch,
   type LocateParams,
 } from "./locate.ts";
-import type { LspService, LspSymbol } from "../syntax/lsp.ts";
 import { HandleStore } from "../syntax/node-handles.ts";
-import { isStringBoundary, parseFile } from "../syntax/parser.ts";
 import {
   pathIsWithin,
   resolveExistingPath,

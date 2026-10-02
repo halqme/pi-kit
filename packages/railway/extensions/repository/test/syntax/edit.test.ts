@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { chmod, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clearFileCache, parseFile } from "../../src/syntax/parser.ts";
+import { clearFileCache, parseFile } from "@halqme/astrolabe";
 import { HandleStore } from "../../src/syntax/node-handles.ts";
 import { edit, editContinuationDetailed } from "../../src/code/edit.ts";
 

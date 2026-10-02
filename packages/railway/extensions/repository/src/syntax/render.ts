@@ -1,6 +1,4 @@
-import { Query, type Node } from "web-tree-sitter";
-import { adapterForIdentity } from "./language-profile.ts";
-import { sourceOf, type ParsedFile } from "./parser.ts";
+import { Query, adapterForIdentity, sourceOf, type Node, type ParsedFile } from "@halqme/astrolabe";
 import { HandleStore } from "./node-handles.ts";
 
 interface RenderContext {

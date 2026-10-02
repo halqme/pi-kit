@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTreeEdit, parseSource } from "../../src/syntax/parser.ts";
+import { createTreeEdit, parseSource } from "@halqme/astrolabe";
 import { findNewSyntaxIssues } from "../../src/syntax/syntax-validation.ts";
 
 test("maps an unchanged syntax issue after text is inserted before it", async () => {

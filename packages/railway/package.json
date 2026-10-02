@@ -5,8 +5,7 @@
     "pi-package"
   ],
   "dependencies": {
-    "@repomix/tree-sitter-wasms": "0.1.17",
-    "web-tree-sitter": "0.26.13"
+    "@halqme/astrolabe": "workspace:*"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "catalog:",

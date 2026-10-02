@@ -4,7 +4,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HandleStore } from "../../src/syntax/node-handles.ts";
-import { clearFileCache } from "../../src/syntax/parser.ts";
+import { clearFileCache } from "@halqme/astrolabe";
 import { locateDetailed } from "../../src/context/locate.ts";
 
 test("locate ranks an exact qualified symbol above term-only declarations", async () => {

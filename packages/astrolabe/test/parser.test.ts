@@ -3,9 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { typescriptAdapter } from "../../src/syntax/languages/typescript/config.ts";
-import type { LanguageAdapter } from "../../src/syntax/language-profile.ts";
 import {
+  adapterForLanguage,
   byteIndexToStringIndex,
   cacheFile,
   clearFileCache,
@@ -17,7 +16,10 @@ import {
   startParserCaches,
   stringIndexToByteIndex,
   withParserActivity,
-} from "../../src/syntax/parser.ts";
+  type LanguageAdapter,
+} from "../src/index.ts";
+
+const typescriptAdapter = adapterForLanguage("typescript");
 
 test("parses TypeScript and preserves source ranges", async () => {
   const file = await parseSource("fixture.ts", "const answer: number = 42;\n");

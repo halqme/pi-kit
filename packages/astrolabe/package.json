@@ -1,0 +1,23 @@
+{
+  "name": "@halqme/astrolabe",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "bun run typecheck && bun run test",
+    "test": "bun test --parallel",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repomix/tree-sitter-wasms": "0.1.17",
+    "web-tree-sitter": "0.26.13"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  },
+  "engines": {
+    "node": ">=26.0.0"
+  }
+}

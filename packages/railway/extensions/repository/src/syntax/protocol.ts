@@ -1,5 +1,4 @@
-import type { LanguageId } from "./language-profile.ts";
-import type { SyntaxSearchKind } from "../context/syntax-search.ts";
+import type { LanguageId, SyntaxSearchKind } from "@halqme/astrolabe";
 
 export type SyntaxAction = "inspect" | "inspect_many" | "locate" | "search" | "edit" | "rename";
 export type InspectDetail = "outline" | "source";

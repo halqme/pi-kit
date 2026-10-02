@@ -1,5 +1,11 @@
-import type { Node, Tree } from "web-tree-sitter";
-import { syntaxIssues, type ParsedFile, type SyntaxIssue, type TreeEdit } from "./parser.ts";
+import {
+  syntaxIssues,
+  type Node,
+  type ParsedFile,
+  type SyntaxIssue,
+  type Tree,
+  type TreeEdit,
+} from "@halqme/astrolabe";
 
 function mapIndexThroughEdits(index: number, edits: readonly TreeEdit[]): number {
   return (

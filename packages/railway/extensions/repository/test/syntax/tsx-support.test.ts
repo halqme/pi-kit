@@ -3,9 +3,10 @@ import test from "node:test";
 import {
   adapterForLanguage,
   adapterForPath,
+  clearFileCache,
+  parseSource,
   supportedLanguageIds,
-} from "../../src/syntax/language-profile.ts";
-import { clearFileCache, parseSource } from "../../src/syntax/parser.ts";
+} from "@halqme/astrolabe";
 
 test("registers TSX as an auto-detected repository language", () => {
   const adapter = adapterForLanguage("tsx");

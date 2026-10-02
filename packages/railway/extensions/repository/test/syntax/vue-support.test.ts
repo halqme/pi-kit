@@ -7,10 +7,11 @@ import { syntaxSearchDetailed } from "../../src/context/syntax-search.ts";
 import {
   adapterForLanguage,
   adapterForPath,
+  clearFileCache,
+  parseSource,
   supportedLanguageIds,
-} from "../../src/syntax/language-profile.ts";
+} from "@halqme/astrolabe";
 import { HandleStore } from "../../src/syntax/node-handles.ts";
-import { clearFileCache, parseSource } from "../../src/syntax/parser.ts";
 import { outline } from "../../src/syntax/render.ts";
 
 test("registers Vue as an auto-detected repository language", () => {

@@ -13,7 +13,7 @@ The repository tools and editor integration intentionally share one structural e
 
 The automatic editor route is based on the supported language extension, so source-based configuration and generated files are validated like other supported source. Unsupported languages and new files remain ordinary file-editing territory. Structural file scopes prefer paths relative to the current session directory, then fall back to Git-project-root-relative paths; the Git root is the containment boundary even when Pi starts in a subdirectory. Repository text returned by `context` is data, not instructions.
 
-Tree-sitter parser binaries for supported languages are supplied from the pinned `@repomix/tree-sitter-wasms` bundle. Language-specific adapters still own Pi Kit's outline/search/edit semantics and optional LSP integration; the shared bundle only centralizes parser distribution.
+Tree-sitter parsing, supported-language profiles, and LSP client services are provided by the Pi-independent `@halqme/astrolabe` workspace package. The repository extension owns Pi integration and repository-specific search, inspection, and mutation workflows.
 
 Checks:
 

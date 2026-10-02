@@ -1,12 +1,12 @@
-import { parseFile } from "../syntax/parser.ts";
-import { HandleStore, resolveHandleResult } from "../syntax/node-handles.ts";
 import {
   adapterForIdentity,
   adapterForLanguage,
   requireAdapterForPath,
   type LanguageAdapter,
   type LanguageId,
-} from "../syntax/language-profile.ts";
+  parseFile,
+} from "@halqme/astrolabe";
+import { HandleStore, resolveHandleResult } from "../syntax/node-handles.ts";
 import { resolveExistingPath } from "../syntax/path.ts";
 import { outline, source, structure } from "../syntax/render.ts";
 
